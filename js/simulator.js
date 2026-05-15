@@ -1,0 +1,445 @@
+class Entity {
+    constructor(id, name, isEnemy, baseSpd, bonusSpd, maxEP, err, equipment) {
+        this.id = id;
+        this.name = name;
+        this.isEnemy = isEnemy;
+        this.baseSpd = baseSpd;
+        this.bonusSpd = bonusSpd;
+        this.maxEP = maxEP;
+        this.currentEP = isEnemy ? 0 : 50; // 味方は初期EP50
+        this.err = err / 100; // EP回復効率
+        this.equipment = equipment || { lc: 'none', relic1: 'none', relic2: 'none', ornament: 'none' };
+        this.buffs = []; // { name, spdMod, duration }
+        this.actionValue = 0;
+        this.speed = 0;
+        
+        // セット効果フラグ
+        this.hasEagle4 = (this.equipment.relic1 === 'eagle' && this.equipment.relic2 === 'eagle');
+        this.hasMessenger4 = (this.equipment.relic1 === 'messenger' && this.equipment.relic2 === 'messenger');
+        this.hasDDD = (this.equipment.lc === 'ddd');
+        this.hasVonwacq = (this.equipment.ornament === 'vonwacq');
+        
+        this.calculateSpeed();
+        this.resetActionValue();
+        
+        // 戦闘開始時の行動順短縮 (ウェンワック等)
+        if (!isEnemy && this.hasVonwacq) {
+            this.actionValue = Math.max(0, this.actionValue - (10000 / this.speed) * 0.40);
+        }
+    }
+
+    calculateSpeed() {
+        let spdMod = 0;
+        for (const b of this.buffs) {
+            spdMod += b.spdMod || 0;
+        }
+        const oldSpeed = this.speed;
+        
+        // メッセンジャー等の速度バフは基礎速度に乗算される
+        this.speed = this.baseSpd * (1 + spdMod) + this.bonusSpd;
+        
+        // バフ等で速度が変わった場合、残り行動値の割合を維持して再計算
+        if (oldSpeed && oldSpeed !== this.speed && this.actionValue > 0) {
+            this.actionValue = this.actionValue * (oldSpeed / this.speed);
+        }
+    }
+
+    addBuff(buff) {
+        // メッセンジャーの速度バフは累積しない（上書き）
+        if (buff.name === 'messenger_spd') {
+            this.buffs = this.buffs.filter(b => b.name !== 'messenger_spd');
+        }
+        this.buffs.push(buff);
+        this.calculateSpeed();
+    }
+
+    tickBuffs() {
+        // ターン終了時にバフのターンを消費
+        this.buffs.forEach(b => b.duration--);
+        this.buffs = this.buffs.filter(b => b.duration > 0);
+        this.calculateSpeed();
+    }
+
+    resetActionValue() {
+        this.actionValue = 10000 / this.speed;
+    }
+
+    advanceAction(percent) {
+        // 行動順短縮 (現在の速度基準の基本AVに対してpercent分短縮)
+        const baseAV = 10000 / this.speed;
+        this.actionValue = Math.max(0, this.actionValue - (baseAV * percent));
+    }
+
+    gainEP(baseAmount) {
+        if (this.isEnemy) return;
+        this.currentEP = Math.min(this.maxEP, this.currentEP + baseAmount * this.err);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    let entities = [];
+    let state = {
+        currentAV: 0,
+        activeEntity: null,
+        phase: 'SETUP' // 'SETUP', 'WAITING_ACTION', 'ACTION_FINISHED'
+    };
+
+    let nextId = 1;
+
+    // Elements
+    const charName = document.getElementById('char-name');
+    const charBaseSpd = document.getElementById('char-base-spd');
+    const charBonusSpd = document.getElementById('char-bonus-spd');
+    const charErr = document.getElementById('char-err');
+    
+    const charLc = document.getElementById('char-lc');
+    const charRelic1 = document.getElementById('char-relic1');
+    const charRelic2 = document.getElementById('char-relic2');
+    const charOrnament = document.getElementById('char-ornament');
+    
+    const addCharBtn = document.getElementById('add-char-btn');
+    const charList = document.getElementById('char-list');
+    const startBtn = document.getElementById('start-combat-btn');
+    
+    const combatSetupPanel = document.getElementById('combat-setup-panel');
+    const combatArea = document.getElementById('combat-area');
+    const timeline = document.getElementById('timeline');
+    const currentAvDisplay = document.getElementById('current-av-display');
+    const activeActorName = document.getElementById('active-actor-name');
+    const activeActorSpd = document.getElementById('active-actor-spd');
+    const activeActorBuffs = document.getElementById('active-actor-buffs');
+    
+    const btnAttack = document.getElementById('btn-attack');
+    const btnSkill = document.getElementById('btn-skill');
+    const btnNextTurn = document.getElementById('btn-next-turn');
+    
+    const btnEndCombat = document.getElementById('btn-end-combat');
+    const statusModal = document.getElementById('status-modal');
+    const closeStatusModal = document.getElementById('close-status-modal');
+    const statusModalName = document.getElementById('status-modal-name');
+    const statusModalBody = document.getElementById('status-modal-body');
+
+    // キャラクターの追加
+    addCharBtn.addEventListener('click', () => {
+        const name = charName.value || `キャラ${nextId}`;
+        const bSpd = parseFloat(charBaseSpd.value) || 100;
+        const oSpd = parseFloat(charBonusSpd.value) || 0;
+        const err = parseFloat(charErr.value) || 100;
+        
+        const equipment = {
+            lc: charLc.value,
+            relic1: charRelic1.value,
+            relic2: charRelic2.value,
+            ornament: charOrnament.value
+        };
+        
+        // maxEP 100 で生成
+        const entity = new Entity(`c${nextId++}`, name, false, bSpd, oSpd, 100, err, equipment);
+        entities.push(entity);
+        
+        updateSetupList();
+    });
+
+    function updateSetupList() {
+        charList.innerHTML = '';
+        
+        const mapName = (v) => {
+            if(v === 'none') return 'なし';
+            if(v === 'eagle') return '昼夜の狭間を翔ける鷹';
+            if(v === 'messenger') return 'メッセ';
+            if(v === 'ddd') return 'ダンス';
+            if(v === 'vonwacq') return '生命のウェンワーク';
+            return v;
+        };
+
+        entities.forEach(e => {
+            if (e.isEnemy) return;
+            const div = document.createElement('div');
+            div.className = 'setup-char-item';
+            div.style.display = 'flex';
+            div.style.justifyContent = 'space-between';
+            div.style.alignItems = 'center';
+            
+            const lcName = mapName(e.equipment.lc);
+            const r1 = mapName(e.equipment.relic1);
+            const r2 = mapName(e.equipment.relic2);
+            const relicName = (r1 === r2) ? (r1 === 'なし' ? 'なし' : `${r1}4`) : `${r1}2+${r2}2`;
+            const ornamentName = mapName(e.equipment.ornament);
+
+            div.innerHTML = `
+                <div>
+                    <strong>${e.name}</strong>
+                    <span style="font-size: 0.85rem; color: var(--text-muted); margin-left: 10px;">
+                        合計速度:${e.speed.toFixed(1)} | 円錐:${lcName} | 遺物:${relicName} | オーナメント:${ornamentName}
+                    </span>
+                </div>
+                <button class="delete-char-btn" data-id="${e.id}" style="background: transparent; border: 1px solid #ff6b6b; color: #ff6b6b; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.backgroundColor='rgba(255,107,107,0.1)'" onmouseout="this.style.backgroundColor='transparent'">削除</button>
+            `;
+            
+            div.querySelector('.delete-char-btn').addEventListener('click', (ev) => {
+                const targetId = ev.target.getAttribute('data-id');
+                entities = entities.filter(ent => ent.id !== targetId);
+                div.remove();
+            });
+            
+            charList.appendChild(div);
+        });
+    }
+
+    // 戦闘開始
+    startBtn.addEventListener('click', () => {
+        if (entities.length === 0) return alert('キャラクターを追加してください');
+        
+        // ダミー敵の追加
+        entities.push(new Entity('e1', 'ダミーエネミーA', true, 120, 0, 0, 0, 'none'));
+        entities.push(new Entity('e2', 'ダミーエネミーB', true, 100, 0, 0, 0, 'none'));
+        
+        state.phase = 'WAITING_ACTION';
+        state.currentAV = 0;
+        
+        combatSetupPanel.style.display = 'none';
+        combatArea.style.display = 'block';
+        
+        nextTurn();
+    });
+
+    // 戦闘終了
+    btnEndCombat.addEventListener('click', () => {
+        if (!confirm('戦闘を終了して設定画面に戻りますか？')) return;
+        
+        // 敵を削除し、味方のステータスをリセット
+        entities = entities.filter(e => !e.isEnemy);
+        entities.forEach(e => {
+            e.currentEP = 50;
+            e.buffs = [];
+            e.calculateSpeed();
+            e.resetActionValue();
+        });
+        
+        state.phase = 'SETUP';
+        
+        combatArea.style.display = 'none';
+        combatSetupPanel.style.display = 'block';
+    });
+
+    // モーダルを閉じる
+    closeStatusModal.addEventListener('click', () => {
+        statusModal.style.display = 'none';
+    });
+
+    window.openStatus = function(id) {
+        const entity = entities.find(e => e.id === id);
+        if (!entity) return;
+        
+        statusModalName.textContent = entity.name;
+        
+        let buffsHtml = entity.buffs.length === 0 ? '<span style="color: var(--text-muted)">なし</span>' : '';
+        entity.buffs.forEach(b => {
+            const buffName = b.name === 'messenger_spd' ? '速度+12% (メッセンジャー)' : b.name;
+            buffsHtml += `<span class="buff-badge" style="margin-right: 5px; margin-bottom: 5px; display: inline-block;">${buffName} (${b.duration}T)</span>`;
+        });
+
+        statusModalBody.innerHTML = `
+            <div class="status-item">
+                <span>HP</span>
+                <strong>100%</strong>
+            </div>
+            <div class="status-item">
+                <span>EP</span>
+                <strong>${Math.floor(entity.currentEP)} / ${entity.maxEP}</strong>
+            </div>
+            <div class="status-item">
+                <span>速度</span>
+                <strong>${entity.speed.toFixed(1)} <span style="font-size:0.8rem; color:var(--text-muted);">(基礎${entity.baseSpd} + 加算${entity.bonusSpd})</span></strong>
+            </div>
+            <div class="status-item">
+                <span>残り行動値 (AV)</span>
+                <strong>${entity.actionValue.toFixed(1)}</strong>
+            </div>
+            <div class="status-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                <span style="color:var(--text-muted); font-size:0.8rem;">光円錐: ${entity.equipment?.lc === 'ddd' ? 'ダンス・ダンス・ダンス' : 'なし'}</span>
+                <span style="color:var(--text-muted); font-size:0.8rem;">遺物1: ${entity.equipment?.relic1 === 'eagle' ? '昼夜の狭間を翔ける鷹' : entity.equipment?.relic1 === 'messenger' ? 'メッセンジャー' : 'なし'}</span>
+                <span style="color:var(--text-muted); font-size:0.8rem;">遺物2: ${entity.equipment?.relic2 === 'eagle' ? '昼夜の狭間を翔ける鷹' : entity.equipment?.relic2 === 'messenger' ? 'メッセンジャー' : 'なし'}</span>
+                <span style="color:var(--text-muted); font-size:0.8rem;">オーナメント: ${entity.equipment?.ornament === 'vonwacq' ? '生命のウェンワーク' : 'なし'}</span>
+            </div>
+            <div class="status-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                <span>バフ・デバフ一覧</span>
+                <div>${buffsHtml}</div>
+            </div>
+        `;
+        
+        statusModal.style.display = 'flex';
+    };
+
+    function nextTurn() {
+        // 行動値の少ない順（＝行動順）にソート
+        entities.sort((a, b) => a.actionValue - b.actionValue);
+        const nextActor = entities[0];
+        const elapsed = nextActor.actionValue;
+        
+        // 時間（AV）を進める
+        if (elapsed > 0) {
+            state.currentAV += elapsed;
+            entities.forEach(e => {
+                e.actionValue = Math.max(0, e.actionValue - elapsed);
+            });
+        }
+        
+        state.activeEntity = nextActor;
+        state.phase = 'WAITING_ACTION';
+        
+        updateUI();
+    }
+
+    // UIの描画更新
+    window.updateUI = function() {
+        currentAvDisplay.textContent = state.currentAV.toFixed(1);
+        
+        // Timeline垂直描画 (AVの昇順)
+        const sorted = [...entities].sort((a, b) => a.actionValue - b.actionValue);
+        timeline.innerHTML = '';
+        sorted.forEach(e => {
+            const div = document.createElement('div');
+            div.className = `timeline-item ${e.isEnemy ? 'enemy' : ''}`;
+            if (e.id === state.activeEntity.id) {
+                div.style.borderColor = 'var(--accent-gold)';
+                div.style.backgroundColor = 'rgba(212, 175, 55, 0.2)';
+            }
+            div.innerHTML = `
+                <div class="clickable-area" onclick="openStatus('${e.id}')" style="padding: 5px; border-radius: 4px;">
+                    <div>${e.name}</div>
+                    <div class="timeline-av">${e.actionValue.toFixed(1)} AV</div>
+                </div>
+            `;
+            timeline.appendChild(div);
+        });
+        
+        // 現在のアクター情報
+        const actor = state.activeEntity;
+        
+        activeActorSpd.textContent = actor.speed.toFixed(1);
+        
+        activeActorBuffs.innerHTML = '';
+        actor.buffs.forEach(b => {
+            const span = document.createElement('span');
+            span.className = 'buff-badge';
+            span.textContent = `${b.name === 'messenger_spd' ? '速度+12%' : b.name} (${b.duration}T)`;
+            activeActorBuffs.appendChild(span);
+        });
+
+        if (state.phase === 'WAITING_ACTION') {
+            if (!actor.isEnemy) {
+                activeActorName.textContent = actor.name;
+                btnAttack.style.display = 'flex';
+                btnSkill.style.display = 'flex';
+                btnNextTurn.style.display = 'none';
+            } else {
+                activeActorName.textContent = `${actor.name} (敵のターン)`;
+                btnAttack.style.display = 'none';
+                btnSkill.style.display = 'none';
+                btnNextTurn.style.display = 'block';
+                btnNextTurn.textContent = '敵の行動を完了する';
+            }
+        } else if (state.phase === 'ACTION_FINISHED') {
+            activeActorName.textContent = `${actor.name} (行動完了・待機中)`;
+            btnAttack.style.display = 'none';
+            btnSkill.style.display = 'none';
+            btnNextTurn.style.display = 'block';
+            btnNextTurn.textContent = '次の行動順へ進む (時間を進める)';
+        }
+
+        // Party HUD (Bottom Left)
+        const partyHud = document.getElementById('party-hud');
+        if (partyHud) {
+            partyHud.innerHTML = '';
+            entities.filter(e => !e.isEnemy).forEach((e, index) => {
+                const isReady = e.currentEP >= 100;
+                const epPercent = (e.currentEP / e.maxEP) * 100;
+                
+                const div = document.createElement('div');
+                div.className = 'char-hud-item';
+                div.innerHTML = `
+                    <button class="char-ult-btn ${isReady ? 'ready' : ''}" onclick="triggerUlt('${e.id}')" ${!isReady ? 'disabled' : ''}>
+                        必殺技
+                    </button>
+                    <div class="clickable-area" onclick="openStatus('${e.id}')" style="padding: 5px; border-radius: 4px; width: 100%; text-align: center;">
+                        <div class="char-name-hud" style="color: ${e.id === actor.id ? 'var(--accent-gold)' : 'white'}; margin: 0 auto;">${e.name}</div>
+                        <div class="char-bars" style="margin: 0 auto;">
+                            <div class="hp-bar"><div class="hp-fill"></div></div>
+                            <div class="ep-bar"><div class="ep-fill" style="width: ${epPercent}%"></div></div>
+                        </div>
+                    </div>
+                `;
+                partyHud.appendChild(div);
+            });
+        }
+    }
+
+    // 必殺技の割り込み発動 (グローバルから呼べるようにする)
+    window.triggerUlt = function(id) {
+        const actor = entities.find(e => e.id === id);
+        if (!actor || actor.currentEP < 100) return;
+        
+        // 必殺技消費
+        actor.currentEP = 0;
+        actor.gainEP(5); // 使用時の固定回復
+        
+        // 鷹4セット効果
+        if (actor.hasEagle4) {
+            actor.advanceAction(0.25);
+        }
+        
+        // ダンス・ダンス・ダンス効果 (全体行動順24%短縮)
+        if (actor.hasDDD) {
+            entities.filter(e => !e.isEnemy).forEach(ally => {
+                ally.advanceAction(0.24);
+            });
+        }
+        
+        // メッセンジャー4セット効果
+        if (actor.hasMessenger4) {
+            entities.filter(e => !e.isEnemy).forEach(ally => {
+                ally.addBuff({ name: 'messenger_spd', spdMod: 0.12, duration: 1 });
+            });
+        }
+        
+        // 再描画 (行動値が変化している可能性があるため)
+        window.updateUI();
+    };
+
+    // ターン消費アクション (通常攻撃・戦闘スキル)
+    btnAttack.addEventListener('click', () => {
+        executeTurnAction('attack');
+    });
+    btnSkill.addEventListener('click', () => {
+        executeTurnAction('skill');
+    });
+
+    btnNextTurn.addEventListener('click', () => {
+        if (state.phase === 'WAITING_ACTION' && state.activeEntity.isEnemy) {
+            // 敵の行動処理
+            state.activeEntity.tickBuffs();
+            state.activeEntity.resetActionValue();
+            state.phase = 'ACTION_FINISHED';
+            window.updateUI();
+        } else if (state.phase === 'ACTION_FINISHED') {
+            // 次のターンへ時間を進める
+            nextTurn();
+        }
+    });
+
+    function executeTurnAction(type) {
+        const actor = state.activeEntity;
+        
+        if (type === 'attack') actor.gainEP(20);
+        else if (type === 'skill') actor.gainEP(30);
+        
+        // ターン終了処理
+        actor.tickBuffs();
+        actor.resetActionValue();
+        
+        // 状態を行動完了に変更し、手動で次に進むのを待つ
+        state.phase = 'ACTION_FINISHED';
+        window.updateUI(); 
+    }
+});

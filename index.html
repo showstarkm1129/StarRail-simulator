@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>崩壊スターレイル シミュレーター</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <h1>崩壊スターレイル シミュレーター</h1>
+        <nav class="tabs">
+            <button class="tab-btn active" data-target="tab-speed">速度・行動回数</button>
+            <button class="tab-btn" data-target="tab-combat">戦闘シミュ</button>
+            <button class="tab-btn" data-target="tab-diminishing" disabled>限界効用逓減 (未実装)</button>
+        </nav>
+    </header>
+
+    <main class="app-content">
+        <!-- 速度・行動回数タブ -->
+        <section id="tab-speed" class="tab-pane active">
+            <div class="panel">
+                <h2>速度と行動値</h2>
+                
+                <div class="mode-group">
+                    <label for="mode-select">コンテンツ:</label>
+                    <select id="mode-select">
+                        <option value="moc">忘却の庭 (最大5ラウンド)</option>
+                        <option value="pf">虚構叙事 (最大4ラウンド)</option>
+                        <option value="as">末日の幻影 (650 AV目標)</option>
+                        <option value="ar">異相の仲裁 (0R 300 / 最大6ラウンド)</option>
+                        <option value="custom">自由設定モード</option>
+                    </select>
+                </div>
+                
+                <div class="custom-settings" id="custom-settings" style="display: none;">
+                    <div class="custom-row">
+                        <label>計算方式:</label>
+                        <select id="custom-type">
+                            <option value="round">ラウンド制</option>
+                            <option value="av">総行動値</option>
+                        </select>
+                    </div>
+                    <div id="custom-round-inputs" class="custom-inputs">
+                        <div class="custom-col">
+                            <label>0R 行動値:</label>
+                            <input type="number" id="custom-first" value="150" min="0">
+                        </div>
+                        <div class="custom-col">
+                            <label>以降 行動値:</label>
+                            <input type="number" id="custom-next" value="100" min="0">
+                        </div>
+                        <div class="custom-col">
+                            <label>最大ラウンド:</label>
+                            <input type="number" id="custom-max" value="5" min="0">
+                        </div>
+                    </div>
+                    <div id="custom-av-inputs" class="custom-inputs" style="display: none;">
+                        <div class="custom-col">
+                            <label>目標 行動値:</label>
+                            <input type="number" id="custom-total" value="650" min="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-wrap: wrap; gap: 2rem; align-items: center; margin-bottom: 2rem;">
+                    <div class="input-group" style="margin-bottom: 0;">
+                        <label for="speed-input">キャラクター速度:</label>
+                        <input type="number" id="speed-input" value="100" min="1" step="0.1" style="width: 150px;">
+                    </div>
+                    
+                    <div class="result-box panel" style="margin-top: 0; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem; width: auto; background-color: rgba(0,0,0,0.2);">
+                        <h4 style="margin: 0; font-size: 1rem;">基本行動値:</h4>
+                        <div class="av-value" id="base-av" style="font-size: 1.8rem; margin: 0;">100.00</div>
+                    </div>
+                </div>
+
+                <div class="cycle-box">
+                    <h3 id="table-title">ラウンドごとの行動回数</h3>
+                    <p class="help-text" id="table-help">※ コンテンツ設定に基づき計算されます</p>
+                    <table class="cycle-table">
+                        <thead>
+                            <tr id="table-header">
+                                <th>ラウンド数</th>
+                                <th>累積行動値</th>
+                                <th>行動回数</th>
+                                <th>+1回行動の目標速度</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cycle-tbody">
+                            <!-- JSで生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 戦闘シミュタブ -->
+        <section id="tab-combat" class="tab-pane">
+            <div class="panel setup-panel" id="combat-setup-panel">
+                <h2>キャラクター設定</h2>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+                    <div class="input-group">
+                        <label>名前:</label>
+                        <input type="text" id="char-name" value="テストキャラ" style="width: 100px;">
+                    </div>
+                    <div class="input-group">
+                        <label>基礎速度:</label>
+                        <input type="number" id="char-base-spd" value="100" style="width: 60px;">
+                    </div>
+                    <div class="input-group">
+                        <label>速度加算:</label>
+                        <input type="number" id="char-bonus-spd" value="0" style="width: 60px;" step="0.1">
+                    </div>
+                    <div class="input-group">
+                        <label>EP効率(%):</label>
+                        <input type="number" id="char-err" value="100" style="width: 70px;" step="0.1">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
+                    <div class="input-group">
+                        <label>光円錐:</label>
+                        <select id="char-lc" style="padding: 0.3rem;">
+                            <option value="none">なし</option>
+                            <option value="ddd">ダンス・ダンス・ダンス (必殺後24%短縮)</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>トンネル遺物 (2枠):</label>
+                        <div style="display: flex; gap: 5px;">
+                            <select id="char-relic1" style="padding: 0.3rem;">
+                                <option value="none">なし</option>
+                                <option value="eagle">昼夜の狭間を翔ける鷹</option>
+                                <option value="messenger">メッセンジャー</option>
+                            </select>
+                            <select id="char-relic2" style="padding: 0.3rem;">
+                                <option value="none">なし</option>
+                                <option value="eagle">昼夜の狭間を翔ける鷹</option>
+                                <option value="messenger">メッセンジャー</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label>次元界オーナメント:</label>
+                        <select id="char-ornament" style="padding: 0.3rem;">
+                            <option value="none">なし</option>
+                            <option value="vonwacq">生命のウェンワーク</option>
+                        </select>
+                    </div>
+                    <button id="add-char-btn" class="primary-btn" style="margin-bottom: 2px;">追加</button>
+                </div>
+                
+                <h3>追加済みのキャラクター</h3>
+                <ul id="char-list" class="char-list"></ul>
+                
+                <div style="margin-top: 1.5rem;">
+                    <button id="start-combat-btn" class="primary-btn action-btn">戦闘開始 (ダミー敵も自動追加)</button>
+                </div>
+            </div>
+
+            <div class="combat-area-ui" id="combat-area" style="display:none;">
+                <!-- End Combat Button -->
+                <button id="btn-end-combat" class="btn-end-combat">戦闘終了</button>
+                
+                <!-- Status Modal -->
+                <div id="status-modal" class="status-modal" style="display: none;">
+                    <div class="status-modal-content">
+                        <span class="close-modal" id="close-status-modal">&times;</span>
+                        <h2 id="status-modal-name" style="color: var(--accent-gold); margin-bottom: 15px;">---</h2>
+                        <div id="status-modal-body"></div>
+                    </div>
+                </div>
+
+                <!-- Left: Timeline -->
+                <div class="timeline-vertical" id="timeline">
+                    <!-- JS generated -->
+                </div>
+
+                <!-- Center: Info -->
+                <div class="battle-center">
+                    <h3>現在の累計AV: <span id="current-av-display" style="color: var(--accent-gold);">0</span></h3>
+                    <h2 style="margin-top:20px;">現在のアクター: <span id="active-actor-name" style="color: var(--accent-gold);">---</span></h2>
+                    
+                    <div id="active-actor-buffs" class="buff-list" style="justify-content: center; margin-top: 10px;"></div>
+                    <div style="margin-top: 10px; color: var(--text-muted);">
+                        現在速度: <strong id="active-actor-spd" style="color: white;">100</strong>
+                    </div>
+                </div>
+
+                <!-- Bottom Left: Party HUD -->
+                <div class="party-hud" id="party-hud">
+                    <!-- JS generated -->
+                </div>
+
+                <!-- Bottom Right: Action HUD -->
+                <div class="action-hud">
+                    <div class="action-hud-row" id="action-buttons-container">
+                        <button id="btn-attack" class="round-btn btn-attack-ui">通常<br>EP+20</button>
+                        <button id="btn-skill" class="round-btn btn-skill-ui">スキル<br>EP+30</button>
+                    </div>
+                    <button id="btn-next-turn" class="btn-next-ui" style="display: none;">次の行動順へ進む</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="tab-diminishing" class="tab-pane">
+            <p>限界効用逓減計算機準備中...</p>
+        </section>
+    </main>
+
+    <script src="js/ui.js"></script>
+    <script src="js/speed.js"></script>
+    <script src="js/simulator.js"></script>
+</body>
+</html>
