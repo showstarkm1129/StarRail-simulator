@@ -13,11 +13,11 @@ class Entity {
         this.actionValue = 0;
         this.speed = 0;
         
-        // セット効果フラグ
-        this.hasEagle4 = (this.equipment.relic1 === 'eagle' && this.equipment.relic2 === 'eagle');
-        this.hasMessenger4 = (this.equipment.relic1 === 'messenger' && this.equipment.relic2 === 'messenger');
-        this.hasDDD = (this.equipment.lc === 'ddd');
-        this.hasVonwacq = (this.equipment.ornament === 'vonwacq');
+        // セット効果フラグ (setCounts が後から付与された場合にも対応するフォールバック)
+        this.hasEagle4     = (this.setCounts?.eagle     >= 4) || (this.equipment.relic1 === 'eagle'     && this.equipment.relic2 === 'eagle');
+        this.hasMessenger4 = (this.setCounts?.messenger >= 4) || (this.equipment.relic1 === 'messenger' && this.equipment.relic2 === 'messenger');
+        this.hasDDD        = (this.equipment.lc === 'ddd');
+        this.hasVonwacq    = (this.setCounts?.vonwacq   >= 2) || (this.equipment.ornament === 'vonwacq');
         
         this.calculateSpeed();
         this.resetActionValue();
@@ -75,6 +75,9 @@ class Entity {
         this.currentEP = Math.min(this.maxEP, this.currentEP + baseAmount * this.err);
     }
 }
+
+// ES Modules (bootstrap.js) からも new Entity() できるようにグローバルへ公開
+if (typeof window !== 'undefined') window.Entity = Entity;
 
 document.addEventListener('DOMContentLoaded', () => {
     let entities = [];
@@ -379,30 +382,37 @@ document.addEventListener('DOMContentLoaded', () => {
     window.triggerUlt = function(id) {
         const actor = entities.find(e => e.id === id);
         if (!actor || actor.currentEP < 100) return;
-        
+
         // 必殺技消費
         actor.currentEP = 0;
         actor.gainEP(5); // 使用時の固定回復
-        
-        // 鷹4セット効果
-        if (actor.hasEagle4) {
-            actor.advanceAction(0.25);
+
+        const allies = entities.filter(e => !e.isEnemy);
+        const enemies = entities.filter(e => e.isEnemy);
+
+        if (actor.hooks !== undefined) {
+            // 新形態: buildToEntity 経由で hooks が紐付いている Entity は
+            //         data/ 配下の hook 定義経由でディスパッチする。
+            const ctx = { self: actor, allies, enemies };
+            const onUltUse = actor.hooks?.onUltUse;
+            if (Array.isArray(onUltUse)) {
+                for (const h of onUltUse) {
+                    try { h.fn(ctx); }
+                    catch (err) { console.error(`[ult hook ${h.source}]`, err); }
+                }
+            }
+        } else {
+            // 旧形態: 旧UIで直接生成された Entity 向けハードコード経路
+            // 鷹4セット
+            if (actor.hasEagle4) actor.advanceAction(0.25);
+            // ダンス・ダンス・ダンス (重畳指定なしのため S1 = 16% を採用)
+            if (actor.hasDDD) allies.forEach(ally => ally.advanceAction(0.16));
+            // メッセンジャー4セット
+            if (actor.hasMessenger4) {
+                allies.forEach(ally => ally.addBuff({ name: 'messenger_spd', spdMod: 0.12, duration: 1 }));
+            }
         }
-        
-        // ダンス・ダンス・ダンス効果 (全体行動順24%短縮)
-        if (actor.hasDDD) {
-            entities.filter(e => !e.isEnemy).forEach(ally => {
-                ally.advanceAction(0.24);
-            });
-        }
-        
-        // メッセンジャー4セット効果
-        if (actor.hasMessenger4) {
-            entities.filter(e => !e.isEnemy).forEach(ally => {
-                ally.addBuff({ name: 'messenger_spd', spdMod: 0.12, duration: 1 });
-            });
-        }
-        
+
         // 再描画 (行動値が変化している可能性があるため)
         window.updateUI();
     };
