@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>崩壊スターレイル シミュレーター</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -12,7 +15,7 @@
         <nav class="tabs">
             <button class="tab-btn active" data-target="tab-speed">速度・行動回数</button>
             <button class="tab-btn" data-target="tab-combat">戦闘シミュ</button>
-            <button class="tab-btn" data-target="tab-diminishing" disabled>限界効用逓減 (未実装)</button>
+            <button class="tab-btn" data-target="tab-diminishing">限界効用逓減</button>
         </nav>
     </header>
 
@@ -204,12 +207,15 @@
         </section>
 
         <section id="tab-diminishing" class="tab-pane">
-            <p>限界効用逓減計算機準備中...</p>
+            <!-- 中身は js/ui/diminishingUI.js が動的に生成 -->
         </section>
     </main>
 
-    <script src="js/ui.js"></script>
-    <script src="js/speed.js"></script>
-    <script src="js/simulator.js"></script>
+    <!-- dev: 開発中はキャッシュバスト用に ?v= を付与。リリース時は固定値に。 -->
+    <script>window.__APPV__ = String(Date.now());</script>
+    <script>document.write('<script src="js/ui.js?v=' + window.__APPV__ + '"><\/script>');</script>
+    <script>document.write('<script src="js/speed.js?v=' + window.__APPV__ + '"><\/script>');</script>
+    <script>document.write('<script src="js/simulator.js?v=' + window.__APPV__ + '"><\/script>');</script>
+    <script>document.write('<script type="module" src="js/bootstrap.js?v=' + window.__APPV__ + '"><\/script>');</script>
 </body>
 </html>
