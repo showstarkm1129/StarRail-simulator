@@ -23,4 +23,9 @@ Registry.lightcone.add({
             ctx.allies?.forEach(a => a.advanceAction?.(pct));
         },
     }),
+
+    // パーティ枠経由で focus キャラに与える効果
+    //   関数または配列。関数なら (superimpose) を受け取り配列を返す。
+    //   DDD は行動値短縮のみで focus キャラのステータスには影響しないため空配列。
+    partyEffects: (superimpose) => [],
 });

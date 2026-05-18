@@ -12,7 +12,7 @@
 // SPD変化は情報表示のみで火力換算しない(memory: project_diminishing_scope)。
 
 import { Registry } from '../build/registry.js';
-import { StatComputer } from '../build/statComputer.js';
+import { StatComputer, countSetsByType } from '../build/statComputer.js';
 import { Diminishing } from '../build/diminishing.js';
 import { Build as BuildStore } from '../build/buildStore.js';
 import {
@@ -43,6 +43,9 @@ const SUB_INPUTS = [
 ];
 
 const SUB_LABEL_PREFIX = 'サブステ.';
+const PARTY_LABEL_PREFIX = 'パーティ.';   // envBuffs のラベル識別子
+
+const PARTY_SLOTS = 3;   // focus 以外のチームメンバー枠数
 
 // スキルキーの表示順 / 表示名
 const SKILL_DISPLAY_ORDER = ['basic', 'skill', 'ult', 'talent', 'technique'];
@@ -63,6 +66,18 @@ const state = {
     build: null,
     snapshot: null,
     options: { ...Diminishing.DEFAULT_OPTIONS },
+    // パーティ枠: focus 以外のメンバー × 3
+    //   各要素: {
+    //     characterId: string|null,           簡易モード用 (キャラ select の値)
+    //     levelPreset: 'default'|'eidolon',   簡易モード用 (無凸MAX / 凸後MAX)
+    //     buildId: string|null,                ビルドモード用 (BuildStore の id、優先)
+    //     activeEffectIds: Set<string>,        合成ID: 'char.<id>' | 'lc.<id>' | 'set:<setId>:pc2.<id>' 等
+    //   }
+    party: [
+        { mode: 'simple', characterId: null, levelPreset: 'eidolon', buildId: null, activeEffectIds: new Set() },
+        { mode: 'simple', characterId: null, levelPreset: 'eidolon', buildId: null, activeEffectIds: new Set() },
+        { mode: 'simple', characterId: null, levelPreset: 'eidolon', buildId: null, activeEffectIds: new Set() },
+    ],
 };
 
 // ---- エントリ ----------------------------------------------------------
@@ -99,6 +114,33 @@ function renderShell() {
                 <br><span style="color: var(--text-muted)">※ SPD変化は情報表示のみ。行動回数の影響は「速度・行動回数」タブで別途確認してください。</span>
             </p>
 
+            <div class="dim-build-mgr">
+                <h3 class="dim-build-mgr-title">ビルド管理</h3>
+                <div class="dim-build-mgr-row">
+                    <label>名前</label>
+                    <input id="dim-build-name" type="text" placeholder="ビルド名" value="">
+                    <button id="dim-build-save" class="btn-primary btn-mini">保存 / 上書き</button>
+                    <button id="dim-build-new" class="btn-secondary btn-mini">新規 (クリア)</button>
+                </div>
+                <div class="dim-build-mgr-row">
+                    <label>保存済み</label>
+                    <select id="dim-build-list"></select>
+                    <button id="dim-build-load" class="btn-secondary btn-mini">読込</button>
+                    <button id="dim-build-delete" class="btn-secondary btn-mini">削除</button>
+                </div>
+                <div class="dim-build-mgr-row">
+                    <button id="dim-build-export" class="btn-secondary btn-mini">JSON書出</button>
+                    <button id="dim-build-import" class="btn-secondary btn-mini">JSON読込</button>
+                </div>
+                <div id="dim-build-json-area" class="dim-build-json-area" style="display:none">
+                    <textarea id="dim-build-json-text" rows="6" placeholder="JSONをここに貼り付け / 書出時はここに表示"></textarea>
+                    <div class="dim-build-mgr-row">
+                        <button id="dim-build-json-apply" class="btn-primary btn-mini">適用 (merge)</button>
+                        <button id="dim-build-json-close" class="btn-secondary btn-mini">閉じる</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="dim-controls">
                 <button id="dim-snapshot-btn" class="btn-primary">現状をスナップショットして比較開始</button>
                 <button id="dim-clear-btn" class="btn-secondary">スナップショットをクリア</button>
@@ -134,17 +176,18 @@ function renderShell() {
                 </div>
 
                 <div class="dim-panel">
-                    <h3>遺物 メインステ</h3>
-                    ${ALL_SLOTS.map(slot => `
-                        <div class="dim-row dim-slot-row">
-                            <label>${slotLabel(slot)}</label>
-                            <select class="dim-relic-main" data-slot="${slot}"></select>
-                        </div>
-                    `).join('')}
-                </div>
+                    <h3>遺物</h3>
+                    <h4 class="dim-subheading-inline">メインステ</h4>
+                    <div class="dim-relic-main-grid">
+                        ${ALL_SLOTS.map(slot => `
+                            <div class="dim-relic-slot">
+                                <label>${slotLabel(slot)}</label>
+                                <select class="dim-relic-main" data-slot="${slot}"></select>
+                            </div>
+                        `).join('')}
+                    </div>
 
-                <div class="dim-panel">
-                    <h3>セット効果(一括選択)</h3>
+                    <h4 class="dim-subheading">セット効果(一括選択)</h4>
                     <p class="dim-panel-hint">セットを選ぶと自動で各部位に適用されます。</p>
 
                     <div class="dim-preset-block">
@@ -182,7 +225,7 @@ function renderShell() {
                     </div>
                 </div>
 
-                <div class="dim-panel">
+                <div class="dim-panel dim-subs-panel">
                     <h3>サブステ合計</h3>
                     <p class="dim-panel-hint">遺物全体の副詞品集計値を入力 (% は数値で「25」と入力すると 25%)</p>
                     <div class="dim-subs-grid">
@@ -195,6 +238,17 @@ function renderShell() {
                         `).join('')}
                     </div>
                 </div>
+            </div>
+
+            <div class="dim-panel dim-party-panel">
+                <h3>パーティ (他メンバーのバフ)</h3>
+                <p class="dim-panel-hint">
+                    teammate を枠に追加 → 効果のチェックボックスで focus キャラの計算に反映。
+                    <b>簡易モード</b>はキャラ + Lvプリセットのみ、<b>ビルドモード</b>は保存ビルドから完全ステを読み込み(光円錐・遺物セットの partyEffects も対象に)。
+                    caster ステ依存(必殺CD = caster.CD × Y% + Z% 等)は teammate の実 CD を使って動的計算されます。
+                    <br><span style="color: var(--text-muted)">※ focus と同じキャラを teammate に入れることも可能(セルフバフ計算用)。ただし常時オーラ(昇格6 等)は focus の traces に既に含まれているため、二重計上を避けるため party 側で OFF にすること。</span>
+                </p>
+                <div id="dim-party-grid" class="dim-party-grid"></div>
             </div>
 
             <div class="dim-panel dim-options-panel">
@@ -261,6 +315,8 @@ function refreshAllForms() {
     fillOptionInputs();
     fillLevelInputs();
     fillPresetSelects();
+    refreshBuildList();
+    renderParty();
     renderCharDetail();
 }
 
@@ -387,7 +443,11 @@ function bindAll() {
         state.build.characterId = e.target.value;
         // キャラ変更時はLvを無凸MAXで再初期化
         state.build.traceLevel = presetDefaultMaxLevels(Registry.character.get(e.target.value));
+        // ※ パーティ枠に同キャラがいてもクリアしない (セルフバフ計算を許容)
+        //   常時オーラ等は二重計上になるためユーザー側で off にすること
         fillLevelInputs();
+        renderParty();    // 選択肢の表示更新
+        applyPartyToEnvBuffs();
         renderCharDetail();
         recompute();
     });
@@ -538,6 +598,428 @@ function bindAll() {
         const open = body?.classList.toggle('open');
         head.classList.toggle('open', !!open);
     });
+
+    // ---- ビルド管理 ----------------------------------------------------
+    document.getElementById('dim-build-save').addEventListener('click', () => {
+        const name = document.getElementById('dim-build-name').value.trim();
+        if (!name) { alert('ビルド名を入力してください'); return; }
+        state.build.name = name;
+        // 同名既存があれば ID 引き継ぎ(=上書き)、なければ既存 ID で保存(=新規 or 既存上書き)
+        const existing = BuildStore.list().find(b => b.name === name);
+        if (existing && existing.id !== state.build.id) state.build.id = existing.id;
+        const saved = BuildStore.save(state.build);
+        state.build.id = saved.id;
+        refreshBuildList();
+    });
+
+    document.getElementById('dim-build-new').addEventListener('click', () => {
+        if (!confirm('現在の編集内容をクリアして新規ビルドを作成しますか?')) return;
+        const ch = Registry.character.get(state.build.characterId)
+                || Registry.character.list().find(c => c.id !== 'template');
+        state.build = BuildStore.blank(ch.id);
+        state.build.name = '';
+        state.build.traceLevel = presetDefaultMaxLevels(ch);
+        document.getElementById('dim-build-name').value = '';
+        refreshAllForms();
+        recompute();
+    });
+
+    document.getElementById('dim-build-load').addEventListener('click', () => {
+        const id = document.getElementById('dim-build-list').value;
+        if (!id) return;
+        const b = BuildStore.get(id);
+        if (!b) { alert('ビルドが見つかりません'); return; }
+        state.build = JSON.parse(JSON.stringify(b));
+        document.getElementById('dim-build-name').value = b.name || '';
+        // eidolon select 反映
+        const eSel = document.getElementById('dim-eidolon');
+        if (eSel) eSel.value = String(state.build.eidolon || 0);
+        refreshAllForms();
+        recompute();
+    });
+
+    document.getElementById('dim-build-delete').addEventListener('click', () => {
+        const id = document.getElementById('dim-build-list').value;
+        if (!id) return;
+        const b = BuildStore.get(id);
+        if (!b) return;
+        if (!confirm(`「${b.name || id}」を削除しますか?`)) return;
+        BuildStore.delete(id);
+        refreshBuildList();
+    });
+
+    document.getElementById('dim-build-export').addEventListener('click', () => {
+        const text = BuildStore.exportJson();
+        const area = document.getElementById('dim-build-json-area');
+        area.style.display = 'block';
+        document.getElementById('dim-build-json-text').value = text;
+    });
+
+    document.getElementById('dim-build-import').addEventListener('click', () => {
+        const area = document.getElementById('dim-build-json-area');
+        area.style.display = 'block';
+        document.getElementById('dim-build-json-text').value = '';
+        document.getElementById('dim-build-json-text').focus();
+    });
+
+    document.getElementById('dim-build-json-apply').addEventListener('click', () => {
+        const text = document.getElementById('dim-build-json-text').value.trim();
+        if (!text) return;
+        try {
+            const total = BuildStore.importJson(text, 'merge');
+            alert(`読み込み完了。合計 ${total} 件のビルドが保存済みです。`);
+            refreshBuildList();
+            document.getElementById('dim-build-json-area').style.display = 'none';
+        } catch (err) {
+            alert('JSON読込エラー: ' + err.message);
+        }
+    });
+
+    document.getElementById('dim-build-json-close').addEventListener('click', () => {
+        document.getElementById('dim-build-json-area').style.display = 'none';
+    });
+}
+
+// ---- パーティ枠 (Feature 3: Plan A) -----------------------------------
+
+// 各 slot に対し、計算用 teammate build を派生する。
+//   buildId 優先 (BuildStore から完全ビルド)。なければ簡易モード(char + Lv preset)で blank ビルドを構築。
+function partyBuildFor(slot) {
+    if (slot.buildId) {
+        const b = BuildStore.get(slot.buildId);
+        if (b) return JSON.parse(JSON.stringify(b));   // 防御コピー
+    }
+    if (!slot.characterId) return null;
+    const ch = Registry.character.get(slot.characterId);
+    if (!ch) return null;
+    const b = BuildStore.blank(slot.characterId);
+    b.eidolon = slot.levelPreset === 'eidolon' ? 6 : 0;
+    b.traceLevel = slot.levelPreset === 'eidolon'
+        ? presetEidolonMaxLevels(ch)
+        : presetDefaultMaxLevels(ch);
+    return b;
+}
+
+// teammate に紐づく全 partyEffects をソース別に収集
+//   返り値: [{ srcKey, srcLabel, ef }, ...]
+//     srcKey 例: 'char' | 'lc' | 'set:messenger:pc4' | 'orn:vonwacq:pc2'
+function gatherTeammateEffects(teammateBuild) {
+    if (!teammateBuild) return [];
+    const out = [];
+    const ch = Registry.character.get(teammateBuild.characterId);
+    if (!ch) return out;
+
+    // キャラ
+    for (const ef of ch.partyEffects || []) {
+        out.push({ srcKey: 'char', srcLabel: `キャラ: ${ch.name}`, ef });
+    }
+
+    // 光円錐
+    if (teammateBuild.lightcone?.id) {
+        const lc = Registry.lightcone.get(teammateBuild.lightcone.id);
+        if (lc) {
+            const si = Math.max(1, Math.min(5, teammateBuild.lightcone.superimpose || 1));
+            const lcEffects = typeof lc.partyEffects === 'function'
+                ? (lc.partyEffects(si) || [])
+                : (lc.partyEffects || []);
+            for (const ef of lcEffects) {
+                out.push({ srcKey: 'lc', srcLabel: `光円錐: ${lc.name} S${si}`, ef });
+            }
+        }
+    }
+
+    // 洞窟セット (装着 setId のセット効果のみ)
+    const cavCounts = countSetsByType(teammateBuild.relics, SET_TYPE.CAVERN);
+    for (const [setId, cnt] of Object.entries(cavCounts)) {
+        const set = Registry.relicSet.get(setId);
+        if (!set?.partyEffects) continue;
+        if (cnt >= 2) for (const ef of set.partyEffects.pc2 || []) {
+            out.push({ srcKey: `set:${setId}:pc2`, srcLabel: `セット: ${set.name} 2pc`, ef });
+        }
+        if (cnt >= 4) for (const ef of set.partyEffects.pc4 || []) {
+            out.push({ srcKey: `set:${setId}:pc4`, srcLabel: `セット: ${set.name} 4pc`, ef });
+        }
+    }
+
+    // 次元界オーナメント
+    const ornCounts = countSetsByType(teammateBuild.relics, SET_TYPE.PLANAR);
+    for (const [setId, cnt] of Object.entries(ornCounts)) {
+        const orn = Registry.ornament.get(setId);
+        if (!orn?.partyEffects) continue;
+        if (cnt >= 2) for (const ef of orn.partyEffects.pc2 || []) {
+            out.push({ srcKey: `orn:${setId}:pc2`, srcLabel: `次元界: ${orn.name} 2pc`, ef });
+        }
+    }
+
+    return out;
+}
+
+// 効果1つに対する実際の stats を解決
+//   ef.stats が定義 → そのまま
+//   ef.fromLevel + ef.computeStats が定義 → teammate の Lv と FinalStats を使って動的計算
+function resolveEffectStats(ef, teammateBuild, teammateStats) {
+    if (ef.stats) return ef.stats;
+    if (typeof ef.computeStats === 'function') {
+        const ch = Registry.character.get(teammateBuild.characterId);
+        const skill = ch?.skills?.[ef.fromLevel];
+        if (!skill?.levels) return null;
+        const lv = (teammateBuild.traceLevel?.[ef.fromLevel]) || 1;
+        const idx = Math.max(0, Math.min(skill.levels.length - 1, lv - 1));
+        const mult = skill.levels[idx];
+        try {
+            return ef.computeStats(lv, mult, teammateStats);
+        } catch (err) {
+            console.warn('[diminishingUI] computeStats failed', ef.id, err);
+            return null;
+        }
+    }
+    return null;
+}
+
+// 合成 effect ID: srcKey + '.' + ef.id (チェックボックスの状態管理用)
+const effectKey = (srcKey, efId) => `${srcKey}.${efId}`;
+
+function renderParty() {
+    const grid = document.getElementById('dim-party-grid');
+    if (!grid) return;
+    grid.innerHTML = state.party.map((slot, idx) => renderPartySlot(slot, idx)).join('');
+
+    // モード(簡易/ビルド)ラジオ
+    grid.querySelectorAll('.dim-party-mode').forEach(r => {
+        r.addEventListener('change', e => {
+            if (!r.checked) return;
+            const idx = parseInt(r.dataset.idx, 10);
+            state.party[idx].mode = r.value;
+            if (state.party[idx].mode === 'simple') {
+                state.party[idx].buildId = null;
+            }
+            applyDefaultActiveEffects(idx);
+            renderParty();
+            applyPartyToEnvBuffs();
+            recompute();
+        });
+    });
+
+    // キャラ選択 (簡易モード)
+    grid.querySelectorAll('.dim-party-char').forEach(sel => {
+        sel.addEventListener('change', e => {
+            const idx = parseInt(sel.dataset.idx, 10);
+            state.party[idx].characterId = e.target.value || null;
+            state.party[idx].buildId = null;   // 簡易モードに切替
+            applyDefaultActiveEffects(idx);
+            renderParty();
+            applyPartyToEnvBuffs();
+            recompute();
+        });
+    });
+
+    // 凸プリセット (簡易モード)
+    grid.querySelectorAll('.dim-party-levelpreset').forEach(r => {
+        r.addEventListener('change', () => {
+            if (!r.checked) return;
+            const idx = parseInt(r.dataset.idx, 10);
+            state.party[idx].levelPreset = r.value;
+            renderParty();
+            applyPartyToEnvBuffs();
+            recompute();
+        });
+    });
+
+    // ビルド選択 (ビルドモード)
+    grid.querySelectorAll('.dim-party-buildsel').forEach(sel => {
+        sel.addEventListener('change', e => {
+            const idx = parseInt(sel.dataset.idx, 10);
+            state.party[idx].buildId = e.target.value || null;
+            if (state.party[idx].buildId) {
+                const b = BuildStore.get(state.party[idx].buildId);
+                if (b) state.party[idx].characterId = b.characterId;
+            }
+            applyDefaultActiveEffects(idx);
+            renderParty();
+            applyPartyToEnvBuffs();
+            recompute();
+        });
+    });
+
+    // 効果チェックボックス
+    grid.querySelectorAll('.dim-party-effect').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const idx = parseInt(cb.dataset.idx, 10);
+            const key = cb.dataset.effectKey;
+            if (cb.checked) state.party[idx].activeEffectIds.add(key);
+            else state.party[idx].activeEffectIds.delete(key);
+            renderParty();    // 計算済み値の表示を更新するため再描画
+            applyPartyToEnvBuffs();
+            recompute();
+        });
+    });
+}
+
+// キャラ/ビルド変更時に default-active な効果を自動チェック
+function applyDefaultActiveEffects(idx) {
+    const slot = state.party[idx];
+    slot.activeEffectIds = new Set();
+    const tBuild = partyBuildFor(slot);
+    if (!tBuild) return;
+    const effects = gatherTeammateEffects(tBuild);
+    for (const { srcKey, ef } of effects) {
+        if (ef.defaultActive) slot.activeEffectIds.add(effectKey(srcKey, ef.id));
+    }
+}
+
+function renderPartySlot(slot, idx) {
+    // 注: focus と同じキャラも party に入れられる(セルフバフ計算用)。
+    //     ただし常時オーラ(昇格6 等)は focus の traces に既に含まれており
+    //     party 側でも ON にすると二重計上になるため、ユーザー側で off にすること。
+    const charOptions = [`<option value="">(なし)</option>`].concat(
+        Registry.character.list()
+            .filter(c => c.id !== 'template')
+            .map(c => {
+                const sameAsFocus = c.id === state.build.characterId;
+                const label = sameAsFocus ? `${c.name} (focusと同キャラ)` : c.name;
+                return `<option value="${c.id}" ${c.id === slot.characterId ? 'selected' : ''}>${label}</option>`;
+            })
+    ).join('');
+
+    const buildOptions = [`<option value="">(なし)</option>`].concat(
+        BuildStore.list()
+            .map(b => {
+                const ch = Registry.character.get(b.characterId);
+                const sameAsFocus = b.characterId === state.build.characterId;
+                const tag = sameAsFocus ? ' (focusと同キャラ)' : '';
+                return `<option value="${b.id}" ${b.id === slot.buildId ? 'selected' : ''}>${escapeHtml(b.name || '(無名)')} — ${ch?.name || b.characterId}${tag}</option>`;
+            })
+    ).join('');
+
+    const isBuildMode = slot.mode === 'build';
+    const tBuild = partyBuildFor(slot);
+    const ch = tBuild ? Registry.character.get(tBuild.characterId) : null;
+    let tStats = null;
+    try { tStats = tBuild ? StatComputer.compute(tBuild) : null; }
+    catch (err) { console.error('[party] tStats compute failed', err, tBuild); }
+    const effects = gatherTeammateEffects(tBuild);
+
+    // ソース別にグルーピング
+    const groups = new Map();   // srcLabel → [{srcKey, ef, resolvedStats}, ...]
+    for (const item of effects) {
+        const resolvedStats = resolveEffectStats(item.ef, tBuild, tStats);
+        if (!groups.has(item.srcLabel)) groups.set(item.srcLabel, []);
+        groups.get(item.srcLabel).push({ ...item, resolvedStats });
+    }
+
+    const effectsHtml = (groups.size === 0)
+        ? (ch ? '<p class="dim-empty">パーティ効果データ未登録</p>' : '<p class="dim-empty">キャラ/ビルドを選択してください</p>')
+        : Array.from(groups.entries()).map(([srcLabel, items]) => `
+            <div class="dim-party-source-group">
+                <h5 class="dim-party-source-label">${escapeHtml(srcLabel)}</h5>
+                ${items.map(({ srcKey, ef, resolvedStats }) => {
+                    const ekey = effectKey(srcKey, ef.id);
+                    const checked = slot.activeEffectIds.has(ekey);
+                    return `
+                        <label class="dim-party-effect-row" title="${escapeHtml(ef.description || '')}">
+                            <input type="checkbox" class="dim-party-effect"
+                                   data-idx="${idx}" data-effect-key="${ekey}"
+                                   ${checked ? 'checked' : ''}>
+                            <span class="dim-party-effect-name">${escapeHtml(ef.name)}</span>
+                            <span class="dim-party-effect-stats">${formatEffectStats(resolvedStats)}</span>
+                        </label>
+                    `;
+                }).join('')}
+            </div>
+        `).join('');
+
+    return `
+        <div class="dim-party-slot">
+            <div class="dim-party-slot-head">
+                <span class="dim-party-slot-label">枠 ${idx + 1}</span>
+                ${ch ? `<span class="dim-party-slot-char">${escapeHtml(ch.name)}</span>` : ''}
+            </div>
+            <div class="dim-party-slot-config">
+                <div class="dim-party-mode-row">
+                    <label class="dim-radio">
+                        <input type="radio" class="dim-party-mode" data-idx="${idx}" name="party-mode-${idx}" value="simple" ${!isBuildMode ? 'checked' : ''}> 簡易
+                    </label>
+                    <label class="dim-radio">
+                        <input type="radio" class="dim-party-mode" data-idx="${idx}" name="party-mode-${idx}" value="build" ${isBuildMode ? 'checked' : ''}> ビルドから
+                    </label>
+                </div>
+                ${isBuildMode ? `
+                    <div class="dim-party-buildmode-config">
+                        <label>ビルド</label>
+                        <select class="dim-party-buildsel" data-idx="${idx}">${buildOptions}</select>
+                    </div>
+                ` : `
+                    <div class="dim-party-simplemode-config">
+                        <label>キャラ</label>
+                        <select class="dim-party-char" data-idx="${idx}">${charOptions}</select>
+                        <span class="dim-party-lvpreset">
+                            <label class="dim-radio">
+                                <input type="radio" class="dim-party-levelpreset" data-idx="${idx}" name="party-lv-${idx}" value="default" ${slot.levelPreset === 'default' ? 'checked' : ''}> 無凸MAX
+                            </label>
+                            <label class="dim-radio">
+                                <input type="radio" class="dim-party-levelpreset" data-idx="${idx}" name="party-lv-${idx}" value="eidolon" ${slot.levelPreset === 'eidolon' ? 'checked' : ''}> 凸後MAX
+                            </label>
+                        </span>
+                    </div>
+                `}
+            </div>
+            <div class="dim-party-effects">${effectsHtml}</div>
+        </div>
+    `;
+}
+
+function formatEffectStats(stats) {
+    if (!stats) return '<span class="dim-party-effect-stats-empty">—</span>';
+    const parts = Object.entries(stats).map(([k, v]) => {
+        const isFlat = k.endsWith('Flat') || k === 'spdBase' || k === 'atkBase';
+        const valStr = isFlat ? `+${v.toFixed(1)}` : `+${(v * 100).toFixed(2)}%`;
+        return `${formatStatLabel(k)} ${valStr}`;
+    });
+    return parts.join(' / ');
+}
+
+// パーティ効果を state.build.envBuffs に反映 (既存「パーティ.*」を一掃して書き直し)
+function applyPartyToEnvBuffs() {
+    state.build.envBuffs = (state.build.envBuffs || []).filter(b =>
+        !(typeof b.label === 'string' && b.label.startsWith(PARTY_LABEL_PREFIX))
+    );
+    for (let idx = 0; idx < state.party.length; idx++) {
+        const slot = state.party[idx];
+        const tBuild = partyBuildFor(slot);
+        if (!tBuild) continue;
+        const tStats = StatComputer.compute(tBuild);
+        const effects = gatherTeammateEffects(tBuild);
+        for (const { srcKey, ef } of effects) {
+            const ekey = effectKey(srcKey, ef.id);
+            if (!slot.activeEffectIds.has(ekey)) continue;
+            const stats = resolveEffectStats(ef, tBuild, tStats);
+            if (!stats) continue;
+            for (const [stat, value] of Object.entries(stats)) {
+                state.build.envBuffs.push({
+                    stat,
+                    value,
+                    label: `${PARTY_LABEL_PREFIX}${idx}.${srcKey}.${ef.id}.${stat}`,
+                });
+            }
+        }
+    }
+}
+
+function refreshBuildList() {
+    const sel = document.getElementById('dim-build-list');
+    if (!sel) return;
+    const builds = BuildStore.list();
+    if (builds.length === 0) {
+        sel.innerHTML = '<option value="">(保存ビルドなし)</option>';
+        return;
+    }
+    sel.innerHTML = builds
+        .sort((a, b) => (b.meta?.updatedAt || '').localeCompare(a.meta?.updatedAt || ''))
+        .map(b => {
+            const ch = Registry.character.get(b.characterId);
+            const charName = ch?.name || b.characterId || '?';
+            return `<option value="${b.id}">${escapeHtml(b.name || '(無名)')} — ${charName}</option>`;
+        }).join('');
 }
 
 function applySubInputs() {

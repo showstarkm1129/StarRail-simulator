@@ -584,6 +584,63 @@ body {
     background-color: #e5bd3c;
 }
 
+/* 戦闘シミュ: 保存ビルドローダー */
+.build-loader-section {
+    margin-top: 1.5rem;
+    padding: 0.8rem 1rem;
+    background-color: rgba(74, 144, 226, 0.06);
+    border: 1px solid rgba(74, 144, 226, 0.25);
+    border-radius: 6px;
+}
+.build-loader-section h3 {
+    color: var(--accent-blue);
+    font-size: 1rem;
+    margin-bottom: 0.3rem;
+}
+.build-loader-hint {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    margin-bottom: 0.6rem;
+}
+.build-loader-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.build-loader-row select {
+    flex: 1;
+    min-width: 220px;
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 0.4rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.88rem;
+}
+.secondary-btn-small {
+    background-color: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+.secondary-btn-small:hover {
+    color: var(--text-main);
+    border-color: var(--text-muted);
+}
+.build-tag {
+    background-color: var(--accent-blue);
+    color: white;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    margin-left: 0.4rem;
+}
+
 /* ===== 限界効用逓減タブ ===== */
 .dim-container {
     padding: 1.5rem;
@@ -613,6 +670,60 @@ body {
     background-color: var(--bg-panel);
     border: 1px solid var(--border-color);
     border-radius: 6px;
+}
+
+/* ===== ビルド管理 ===== */
+.dim-build-mgr {
+    background-color: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+    margin-bottom: 0.8rem;
+}
+.dim-build-mgr-title {
+    color: var(--accent-gold);
+    font-size: 0.95rem;
+    margin-bottom: 0.6rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.3rem;
+}
+.dim-build-mgr-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+    flex-wrap: wrap;
+}
+.dim-build-mgr-row label {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    flex: 0 0 60px;
+}
+.dim-build-mgr-row input[type="text"],
+.dim-build-mgr-row select {
+    flex: 1;
+    min-width: 180px;
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 0.3rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+.dim-build-json-area {
+    margin-top: 0.6rem;
+}
+.dim-build-json-area textarea {
+    width: 100%;
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    resize: vertical;
+    margin-bottom: 0.4rem;
 }
 
 .dim-snapshot-status {
@@ -945,9 +1056,194 @@ body {
     margin-top: 0.4rem;
 }
 
+/* 遺物メインステの2列レイアウト (頭+手/胴+足/球+縄) */
+.dim-relic-main-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem 1rem;
+    margin-bottom: 0.6rem;
+}
+.dim-relic-slot {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.dim-relic-slot label {
+    flex: 0 0 24px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+.dim-relic-slot select {
+    flex: 1;
+    min-width: 0;
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 0.3rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+.dim-subheading-inline {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    margin: 0 0 0.4rem 0;
+}
+
+/* サブステ panel をフル幅にして余白を活用 */
+.dim-subs-panel {
+    grid-column: 1 / -1;
+}
+.dim-subs-panel .dim-subs-grid {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+/* ===== パーティ枠 ===== */
+.dim-party-panel {
+    grid-column: 1 / -1;
+}
+.dim-party-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.8rem;
+}
+.dim-party-slot {
+    background-color: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.6rem;
+}
+.dim-party-slot-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.dim-party-slot-label {
+    color: var(--accent-gold);
+    font-size: 0.8rem;
+    font-weight: bold;
+    flex: 0 0 auto;
+}
+.dim-party-char {
+    flex: 1;
+    background-color: var(--bg-panel);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 0.25rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.82rem;
+}
+.dim-party-effects {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.dim-party-effect-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    cursor: pointer;
+    padding: 0.25rem 0.3rem;
+    border-radius: 3px;
+    transition: background-color 0.1s ease;
+}
+.dim-party-effect-row:hover {
+    background-color: rgba(212, 175, 55, 0.05);
+}
+.dim-party-effect-row input[type="checkbox"] {
+    flex: 0 0 auto;
+    margin-top: 2px;
+}
+.dim-party-effect-name {
+    color: var(--text-main);
+    font-size: 0.78rem;
+    flex: 1;
+    line-height: 1.3;
+}
+.dim-party-effect-stats {
+    color: var(--accent-blue);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    display: block;
+    margin-top: 1px;
+    flex: 0 0 100%;
+    padding-left: 1.4rem;
+}
+.dim-party-effect-stats-empty {
+    color: var(--text-muted);
+}
+
+/* ===== Party slot: 簡易/ビルドモード切替 + ソース別グルーピング ===== */
+.dim-party-slot-char {
+    color: var(--text-main);
+    font-size: 0.82rem;
+    margin-left: 0.4rem;
+    font-weight: normal;
+}
+.dim-party-slot-config {
+    padding: 0.4rem 0;
+    border-bottom: 1px dashed var(--border-color);
+    margin-bottom: 0.4rem;
+}
+.dim-party-mode-row {
+    display: flex;
+    gap: 0.6rem;
+    margin-bottom: 0.4rem;
+}
+.dim-party-simplemode-config,
+.dim-party-buildmode-config {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+.dim-party-simplemode-config label,
+.dim-party-buildmode-config label {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    flex: 0 0 auto;
+}
+.dim-party-simplemode-config select,
+.dim-party-buildmode-config select {
+    flex: 1;
+    min-width: 0;
+    background-color: var(--bg-panel);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+.dim-party-lvpreset {
+    display: inline-flex;
+    gap: 0.4rem;
+    flex: 0 0 100%;
+    padding-left: 50px;    /* ラベル幅と揃える */
+    padding-top: 0.2rem;
+}
+.dim-party-source-group {
+    margin-bottom: 0.4rem;
+}
+.dim-party-source-label {
+    color: var(--accent-gold);
+    font-size: 0.7rem;
+    font-weight: bold;
+    margin-bottom: 0.2rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+@media (max-width: 900px) {
+    .dim-party-grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 900px) {
     .dim-level-grid { grid-template-columns: 1fr; }
     .dim-preset-grid { grid-template-columns: 1fr; }
+    .dim-relic-main-grid { grid-template-columns: 1fr; }
+    .dim-subs-panel .dim-subs-grid { grid-template-columns: 1fr; }
 }
 
 /* ===== Character Detail Accordion ===== */

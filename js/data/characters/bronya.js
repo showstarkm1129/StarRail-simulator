@@ -158,6 +158,86 @@ Registry.character.add({
         },
     },
 
+    // パーティに居る時、focus キャラへ寄与する効果一覧
+    //
+    // 構造:
+    //   stats:        固定値(Lv 非依存) — そのまま envBuffs に流す
+    //   fromLevel + computeStats: Lv 連動。teammate の skills[fromLevel].levels[lv-1]
+    //                  を mult として、computeStats(lv, mult, caster) で算出
+    //   target='all'/'single': 単体スキルは focus が対象になった想定でのみ適用
+    //   duration:     表示用(計算には不使用、説明・参考)
+    partyEffects: [
+        {
+            id: 'aura_tier6',
+            source: 'extra',
+            name: '昇格6 軍勢 (常時オーラ)',
+            description: 'ブローニャがフィールド上にいる時、味方全体に与ダメ+10%',
+            stats: { [STAT.DMG_ALL]: 0.10 },
+            defaultActive: true,
+            target: 'all',
+            duration: 'permanent',
+        },
+        {
+            id: 'ult_atk',
+            source: 'ult',
+            name: '必殺 ATKバフ',
+            description: '必殺発動時、味方全体ATK+X%、2T (X%は teammate の必殺Lv 倍率)',
+            fromLevel: 'ult',
+            computeStats: (lv, mult, caster) => ({
+                [STAT.ATK_PERCENT]: mult.atkBuff,
+            }),
+            defaultActive: false,
+            target: 'all',
+            duration: 2,
+        },
+        {
+            id: 'ult_cd',
+            source: 'ult',
+            name: '必殺 会心ダメ (caster CD依存)',
+            description: '必殺発動時、味方全体CD = caster.CD × Y% + Z%、2T',
+            fromLevel: 'ult',
+            computeStats: (lv, mult, caster) => ({
+                [STAT.CRIT_DMG]: caster.derived.critDmg * mult.cdRatio + mult.cdFlat,
+            }),
+            defaultActive: false,
+            target: 'all',
+            duration: 2,
+        },
+        {
+            id: 'skill_dmg',
+            source: 'skill',
+            name: '戦闘スキル 与ダメ (単体)',
+            description: '対象味方単体に与ダメ+X%、1T (E6で2T)',
+            fromLevel: 'skill',
+            computeStats: (lv, mult, caster) => ({
+                [STAT.DMG_ALL]: mult.dmgBuff,
+            }),
+            defaultActive: false,
+            target: 'single',
+            duration: 1,
+        },
+        {
+            id: 'tier4_def',
+            source: 'extra',
+            name: '昇格4 陣地 (戦闘開始 2T)',
+            description: '戦闘開始時、味方全体DEF+20%、2T',
+            stats: { [STAT.DEF_PERCENT]: 0.20 },
+            defaultActive: false,
+            target: 'all',
+            duration: 2,
+        },
+        {
+            id: 'technique',
+            source: 'technique',
+            name: '秘技 ATK (戦闘開始 2T)',
+            description: '秘技使用時、戦闘開始時に味方全体ATK+15%、2T',
+            stats: { [STAT.ATK_PERCENT]: 0.15 },
+            defaultActive: false,
+            target: 'all',
+            duration: 2,
+        },
+    ],
+
     // 追加能力(昇格2/4/6)
     extras: [
         {
