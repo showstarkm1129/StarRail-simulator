@@ -36,13 +36,13 @@ export const SLOT = Object.freeze({
     ROPE: 'rope',
 });
 
-// 4部位セット(洞窟遺物) と 2部位セット(次元界オーナメント) の分類
+// 4部位セット(トンネル遺物) と 2部位セット(次元界オーナメント) の分類
 export const RELIC_SLOTS = Object.freeze([SLOT.HEAD, SLOT.HANDS, SLOT.BODY, SLOT.FEET]);
 export const ORNAMENT_SLOTS = Object.freeze([SLOT.SPHERE, SLOT.ROPE]);
 export const ALL_SLOTS = Object.freeze([...RELIC_SLOTS, ...ORNAMENT_SLOTS]);
 
 export const SET_TYPE = Object.freeze({
-    CAVERN: 'cavern',   // 洞窟遺物 = 4部位セット (2pc/4pc)
+    CAVERN: 'cavern',   // トンネル遺物 = 4部位セット (2pc/4pc) ※内部キーは cavern のまま (互換性維持)
     PLANAR: 'planar',   // 次元界オーナメント = 2部位セット (2pcのみ)
 });
 

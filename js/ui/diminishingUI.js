@@ -24,6 +24,12 @@ import {
     getSkillMaxLevel, getSkillMultAt, clampLevel,
     presetDefaultMaxLevels, presetEidolonMaxLevels,
 } from '../build/skillUtil.js';
+import {
+    SUBSTAT_TABLE, SUBSTAT_ORDER,
+} from '../build/substatTable.js';
+import {
+    calcManualAllocation, rollsToStatDict, excludeMainStatFromCandidates,
+} from '../build/substatRoller.js';
 
 // ---- UI で扱う「サブステ合計」入力フィールド定義 -----------------------
 
@@ -48,17 +54,30 @@ const PARTY_LABEL_PREFIX = 'パーティ.';   // envBuffs のラベル識別子
 const PARTY_SLOTS = 3;   // focus 以外のチームメンバー枠数
 
 // スキルキーの表示順 / 表示名
-const SKILL_DISPLAY_ORDER = ['basic', 'skill', 'ult', 'talent', 'technique'];
+// memorySkill/memoryTalent は記憶の精霊持ち (ヒアンシー等) 専用。
+// キャラ側で skills.memorySkill / memoryTalent が定義されていれば表示される。
+const SKILL_DISPLAY_ORDER = [
+    'basic', 'skill', 'ult', 'talent',
+    'memorySkill', 'memoryTalent',
+    'technique',
+];
 const SKILL_LABELS = {
-    basic:     '通常攻撃',
-    skill:     '戦闘スキル',
-    ult:       '必殺技',
-    talent:    '天賦',
-    technique: '秘技',
+    basic:        '通常攻撃',
+    skill:        '戦闘スキル',
+    ult:          '必殺技',
+    talent:       '天賦',
+    memorySkill:  '精霊スキル',
+    memoryTalent: '精霊天賦',
+    technique:    '秘技',
 };
 
-// 軌跡レベル指定対象 (technique はLv非対応のため除外)
-const LEVEL_KEYS = ['basic', 'skill', 'ult', 'talent'];
+// 軌跡レベル指定対象を「キャラが実際に定義しているスキルキーのみ」動的に決定。
+//   - technique は Lv 非対応のため除外
+//   - キャラに無いスキル (例: ブローニャの memorySkill) は表示されない
+function getLevelKeysForCharacter(character) {
+    if (!character?.skills) return [];
+    return SKILL_DISPLAY_ORDER.filter(k => k !== 'technique' && character.skills[k]);
+}
 
 // ---- 状態 --------------------------------------------------------------
 
@@ -78,6 +97,29 @@ const state = {
         { mode: 'simple', characterId: null, levelPreset: 'eidolon', buildId: null, activeEffectIds: new Set() },
         { mode: 'simple', characterId: null, levelPreset: 'eidolon', buildId: null, activeEffectIds: new Set() },
     ],
+    // サブステの 3 モード独立 state。現在選択中の mode の結果のみ envBuffs に流す。
+    //   manual : 自由入力 (stat → 値 を直接編集)
+    //   total  : 6 部位合計の手動配分 (各サブステに振り回数を指定)
+    //   perSlot: 部位ごとの手動配分 (メインステ自動除外)
+    //
+    // allocations: { [subKey]: rollCount } 各サブステに何ロール振るかの直接指定。
+    // tier: 'low'|'mid'|'high'|'random' 伸び幅。random のみ「シミュレート」が必要。
+    // lastResult: { totals: { [subKey]: 値 } } 計算済み結果。
+    //   - tier ∈ {low,mid,high} のとき: 入力即時に決定的計算で更新
+    //   - tier == 'random' のとき: シミュレートボタン押下時に都度乱数で更新
+    subs: {
+        mode: 'manual',
+        manual: { /* statKey → 値 (envBuffs から init 時に復元) */ },
+        total: {
+            allocations: {},   // 初期は全 0 (= 空 dict)
+            tier: 'high',
+            lastResult: null,
+        },
+        perSlot: {
+            // slot ごとに { allocations, tier, lastResult }
+            // initDiminishingUI() で各部位を初期化
+        },
+    },
 };
 
 // ---- エントリ ----------------------------------------------------------
@@ -95,6 +137,15 @@ export function initDiminishingUI() {
     state.build.name = '比較ビルド';
     // 軌跡Lv は無凸MAX で初期化
     state.build.traceLevel = presetDefaultMaxLevels(Registry.character.get(firstCharId));
+
+    // 部位別ロールの初期 state (各部位デフォルト = 全 0 ロール / 高 / 未計算)
+    for (const slot of ALL_SLOTS) {
+        state.subs.perSlot[slot] = {
+            allocations: {},
+            tier: 'high',
+            lastResult: null,
+        };
+    }
 
     root.innerHTML = renderShell();
     bindAll();
@@ -192,13 +243,13 @@ function renderShell() {
 
                     <div class="dim-preset-block">
                         <div class="dim-preset-mode">
-                            <label class="dim-radio"><input type="radio" name="cav-mode" value="4set" checked> 洞窟 4セット</label>
-                            <label class="dim-radio"><input type="radio" name="cav-mode" value="2+2"> 洞窟 2+2</label>
+                            <label class="dim-radio"><input type="radio" name="cav-mode" value="4set" checked> トンネル 4セット</label>
+                            <label class="dim-radio"><input type="radio" name="cav-mode" value="2+2"> トンネル 2+2</label>
                             <label class="dim-radio"><input type="radio" name="cav-mode" value="individual"> 個別</label>
                             <label class="dim-radio"><input type="radio" name="cav-mode" value="none"> 装着なし</label>
                         </div>
                         <div id="dim-preset-cav4" class="dim-preset-row">
-                            <label>洞窟セット</label>
+                            <label>トンネルセット</label>
                             <select id="dim-preset-cav-a"></select>
                         </div>
                         <div id="dim-preset-cav22" class="dim-preset-row" style="display:none">
@@ -227,26 +278,25 @@ function renderShell() {
 
                 <div class="dim-panel dim-subs-panel">
                     <h3>サブステ合計</h3>
-                    <p class="dim-panel-hint">遺物全体の副詞品集計値を入力 (% は数値で「25」と入力すると 25%)</p>
-                    <div class="dim-subs-grid">
-                        ${SUB_INPUTS.map(s => `
-                            <div class="dim-sub-row">
-                                <label>${s.label}</label>
-                                <input type="number" step="0.1" class="dim-sub-input" data-stat="${s.key}" data-unit="${s.asPercent ? 'pct' : 'flat'}" value="0">
-                                <span class="dim-sub-unit">${s.unit}</span>
-                            </div>
-                        `).join('')}
+                    <p class="dim-panel-hint dim-subs-global-hint">
+                        数値入力欄はクリックでフォーカスした後、マウスホイールでも増減できます (下限 0)。
+                    </p>
+                    <div class="dim-subs-tabs" id="dim-subs-tabs">
+                        <button type="button" class="dim-subs-tab" data-mode="manual">自由入力</button>
+                        <button type="button" class="dim-subs-tab" data-mode="total">総合ロール</button>
+                        <button type="button" class="dim-subs-tab" data-mode="perSlot">部位別ロール</button>
                     </div>
+                    <div class="dim-subs-tab-body" id="dim-subs-body"></div>
                 </div>
             </div>
 
             <div class="dim-panel dim-party-panel">
                 <h3>パーティ (他メンバーのバフ)</h3>
                 <p class="dim-panel-hint">
-                    teammate を枠に追加 → 効果のチェックボックスで focus キャラの計算に反映。
-                    <b>簡易モード</b>はキャラ + Lvプリセットのみ、<b>ビルドモード</b>は保存ビルドから完全ステを読み込み(光円錐・遺物セットの partyEffects も対象に)。
-                    caster ステ依存(必殺CD = caster.CD × Y% + Z% 等)は teammate の実 CD を使って動的計算されます。
-                    <br><span style="color: var(--text-muted)">※ focus と同じキャラを teammate に入れることも可能(セルフバフ計算用)。ただし常時オーラ(昇格6 等)は focus の traces に既に含まれているため、二重計上を避けるため party 側で OFF にすること。</span>
+                    サポート枠のキャラを追加 → 効果のチェックボックスで、メイン火力キャラの計算に反映されます。
+                    <b>キャラのみモード</b>はキャラ + Lvプリセットのみで、そのキャラ固有のバフ(必殺・軌跡など)が対象。<b>保存ビルドモード</b>は保存済みビルドを丸ごと読み込み、光円錐・遺物セットのパーティ効果も含めて計算します。
+                    発動者のステに連動するバフ(例: 必殺の会心ダメ = 発動者の会心ダメ × Y% + Z%)は、サポート枠キャラの実ステ(装備込み)を使って動的計算されます。
+                    <br><span style="color: var(--text-muted)">※ メイン火力キャラと同じキャラをサポート枠に入れることも可能(セルフバフ計算用)。ただし常時発動バフ(昇格6 等)はメイン側の軌跡に既に含まれているため、二重計上を避けるためサポート側で OFF にしてください。</span>
                 </p>
                 <div id="dim-party-grid" class="dim-party-grid"></div>
             </div>
@@ -311,7 +361,8 @@ function refreshAllForms() {
         fillRelicSetSelect(slot);
         fillRelicMainSelect(slot);
     }
-    fillSubInputs();
+    initSubsFromEnvBuffs();
+    renderSubsBody();
     fillOptionInputs();
     fillLevelInputs();
     fillPresetSelects();
@@ -372,17 +423,506 @@ function fillRelicMainSelect(slot) {
         sel.value = firstId;
     }
 }
-function fillSubInputs() {
-    const map = {};
-    for (const b of state.build.envBuffs || []) {
-        if (typeof b.label === 'string' && b.label.startsWith(SUB_LABEL_PREFIX)) map[b.stat] = b.value;
-    }
-    document.querySelectorAll('.dim-sub-input').forEach(inp => {
-        const stat = inp.dataset.stat;
-        const isPct = inp.dataset.unit === 'pct';
-        const v = map[stat] ?? 0;
-        inp.value = isPct ? (v * 100).toFixed(2).replace(/\.?0+$/, '') : v;
+// ---- サブステパネル (3 モード切替) ------------------------------------
+
+// 現モードを再描画 + イベント再バインド + envBuffs 反映 + recompute
+function renderSubsBody() {
+    const body = document.getElementById('dim-subs-body');
+    if (!body) return;
+
+    // タブの active 表示
+    document.querySelectorAll('#dim-subs-tabs .dim-subs-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === state.subs.mode);
     });
+
+    if (state.subs.mode === 'manual')      body.innerHTML = renderSubsTab_manual();
+    else if (state.subs.mode === 'total')  body.innerHTML = renderSubsTab_total();
+    else if (state.subs.mode === 'perSlot') body.innerHTML = renderSubsTab_perSlot();
+
+    bindSubsTabBody();
+}
+
+// ── モード 1: 自由入力 ──
+function renderSubsTab_manual() {
+    return `
+        <p class="dim-panel-hint">遺物全体のサブステ集計値を直接入力 (% は数値で「25」と入力すると 25%)。</p>
+        <div class="dim-subs-grid">
+            ${SUB_INPUTS.map(s => {
+                const v = state.subs.manual[s.key] ?? 0;
+                const display = s.asPercent ? (v * 100).toFixed(2).replace(/\.?0+$/, '') : v;
+                return `
+                    <div class="dim-sub-row">
+                        <label>${s.label}</label>
+                        <input type="number" min="0" step="0.1" class="dim-sub-input"
+                               data-stat="${s.key}" data-unit="${s.asPercent ? 'pct' : 'flat'}"
+                               value="${display}">
+                        <span class="dim-sub-unit">${s.unit}</span>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+// ── モード 2: 総合ロール (手動配分) ──
+function renderSubsTab_total() {
+    const t = state.subs.total;
+    const totalRolls = sumAllocations(t.allocations);
+    const allocInputs = SUBSTAT_ORDER.map(subKey => renderAllocationInput({
+        subKey,
+        scope: 'total',
+        value: t.allocations[subKey] || 0,
+        disabled: false,
+    })).join('');
+    const isRandom = t.tier === 'random';
+
+    return `
+        <p class="dim-panel-hint">
+            部位の区別なく、各サブステに振り回数を直接指定します。メインステ制約は適用されません(簡易シミュ)。
+            低/中/高 を選択時は入力即計算、ランダム時のみ「シミュレート」で都度乱数。
+        </p>
+        <div class="dim-roll-controls">
+            <div class="dim-roll-row">
+                <label>伸び幅</label>
+                ${renderTierRadios('total', t.tier)}
+            </div>
+            <div class="dim-roll-row dim-roll-row-cands">
+                <label>振り回数</label>
+                <div class="dim-alloc-grid">${allocInputs}</div>
+            </div>
+            <div class="dim-roll-row">
+                <label></label>
+                <span class="dim-roll-hint" id="dim-roll-total-sum-hint">合計 <strong>${totalRolls}</strong> ロール (HSR最大 54)</span>
+            </div>
+            <div class="dim-roll-actions">
+                ${isRandom
+                    ? `<button type="button" class="primary-btn" id="dim-roll-total-go">${t.lastResult ? '再シミュレート' : 'シミュレート'}</button>`
+                    : ''}
+                <button type="button" class="secondary-btn-small" id="dim-roll-total-clear">全部 0 にクリア</button>
+            </div>
+            <div id="dim-roll-total-result-wrap">${renderRollResult(t.lastResult)}</div>
+        </div>
+    `;
+}
+
+// ── モード 3: 部位別ロール (手動配分・メインステ除外) ──
+function renderSubsTab_perSlot() {
+    const slotHtml = ALL_SLOTS.map(slot => {
+        const cfg = state.subs.perSlot[slot];
+        const r = state.build.relics?.[slot];
+        const mainStatId = r?.mainStat;
+        const mainStatLabel = mainStatId
+            ? (RELIC_MAIN_OPTIONS[slot][mainStatId]?.label || mainStatId)
+            : '(未設定)';
+        const candKeys = excludeMainStatFromCandidates(slot, mainStatId, SUBSTAT_ORDER);
+        const allowed = new Set(candKeys);
+
+        const allocInputs = SUBSTAT_ORDER.map(subKey => {
+            const excluded = !allowed.has(subKey);
+            return renderAllocationInput({
+                subKey,
+                scope: 'perslot',
+                slot,
+                value: cfg.allocations[subKey] || 0,
+                disabled: excluded,
+            });
+        }).join('');
+
+        const totalRolls = sumAllocations(cfg.allocations);
+        const isRandom = cfg.tier === 'random';
+        const overLimit = totalRolls > 9;
+
+        return `
+            <div class="dim-perslot-card" data-slot="${slot}">
+                <div class="dim-perslot-head">
+                    <span class="dim-perslot-name">${slotLabel(slot)}</span>
+                    <span class="dim-perslot-main">メイン: ${mainStatLabel}</span>
+                </div>
+                <div class="dim-roll-row">
+                    <label>伸び幅</label>
+                    ${renderTierRadios('perslot-' + slot, cfg.tier, slot)}
+                </div>
+                <div class="dim-roll-row dim-roll-row-cands">
+                    <label>振り回数</label>
+                    <div class="dim-alloc-grid dim-alloc-grid-compact">${allocInputs}</div>
+                </div>
+                <div class="dim-roll-row">
+                    <label></label>
+                    <span class="dim-roll-hint ${overLimit ? 'dim-roll-hint-warn' : ''}">
+                        合計 <strong>${totalRolls}</strong> ロール (HSR最大 9)
+                        ${overLimit ? ' ⚠ 上限超過' : ''}
+                    </span>
+                </div>
+                <div class="dim-roll-actions">
+                    ${isRandom
+                        ? `<button type="button" class="secondary-btn-small dim-roll-perslot-go" data-slot="${slot}">${cfg.lastResult ? '再シミュ' : 'シミュ'}</button>`
+                        : ''}
+                    <button type="button" class="secondary-btn-small dim-roll-perslot-clear" data-slot="${slot}">クリア</button>
+                </div>
+                <div class="dim-roll-result-wrap">${renderRollResult(cfg.lastResult)}</div>
+            </div>
+        `;
+    }).join('');
+
+    const aggregateHtml = renderPerSlotAggregate();
+
+    // ランダム伸び幅を使っている部位があれば「全部位シミュ」ボタンを表示
+    const anyRandom = ALL_SLOTS.some(slot => state.subs.perSlot[slot].tier === 'random');
+
+    return `
+        <p class="dim-panel-hint">
+            部位ごとに各サブステの振り回数を指定。メインステに該当するサブステは入力不可。
+            低/中/高 選択時は入力即計算、ランダム時のみシミュボタン押下で都度乱数。
+        </p>
+        <div class="dim-roll-actions" style="margin-bottom: 0.6rem;">
+            ${anyRandom
+                ? `<button type="button" class="primary-btn" id="dim-roll-perslot-all">ランダムを一括シミュ</button>`
+                : ''}
+            <button type="button" class="secondary-btn-small" id="dim-roll-perslot-clear-all">全部位クリア</button>
+        </div>
+        <div class="dim-perslot-grid">${slotHtml}</div>
+        <div id="dim-perslot-summary-wrap">${aggregateHtml}</div>
+    `;
+}
+
+// 全部位合算プレビューの HTML 生成 (部分更新用に独立)
+function renderPerSlotAggregate() {
+    const agg = aggregatePerSlotResults();
+    if (!agg) {
+        return '<p class="dim-panel-hint" style="margin-top: 0.5rem;">各部位の振り回数を入力すると結果が表示されます (ランダム伸び幅時はシミュボタンが必要)。</p>';
+    }
+    return `<div class="dim-perslot-summary">
+        <h4>全部位合算</h4>
+        ${renderRollTotalsTable(agg)}
+    </div>`;
+}
+
+// allocations の合計回数
+function sumAllocations(allocations) {
+    let sum = 0;
+    for (const v of Object.values(allocations)) sum += (parseInt(v, 10) || 0);
+    return sum;
+}
+
+// 1 サブステの振り回数入力 UI
+//   scope: 'total' | 'perslot'  (perslot は slot 必須)
+//   max  : total は実質上限なし (99 まで) / perslot は HSR 仕様準拠 (6)
+function renderAllocationInput({ subKey, scope, slot = null, value, disabled }) {
+    const def = SUBSTAT_TABLE[subKey];
+    const maxVal = scope === 'total' ? 99 : 6;
+    const dataAttr = scope === 'total'
+        ? `data-scope="total" data-subkey="${subKey}"`
+        : `data-scope="perslot" data-slot="${slot}" data-subkey="${subKey}"`;
+    return `
+        <div class="dim-alloc-row ${disabled ? 'dim-alloc-row-disabled' : ''}"
+             title="${disabled ? 'メインステと重複するため除外' : ''}">
+            <span class="dim-alloc-label">${def.label}</span>
+            <input type="number" class="dim-alloc-input"
+                   min="0" max="${maxVal}" value="${value}"
+                   ${dataAttr} ${disabled ? 'disabled' : ''}>
+        </div>
+    `;
+}
+
+// 伸び幅ラジオの描画 (totalとperSlotで共用)
+function renderTierRadios(scopeKey, currentTier, slot = null) {
+    const TIERS = [
+        { value: 'low',    label: '低のみ' },
+        { value: 'mid',    label: '中のみ' },
+        { value: 'high',   label: '高のみ' },
+        { value: 'random', label: 'ランダム' },
+    ];
+    return TIERS.map(t => `
+        <label class="dim-roll-radio">
+            <input type="radio" class="dim-roll-tier" name="tier-${scopeKey}"
+                   data-scope="${scopeKey}" data-slot="${slot ?? ''}" value="${t.value}"
+                   ${currentTier === t.value ? 'checked' : ''}>
+            ${t.label}
+        </label>
+    `).join('');
+}
+
+// ロール結果プレビュー (totals: { subKey: 値 })
+function renderRollResult(lastResult) {
+    if (!lastResult) return '';
+    return `<div class="dim-roll-result">
+        <div class="dim-roll-result-head">結果</div>
+        ${renderRollTotalsTable(lastResult.totals)}
+    </div>`;
+}
+
+function renderRollTotalsTable(totals) {
+    const entries = Object.entries(totals)
+        .filter(([, v]) => v > 0)
+        .sort((a, b) => {
+            const ai = SUBSTAT_ORDER.indexOf(a[0]);
+            const bi = SUBSTAT_ORDER.indexOf(b[0]);
+            return ai - bi;
+        });
+    if (entries.length === 0) return '<div class="dim-roll-empty">(なし)</div>';
+    return `<table class="dim-roll-totals">
+        ${entries.map(([subKey, v]) => {
+            const def = SUBSTAT_TABLE[subKey];
+            if (!def) return '';
+            // SUBSTAT_TABLE は小数 3 桁 (例: 0.043) で定義しているため、×100 後は
+             // 小数 2 位が常に 0 になる。表示は小数 1 位までで十分。
+             const display = def.asPercent ? `${(v * 100).toFixed(1)}%` : v.toFixed(1);
+            return `<tr><th>${def.label}</th><td>${display}</td></tr>`;
+        }).join('')}
+    </table>`;
+}
+
+// perSlot 全結果を合算 (subKey ベース)
+function aggregatePerSlotResults() {
+    const out = {};
+    let any = false;
+    for (const slot of ALL_SLOTS) {
+        const r = state.subs.perSlot[slot]?.lastResult;
+        if (!r) continue;
+        any = true;
+        for (const [k, v] of Object.entries(r.totals)) {
+            out[k] = (out[k] || 0) + v;
+        }
+    }
+    return any ? out : null;
+}
+
+// 既存 envBuffs (BuildStore からのロード等) を state.subs.manual に取り込む
+function initSubsFromEnvBuffs() {
+    state.subs.manual = {};
+    for (const b of state.build.envBuffs || []) {
+        if (typeof b.label === 'string' && b.label.startsWith(SUB_LABEL_PREFIX)) {
+            state.subs.manual[b.stat] = b.value;
+        }
+    }
+}
+
+// ビルド切替時のリセット (mode を manual に戻し、ロール系の state を完全クリア)
+//   ロード直後は env から取り込んだ自由入力値が表示されるのが自然
+function resetSubsForBuildSwitch() {
+    state.subs.mode = 'manual';
+    state.subs.total.allocations = {};
+    state.subs.total.lastResult = null;
+    for (const slot of ALL_SLOTS) {
+        if (state.subs.perSlot[slot]) {
+            state.subs.perSlot[slot].allocations = {};
+            state.subs.perSlot[slot].lastResult = null;
+        }
+    }
+}
+
+// 総合ロール (手動配分) 計算
+//   tier=low/mid/high  : 決定的計算 — 入力即呼び出し可
+//   tier=random        : 都度乱数 — シミュボタン押下時のみ呼ぶ
+//
+// 注: 入力中のフォーカスを保つため、サブステ panel 全体は再描画しない。
+//     結果プレビュー DOM だけ部分更新する。
+function recalcTotal() {
+    const t = state.subs.total;
+    t.lastResult = calcManualAllocation({
+        allocations: t.allocations,
+        tier: t.tier,
+    });
+    updateTotalResultPreview();
+    applySubsToEnvBuffs();
+    recompute();
+}
+
+// 部位別ロール (手動配分) 計算
+//   slot 指定なし: 全部位を再計算
+function recalcPerSlot(targetSlot = null) {
+    const slots = targetSlot ? [targetSlot] : ALL_SLOTS.slice();
+    for (const slot of slots) {
+        const cfg = state.subs.perSlot[slot];
+        // メインステ除外: 念のため対象外サブステの値を 0 扱いで計算
+        const r = state.build.relics?.[slot];
+        const allowed = new Set(excludeMainStatFromCandidates(slot, r?.mainStat, SUBSTAT_ORDER));
+        const cleanAlloc = {};
+        for (const [k, v] of Object.entries(cfg.allocations)) {
+            if (allowed.has(k)) cleanAlloc[k] = v;
+        }
+        cfg.lastResult = calcManualAllocation({ allocations: cleanAlloc, tier: cfg.tier });
+        updatePerSlotResultPreview(slot);
+    }
+    updatePerSlotAggregatePreview();
+    applySubsToEnvBuffs();
+    recompute();
+}
+
+// ---- 結果プレビュー部分更新 (フォーカス維持のため renderSubsBody は使わない) ----
+
+function updateTotalResultPreview() {
+    const wrap = document.getElementById('dim-roll-total-result-wrap');
+    if (wrap) wrap.innerHTML = renderRollResult(state.subs.total.lastResult);
+}
+function updatePerSlotResultPreview(slot) {
+    const card = document.querySelector(`.dim-perslot-card[data-slot="${slot}"]`);
+    if (!card) return;
+    const wrap = card.querySelector('.dim-roll-result-wrap');
+    if (wrap) wrap.innerHTML = renderRollResult(state.subs.perSlot[slot].lastResult);
+}
+function updatePerSlotAggregatePreview() {
+    const sumEl = document.getElementById('dim-perslot-summary-wrap');
+    if (sumEl) sumEl.innerHTML = renderPerSlotAggregate();
+}
+
+// 現在描画中のサブステタブ本文内のイベントバインド (renderSubsBody から都度呼ばれる)
+function bindSubsTabBody() {
+    // ── manual ──
+    document.querySelectorAll('.dim-sub-input').forEach(inp => {
+        inp.addEventListener('input', () => {
+            const stat = inp.dataset.stat;
+            const isPct = inp.dataset.unit === 'pct';
+            // 直接タイプで負数が入る可能性があるため Math.max(0, ...) でクランプ
+            const raw = Math.max(0, parseFloat(inp.value) || 0);
+            state.subs.manual[stat] = isPct ? raw / 100 : raw;
+            applySubsToEnvBuffs();
+            recompute();
+        });
+    });
+
+    // ── 共通: 振り回数入力 (total / perslot) ──
+    document.querySelectorAll('.dim-alloc-input').forEach(inp => {
+        inp.addEventListener('input', () => {
+            const isTotal = inp.dataset.scope === 'total';
+            // total は実質上限なし (99) / perslot は HSR 仕様 (1サブステ最大6ロール)
+            const maxVal = isTotal ? 99 : 6;
+            const v = Math.max(0, Math.min(maxVal, parseInt(inp.value, 10) || 0));
+            const subKey = inp.dataset.subkey;
+            if (isTotal) {
+                state.subs.total.allocations[subKey] = v;
+                updateTotalHint();
+                // 確定計算 (low/mid/high) は即反映、random は次のシミュ押下まで保留
+                if (state.subs.total.tier !== 'random') recalcTotal();
+                else invalidateTotalResult();
+            } else {
+                const slot = inp.dataset.slot;
+                state.subs.perSlot[slot].allocations[subKey] = v;
+                updatePerSlotHint(slot);
+                if (state.subs.perSlot[slot].tier !== 'random') recalcPerSlot(slot);
+                else invalidatePerSlotResult(slot);
+            }
+        });
+    });
+
+    // ── total: 伸び幅・ボタン ──
+    document.querySelectorAll('.dim-roll-tier[data-scope="total"]').forEach(r => {
+        r.addEventListener('change', () => {
+            if (!r.checked) return;
+            state.subs.total.tier = r.value;
+            // 伸び幅切替: low/mid/high なら即計算、random なら結果無効化 + UI 再描画 (ボタン表示切替)
+            if (r.value === 'random') {
+                state.subs.total.lastResult = null;
+                renderSubsBody();
+                applySubsToEnvBuffs();
+                recompute();
+            } else {
+                recalcTotal();
+                renderSubsBody();
+            }
+        });
+    });
+    const totalGo = document.getElementById('dim-roll-total-go');
+    if (totalGo) totalGo.addEventListener('click', () => {
+        recalcTotal();
+        renderSubsBody();
+    });
+    const totalClear = document.getElementById('dim-roll-total-clear');
+    if (totalClear) totalClear.addEventListener('click', () => {
+        state.subs.total.allocations = {};
+        state.subs.total.lastResult = null;
+        renderSubsBody();
+        applySubsToEnvBuffs();
+        recompute();
+    });
+
+    // ── perSlot: 伸び幅・ボタン ──
+    document.querySelectorAll('.dim-roll-tier[data-scope^="perslot-"]').forEach(r => {
+        r.addEventListener('change', () => {
+            if (!r.checked) return;
+            const slot = r.dataset.slot;
+            state.subs.perSlot[slot].tier = r.value;
+            if (r.value === 'random') {
+                state.subs.perSlot[slot].lastResult = null;
+                renderSubsBody();
+                applySubsToEnvBuffs();
+                recompute();
+            } else {
+                recalcPerSlot(slot);
+                renderSubsBody();
+            }
+        });
+    });
+    document.querySelectorAll('.dim-roll-perslot-go').forEach(btn => {
+        btn.addEventListener('click', () => {
+            recalcPerSlot(btn.dataset.slot);
+            renderSubsBody();
+        });
+    });
+    document.querySelectorAll('.dim-roll-perslot-clear').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const slot = btn.dataset.slot;
+            state.subs.perSlot[slot].allocations = {};
+            state.subs.perSlot[slot].lastResult = null;
+            renderSubsBody();
+            applySubsToEnvBuffs();
+            recompute();
+        });
+    });
+    const allGo = document.getElementById('dim-roll-perslot-all');
+    if (allGo) allGo.addEventListener('click', () => {
+        // ランダム伸び幅の部位だけシミュ実行 (固定伸び幅は既にリアルタイム計算済み)
+        for (const slot of ALL_SLOTS) {
+            if (state.subs.perSlot[slot].tier === 'random') recalcPerSlot(slot);
+        }
+        renderSubsBody();
+    });
+    const allClear = document.getElementById('dim-roll-perslot-clear-all');
+    if (allClear) allClear.addEventListener('click', () => {
+        for (const slot of ALL_SLOTS) {
+            state.subs.perSlot[slot].allocations = {};
+            state.subs.perSlot[slot].lastResult = null;
+        }
+        renderSubsBody();
+        applySubsToEnvBuffs();
+        recompute();
+    });
+}
+
+// 軽量な部分更新: 入力即時の合計バーだけ更新 (フル再描画でフォーカスが飛ぶのを防ぐ)
+function updateTotalHint() {
+    const hint = document.getElementById('dim-roll-total-sum-hint');
+    if (!hint) return;
+    const total = sumAllocations(state.subs.total.allocations);
+    hint.innerHTML = `合計 <strong>${total}</strong> ロール (HSR最大 54)`;
+}
+function updatePerSlotHint(slot) {
+    const card = document.querySelector(`.dim-perslot-card[data-slot="${slot}"]`);
+    if (!card) return;
+    const hint = card.querySelector('.dim-roll-hint');
+    if (!hint) return;
+    const total = sumAllocations(state.subs.perSlot[slot].allocations);
+    const overLimit = total > 9;
+    hint.innerHTML = `合計 <strong>${total}</strong> ロール (HSR最大 9)${overLimit ? ' ⚠ 上限超過' : ''}`;
+    hint.classList.toggle('dim-roll-hint-warn', overLimit);
+}
+
+// ランダム tier の結果無効化 (前回の固定計算結果を消す)
+function invalidateTotalResult() {
+    if (state.subs.total.lastResult) {
+        state.subs.total.lastResult = null;
+        renderSubsBody();
+        applySubsToEnvBuffs();
+        recompute();
+    }
+}
+function invalidatePerSlotResult(slot) {
+    if (state.subs.perSlot[slot].lastResult) {
+        state.subs.perSlot[slot].lastResult = null;
+        renderSubsBody();
+        applySubsToEnvBuffs();
+        recompute();
+    }
 }
 function fillOptionInputs() {
     document.getElementById('dim-opt-ref').value = state.options.refStat;
@@ -398,7 +938,8 @@ function fillLevelInputs() {
     if (!grid) return;
     const ch = Registry.character.get(state.build.characterId);
     if (!ch) { grid.innerHTML = ''; return; }
-    grid.innerHTML = LEVEL_KEYS.map(key => {
+    const levelKeys = getLevelKeysForCharacter(ch);
+    grid.innerHTML = levelKeys.map(key => {
         const max = getSkillMaxLevel(ch, key, state.build.eidolon) || 1;
         const cur = clampLevel(state.build.traceLevel?.[key] || 1, max);
         state.build.traceLevel = state.build.traceLevel || {};
@@ -476,15 +1017,30 @@ function bindAll() {
     });
     document.querySelectorAll('.dim-relic-main').forEach(sel => {
         sel.addEventListener('change', e => {
-            state.build.relics[sel.dataset.slot].mainStat = e.target.value;
+            const slot = sel.dataset.slot;
+            state.build.relics[slot].mainStat = e.target.value;
+            // 部位別ロールでメインステ変更 → 候補から外れる subKey の allocation を 0 に戻し、
+            // 当該パネルを再描画して入力欄を disable 状態に揃える
+            if (state.subs.mode === 'perSlot') {
+                const cfg = state.subs.perSlot[slot];
+                const allowed = new Set(excludeMainStatFromCandidates(slot, e.target.value, SUBSTAT_ORDER));
+                for (const k of Object.keys(cfg.allocations)) {
+                    if (!allowed.has(k)) delete cfg.allocations[k];
+                }
+                // メインステ変更で除外サブステに値が入っていたら結果も無効化
+                recalcPerSlot(slot);
+                renderSubsBody();
+            }
             recompute();
         });
     });
 
-    // サブステ
-    document.querySelectorAll('.dim-sub-input').forEach(inp => {
-        inp.addEventListener('input', () => {
-            applySubInputs();
+    // サブステタブ切替
+    document.querySelectorAll('#dim-subs-tabs .dim-subs-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            state.subs.mode = btn.dataset.mode;
+            renderSubsBody();
+            applySubsToEnvBuffs();
             recompute();
         });
     });
@@ -620,6 +1176,7 @@ function bindAll() {
         state.build.name = '';
         state.build.traceLevel = presetDefaultMaxLevels(ch);
         document.getElementById('dim-build-name').value = '';
+        resetSubsForBuildSwitch();
         refreshAllForms();
         recompute();
     });
@@ -634,6 +1191,7 @@ function bindAll() {
         // eidolon select 反映
         const eSel = document.getElementById('dim-eidolon');
         if (eSel) eSel.value = String(state.build.eidolon || 0);
+        resetSubsForBuildSwitch();
         refreshAllForms();
         recompute();
     });
@@ -728,7 +1286,7 @@ function gatherTeammateEffects(teammateBuild) {
         }
     }
 
-    // 洞窟セット (装着 setId のセット効果のみ)
+    // トンネルセット (装着 setId のセット効果のみ)
     const cavCounts = countSetsByType(teammateBuild.relics, SET_TYPE.CAVERN);
     for (const [setId, cnt] of Object.entries(cavCounts)) {
         const set = Registry.relicSet.get(setId);
@@ -868,15 +1426,15 @@ function applyDefaultActiveEffects(idx) {
 }
 
 function renderPartySlot(slot, idx) {
-    // 注: focus と同じキャラも party に入れられる(セルフバフ計算用)。
-    //     ただし常時オーラ(昇格6 等)は focus の traces に既に含まれており
-    //     party 側でも ON にすると二重計上になるため、ユーザー側で off にすること。
+    // 注: メイン火力キャラと同じキャラもサポート枠に入れられる(セルフバフ計算用)。
+    //     ただし常時発動バフ(昇格6 等)はメイン側の軌跡に既に含まれており
+    //     サポート側でも ON にすると二重計上になるため、ユーザー側で off にすること。
     const charOptions = [`<option value="">(なし)</option>`].concat(
         Registry.character.list()
             .filter(c => c.id !== 'template')
             .map(c => {
                 const sameAsFocus = c.id === state.build.characterId;
-                const label = sameAsFocus ? `${c.name} (focusと同キャラ)` : c.name;
+                const label = sameAsFocus ? `${c.name} (メインと同キャラ)` : c.name;
                 return `<option value="${c.id}" ${c.id === slot.characterId ? 'selected' : ''}>${label}</option>`;
             })
     ).join('');
@@ -886,7 +1444,7 @@ function renderPartySlot(slot, idx) {
             .map(b => {
                 const ch = Registry.character.get(b.characterId);
                 const sameAsFocus = b.characterId === state.build.characterId;
-                const tag = sameAsFocus ? ' (focusと同キャラ)' : '';
+                const tag = sameAsFocus ? ' (メインと同キャラ)' : '';
                 return `<option value="${b.id}" ${b.id === slot.buildId ? 'selected' : ''}>${escapeHtml(b.name || '(無名)')} — ${ch?.name || b.characterId}${tag}</option>`;
             })
     ).join('');
@@ -936,11 +1494,11 @@ function renderPartySlot(slot, idx) {
             </div>
             <div class="dim-party-slot-config">
                 <div class="dim-party-mode-row">
-                    <label class="dim-radio">
-                        <input type="radio" class="dim-party-mode" data-idx="${idx}" name="party-mode-${idx}" value="simple" ${!isBuildMode ? 'checked' : ''}> 簡易
+                    <label class="dim-radio" title="キャラと凸プリセットだけ指定。そのキャラ固有の効果(必殺・軌跡など)のみ表示されます。">
+                        <input type="radio" class="dim-party-mode" data-idx="${idx}" name="party-mode-${idx}" value="simple" ${!isBuildMode ? 'checked' : ''}> キャラのみ
                     </label>
-                    <label class="dim-radio">
-                        <input type="radio" class="dim-party-mode" data-idx="${idx}" name="party-mode-${idx}" value="build" ${isBuildMode ? 'checked' : ''}> ビルドから
+                    <label class="dim-radio" title="保存ビルドを丸ごと指定。装備込みの実ステを使って、光円錐・遺物セットの効果も含めて計算します。">
+                        <input type="radio" class="dim-party-mode" data-idx="${idx}" name="party-mode-${idx}" value="build" ${isBuildMode ? 'checked' : ''}> 保存ビルド
                     </label>
                 </div>
                 ${isBuildMode ? `
@@ -1022,18 +1580,35 @@ function refreshBuildList() {
         }).join('');
 }
 
-function applySubInputs() {
+// 現モードのサブステ結果を envBuffs に書き込む (既存 SUB_LABEL_PREFIX を一掃して再構築)
+//   manual : state.subs.manual の入力値
+//   total  : state.subs.total.lastResult.totals
+//   perSlot: 全部位の lastResult.totals を合算
+function applySubsToEnvBuffs() {
     state.build.envBuffs = (state.build.envBuffs || []).filter(b =>
         !(typeof b.label === 'string' && b.label.startsWith(SUB_LABEL_PREFIX))
     );
-    document.querySelectorAll('.dim-sub-input').forEach(inp => {
-        const stat = inp.dataset.stat;
-        const isPct = inp.dataset.unit === 'pct';
-        const raw = parseFloat(inp.value) || 0;
-        if (raw === 0) return;
-        const value = isPct ? raw / 100 : raw;
-        state.build.envBuffs.push({ stat, value, label: SUB_LABEL_PREFIX + stat });
-    });
+    const pushStatDict = (statDict) => {
+        for (const [stat, value] of Object.entries(statDict)) {
+            if (!value) continue;
+            state.build.envBuffs.push({ stat, value, label: SUB_LABEL_PREFIX + stat });
+        }
+    };
+
+    if (state.subs.mode === 'manual') {
+        pushStatDict(state.subs.manual);
+        return;
+    }
+    if (state.subs.mode === 'total') {
+        const t = state.subs.total.lastResult;
+        if (t) pushStatDict(rollsToStatDict(t.totals));
+        return;
+    }
+    if (state.subs.mode === 'perSlot') {
+        const agg = aggregatePerSlotResults();
+        if (agg) pushStatDict(rollsToStatDict(agg));
+        return;
+    }
 }
 
 function updateSnapshotStatus() {
@@ -1238,11 +1813,32 @@ function fillSkillTemplate(text, mult) {
 function renderMultDetail(mult) {
     if (!mult) return '';
     const KEY_LABELS = {
-        atk: '攻撃力倍率', dmgBuff: '与ダメバフ', atkBuff: '攻撃力バフ',
-        cdRatio: '会心ダメ係数(対caster.CD)', cdFlat: '会心ダメ固定値',
-        advance: '行動値短縮',
+        // 共通系
+        atk:           '攻撃力倍率',
+        hpPct:         '最大HP倍率',
+        dmgBuff:       '与ダメバフ',
+        atkBuff:       '攻撃力バフ',
+        cdRatio:       '会心ダメ係数(発動者CDに対する%)',
+        cdFlat:        '会心ダメ固定値',
+        advance:       '行動値短縮',
+        // ヒーラー / 記憶の精霊系
+        allyHpPct:     '味方HP%回復',
+        allyHpFlat:    '味方HP固定回復',
+        ikarunHpPct:   'イカルンHP%回復',
+        ikarunHpFlat:  'イカルンHP固定回復',
+        maxHpPct:      '最大HP+%',
+        maxHpFlat:     '最大HP+固定値',
+        ikarunDmgBuff: 'イカルン与ダメ+%',
+        healDmgRatio: '累計治癒量倍率',
+        ikarunHealPct: 'イカルン回復%',
+        ikarunHealFlat:'イカルン回復固定値',
     };
-    const FMT_PCT_KEYS = new Set(['dmgBuff', 'atkBuff', 'cdRatio', 'cdFlat', 'advance']);
+    // % 表示するキー (小数値を × 100 して % 付与)
+    const FMT_PCT_KEYS = new Set([
+        'dmgBuff', 'atkBuff', 'cdRatio', 'cdFlat', 'advance',
+        'hpPct', 'allyHpPct', 'ikarunHpPct', 'maxHpPct',
+        'ikarunDmgBuff', 'healDmgRatio', 'ikarunHealPct',
+    ]);
     const items = Object.entries(mult).map(([k, v]) => {
         const lbl = KEY_LABELS[k] || k;
         const val = typeof v === 'number'

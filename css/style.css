@@ -1097,55 +1097,349 @@ body {
     grid-template-columns: repeat(4, 1fr);
 }
 
+/* ----- サブステ: モード切替タブ ----- */
+.dim-subs-tabs {
+    display: flex;
+    gap: 0.3rem;
+    margin-bottom: 0.8rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.dim-subs-tab {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    padding: 0.4rem 0.9rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background-color 0.1s, color 0.1s;
+}
+.dim-subs-tab:hover {
+    background-color: rgba(212, 175, 55, 0.08);
+    color: var(--text-main);
+}
+.dim-subs-tab.active {
+    background-color: var(--bg-dark);
+    color: var(--accent-gold);
+    border-color: var(--accent-gold);
+    font-weight: bold;
+}
+
+/* ----- ロール設定共通 ----- */
+.dim-roll-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+.dim-roll-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+.dim-roll-row > label:first-child {
+    flex: 0 0 90px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+.dim-roll-row-cands > label:first-child {
+    align-self: flex-start;
+    padding-top: 0.2rem;
+}
+.dim-roll-hint {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+.dim-roll-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--text-main);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.dim-roll-radio input[type="radio"] {
+    margin: 0;
+}
+.dim-roll-checks {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.2rem 0.6rem;
+    flex: 1;
+    min-width: 0;
+}
+.dim-roll-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--text-main);
+    font-size: 0.82rem;
+    cursor: pointer;
+    padding: 0.15rem 0.3rem;
+    border-radius: 3px;
+    transition: background-color 0.1s;
+}
+.dim-roll-check:hover {
+    background-color: rgba(212, 175, 55, 0.05);
+}
+.dim-roll-check input[type="checkbox"] {
+    margin: 0;
+}
+.dim-roll-check-disabled {
+    color: var(--text-muted);
+    opacity: 0.5;
+    cursor: not-allowed;
+    text-decoration: line-through;
+}
+.dim-roll-check-disabled:hover {
+    background-color: transparent;
+}
+
+/* ----- サブステ振り回数 (手動配分) グリッド ----- */
+.dim-alloc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.25rem 0.6rem;
+    flex: 1;
+    min-width: 0;
+}
+.dim-alloc-grid-compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.15rem 0.4rem;
+}
+.dim-alloc-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.15rem 0.3rem;
+    border-radius: 3px;
+    transition: background-color 0.1s;
+}
+.dim-alloc-row:hover {
+    background-color: rgba(212, 175, 55, 0.04);
+}
+.dim-alloc-row-disabled {
+    color: var(--text-muted);
+    opacity: 0.45;
+    text-decoration: line-through;
+}
+.dim-alloc-row-disabled:hover {
+    background-color: transparent;
+}
+.dim-alloc-label {
+    flex: 1;
+    min-width: 0;
+    color: var(--text-main);
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+}
+.dim-alloc-input {
+    flex: 0 0 52px;
+    width: 52px;
+    box-sizing: border-box;
+    background-color: var(--bg-panel);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 0.18rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.82rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.dim-alloc-input:disabled {
+    background-color: transparent;
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+.dim-roll-hint-warn {
+    color: #ff7a7a;
+    font-weight: bold;
+}
+.dim-perslot-card .dim-alloc-label {
+    font-size: 0.76rem;
+}
+.dim-perslot-card .dim-alloc-input {
+    flex: 0 0 44px;
+    width: 44px;
+    padding: 0.12rem 0.25rem;
+    font-size: 0.78rem;
+}
+.dim-roll-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* ----- ロール結果テーブル ----- */
+.dim-roll-result {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.7rem;
+    background-color: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+.dim-roll-result-head {
+    color: var(--accent-gold);
+    font-size: 0.8rem;
+    font-weight: bold;
+    margin-bottom: 0.3rem;
+}
+.dim-roll-totals {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+}
+.dim-roll-totals th {
+    color: var(--text-muted);
+    font-weight: normal;
+    text-align: left;
+    padding: 0.15rem 0.5rem 0.15rem 0;
+    width: 50%;
+}
+.dim-roll-totals td {
+    color: var(--text-main);
+    text-align: right;
+    padding: 0.15rem 0;
+}
+.dim-roll-empty {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+/* ----- 部位別ロール: 6 部位カード ----- */
+.dim-perslot-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.6rem;
+}
+@media (max-width: 1000px) {
+    .dim-perslot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+    .dim-perslot-grid { grid-template-columns: 1fr; }
+}
+.dim-perslot-card {
+    background-color: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.5rem 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.dim-perslot-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.dim-perslot-name {
+    color: var(--accent-gold);
+    font-size: 0.9rem;
+    font-weight: bold;
+    flex: 0 0 auto;
+}
+.dim-perslot-main {
+    color: var(--text-muted);
+    font-size: 0.76rem;
+}
+.dim-perslot-card .dim-roll-row > label:first-child {
+    flex: 0 0 64px;
+    font-size: 0.78rem;
+}
+.dim-perslot-card .dim-roll-checks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.1rem 0.4rem;
+}
+.dim-perslot-card .dim-roll-check {
+    font-size: 0.76rem;
+    padding: 0.1rem 0.2rem;
+}
+.dim-perslot-card .dim-roll-radio {
+    font-size: 0.78rem;
+}
+.dim-perslot-summary {
+    margin-top: 0.8rem;
+    padding: 0.6rem 0.8rem;
+    background-color: rgba(212, 175, 55, 0.05);
+    border: 1px solid var(--accent-gold);
+    border-radius: 4px;
+}
+.dim-perslot-summary h4 {
+    color: var(--accent-gold);
+    margin: 0 0 0.4rem 0;
+    font-size: 0.95rem;
+}
+
 /* ===== パーティ枠 ===== */
 .dim-party-panel {
     grid-column: 1 / -1;
 }
+/* 常に 3 列固定。minmax(0, 1fr) の 0 が重要:
+   標準 1fr は子の最小内在幅で崩れるが、0 を指定すると 0 まで縮められて等分される。
+   内部要素は overflow-wrap で折り返し。 */
 .dim-party-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.8rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    align-items: start;
 }
 .dim-party-slot {
     background-color: var(--bg-dark);
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    padding: 0.6rem;
+    padding: 0.45rem 0.5rem;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-wrap: anywhere;     /* 長文を強制折り返し */
+    word-break: break-word;
 }
 .dim-party-slot-head {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-    padding-bottom: 0.4rem;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-bottom: 0.35rem;
+    padding-bottom: 0.3rem;
     border-bottom: 1px solid var(--border-color);
 }
 .dim-party-slot-label {
     color: var(--accent-gold);
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: bold;
     flex: 0 0 auto;
 }
 .dim-party-char {
     flex: 1;
+    min-width: 0;
     background-color: var(--bg-panel);
     color: var(--text-main);
     border: 1px solid var(--border-color);
-    padding: 0.25rem 0.4rem;
+    padding: 0.2rem 0.35rem;
     border-radius: 4px;
-    font-size: 0.82rem;
+    font-size: 0.78rem;
 }
 .dim-party-effects {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: 0.1rem;
 }
+/* 2行レイアウト: 1行目 = [チェック] バフ名 / 2行目 = バフ内容(名前列の真下にインデント) */
 .dim-party-effect-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.4rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 0.35rem;
+    row-gap: 0.1rem;
+    align-items: start;
     cursor: pointer;
-    padding: 0.25rem 0.3rem;
+    padding: 0.2rem 0.25rem;
     border-radius: 3px;
     transition: background-color 0.1s ease;
 }
@@ -1153,89 +1447,100 @@ body {
     background-color: rgba(212, 175, 55, 0.05);
 }
 .dim-party-effect-row input[type="checkbox"] {
-    flex: 0 0 auto;
+    grid-row: 1;
+    grid-column: 1;
     margin-top: 2px;
 }
 .dim-party-effect-name {
+    grid-row: 1;
+    grid-column: 2;
     color: var(--text-main);
     font-size: 0.78rem;
-    flex: 1;
     line-height: 1.3;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 .dim-party-effect-stats {
+    grid-row: 2;
+    grid-column: 2;
     color: var(--accent-blue);
     font-size: 0.72rem;
     font-variant-numeric: tabular-nums;
-    display: block;
-    margin-top: 1px;
-    flex: 0 0 100%;
-    padding-left: 1.4rem;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
 }
 .dim-party-effect-stats-empty {
     color: var(--text-muted);
 }
 
-/* ===== Party slot: 簡易/ビルドモード切替 + ソース別グルーピング ===== */
+/* ===== Party slot: モード切替 + ソース別グルーピング ===== */
 .dim-party-slot-char {
     color: var(--text-main);
-    font-size: 0.82rem;
-    margin-left: 0.4rem;
+    font-size: 0.78rem;
+    margin-left: 0.3rem;
     font-weight: normal;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 .dim-party-slot-config {
-    padding: 0.4rem 0;
+    padding: 0.3rem 0;
     border-bottom: 1px dashed var(--border-color);
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.3rem;
 }
 .dim-party-mode-row {
     display: flex;
-    gap: 0.6rem;
-    margin-bottom: 0.4rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
 }
+/* config: 1行目=[ラベル][select] / 2行目=Lvプリセット全幅 */
 .dim-party-simplemode-config,
 .dim-party-buildmode-config {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
-    gap: 0.4rem;
-    flex-wrap: wrap;
+    column-gap: 0.35rem;
+    row-gap: 0.25rem;
 }
-.dim-party-simplemode-config label,
-.dim-party-buildmode-config label {
+.dim-party-simplemode-config > label,
+.dim-party-buildmode-config > label {
     color: var(--text-muted);
-    font-size: 0.78rem;
-    flex: 0 0 auto;
+    font-size: 0.76rem;
 }
 .dim-party-simplemode-config select,
 .dim-party-buildmode-config select {
-    flex: 1;
+    width: 100%;
     min-width: 0;
+    box-sizing: border-box;
     background-color: var(--bg-panel);
     color: var(--text-main);
     border: 1px solid var(--border-color);
-    padding: 0.2rem 0.4rem;
+    padding: 0.18rem 0.35rem;
     border-radius: 4px;
-    font-size: 0.8rem;
+    font-size: 0.76rem;
 }
 .dim-party-lvpreset {
-    display: inline-flex;
-    gap: 0.4rem;
-    flex: 0 0 100%;
-    padding-left: 50px;    /* ラベル幅と揃える */
-    padding-top: 0.2rem;
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 0.5rem;
+    padding-top: 0.15rem;
+    flex-wrap: wrap;
 }
 .dim-party-source-group {
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.3rem;
 }
 .dim-party-source-label {
     color: var(--accent-gold);
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: bold;
-    margin-bottom: 0.2rem;
+    margin-bottom: 0.15rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
+    overflow-wrap: anywhere;
 }
 
-@media (max-width: 900px) {
+/* 極端な狭画面のみ 1 列フォールバック (3 列だと 1 枠 100px 切る場合) */
+@media (max-width: 560px) {
     .dim-party-grid { grid-template-columns: 1fr; }
 }
 
@@ -1367,4 +1672,117 @@ body {
     color: var(--text-muted);
     font-style: italic;
     padding: 0.4rem 0;
+}
+
+/* ===================================================================== */
+/* ===== ブラウザ標準フォーム要素のテーマ統一 ============================ */
+/* ===================================================================== */
+/* これらは個別の input/select 用クラスとは独立して、ブラウザデフォルトの
+   見た目 (スクロールバー / 数値スピン / select 矢印 / focus リング 等) を
+   ダークゴールド系の雰囲気に揃えるためのグローバルスタイル。 */
+
+/* ----- スクロールバー (WebKit / Blink) ----- */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-track {
+    background-color: var(--bg-dark);
+}
+::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 5px;
+    border: 2px solid var(--bg-dark);
+    transition: background-color 0.15s;
+}
+::-webkit-scrollbar-thumb:hover {
+    background-color: var(--accent-gold);
+}
+::-webkit-scrollbar-corner {
+    background-color: var(--bg-dark);
+}
+
+/* ----- スクロールバー (Firefox) ----- */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) var(--bg-dark);
+}
+
+/* ----- 数値入力のスピンボタン: 完全廃止 -----
+   ・CSS だけのカスタム描画は現行 Chrome の仕様で困難なため、表示自体を廃止。
+   ・数値の増減はキーボード ↑/↓ ・ ホイール ・ 直接タイプで行う。 */
+input[type="number"] {
+    -moz-appearance: textfield;   /* Firefox */
+    appearance: textfield;
+}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+}
+
+/* ----- select: ネイティブの矢印を消して SVG ゴールド矢印に差し替え -----
+   既存の個別 select 指定 (背景色・ボーダー・パディング) は維持される。 */
+select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%23d4af37' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 10px 7px;
+    padding-right: 1.6rem !important;   /* 矢印のスペース確保 (既存 padding に勝つ) */
+    cursor: pointer;
+}
+/* IE 互換: ::-ms-expand を非表示 */
+select::-ms-expand {
+    display: none;
+}
+/* option はネイティブ描画なので最低限の色だけ寄せる (OSによっては効かない) */
+select option {
+    background-color: var(--bg-panel);
+    color: var(--text-main);
+}
+
+/* ----- checkbox / radio: アクセント色をゴールドに -----
+   ブラウザの新しいネイティブスタイルを保ったまま色だけ変える。 */
+input[type="checkbox"],
+input[type="radio"] {
+    accent-color: var(--accent-gold);
+    cursor: pointer;
+}
+
+/* ----- フォーカスリング: 既存 input/select/textarea/button にゴールドのリング ----- */
+input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+    outline: none;
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.25);
+}
+
+/* ----- テキスト選択のハイライト色 ----- */
+::selection {
+    background-color: rgba(212, 175, 55, 0.35);
+    color: var(--text-main);
+}
+
+/* ----- ボタンのホバー押下感の微改善 (既存ボタンクラスを補完) ----- */
+button {
+    font-family: inherit;
+}
+button:active {
+    transform: translateY(1px);
+}
+
+/* ----- textarea のデフォルト ----- */
+textarea {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    background-color: var(--bg-panel);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.4rem 0.5rem;
 }

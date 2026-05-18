@@ -3,3 +3,4 @@
 
 import './template.js';
 import './bronya.js';
+import './hyacine.js';
