@@ -51,6 +51,56 @@ Registry.character.add({
         talent: { type: 'passive' },
     },
 
+    // パーティに居る時、focus キャラへ寄与する効果一覧(限界効用逓減タブの「パーティ枠」で参照)
+    //
+    // 共通フィールド:
+    //   id            : 一意 (キャラ内で)
+    //   source        : 'extra'|'ult'|'skill'|'talent'|'technique' (UI表示分類)
+    //   name          : 表示名
+    //   description   : ツールチップ
+    //   defaultActive : 初期 ON / OFF
+    //   target        : 'all' (味方全体) / 'single' (focus が対象想定でのみ適用)
+    //   duration      : 表示用 (計算には不使用)
+    //
+    // 値の指定方法 (どちらか1つ):
+    //   stats: { [STAT.KEY]: number }   固定値 (Lv 非依存)
+    //   fromLevel: 'ult'|'skill'|'basic'|'talent'   teammate の skills[fromLevel].levels[lv-1] を mult として
+    //   computeStats: (lv, mult, caster) => ({ [STAT.KEY]: number, ... })
+    //                                                caster は teammate の FinalStats (derived/raw 利用可)
+    partyEffects: [
+        // 例) 固定値
+        // {
+        //     id: 'aura_xxx',
+        //     source: 'extra',
+        //     name: '効果名',
+        //     description: '効果の説明',
+        //     stats: { [STAT.DMG_ALL]: 0.10 },
+        //     defaultActive: true,
+        //     target: 'all',
+        //     duration: 'permanent',
+        // },
+        // 例) Lv 連動
+        // {
+        //     id: 'ult_atk',
+        //     source: 'ult',
+        //     name: '必殺 ATKバフ',
+        //     fromLevel: 'ult',
+        //     computeStats: (lv, mult, caster) => ({ [STAT.ATK_PERCENT]: mult.atkBuff }),
+        //     defaultActive: false, target: 'all', duration: 2,
+        // },
+        // 例) caster ステ依存
+        // {
+        //     id: 'ult_cd',
+        //     source: 'ult',
+        //     name: '必殺 会心ダメ',
+        //     fromLevel: 'ult',
+        //     computeStats: (lv, mult, caster) => ({
+        //         [STAT.CRIT_DMG]: caster.derived.critDmg * mult.cdRatio + mult.cdFlat,
+        //     }),
+        //     defaultActive: false, target: 'all', duration: 2,
+        // },
+    ],
+
     // 特殊効果フック(計画書18節「型に収まらないバフはコードで書く」)
     hooks: {
         // onBuildResolved(ctx): FinalStats 確定直後に1回だけ呼ばれる。

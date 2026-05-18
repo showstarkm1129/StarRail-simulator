@@ -25,4 +25,21 @@ Registry.relicSet.add({
             },
         },
     },
+
+    // パーティ枠経由で focus キャラに与える効果
+    //   pc2/pc4 ごとに、装着 teammate が居て該当セットを満たす時に表示される
+    partyEffects: {
+        pc4: [
+            {
+                id: 'msg4_ult_spd',
+                source: 'set',
+                name: '必殺後 味方 SPD+12% (1T)',
+                description: '装着 teammate が必殺を発動した時、味方全体の SPD +12%、1T',
+                stats: { [STAT.SPD_PERCENT]: 0.12 },
+                defaultActive: false,
+                target: 'all',
+                duration: 1,
+            },
+        ],
+    },
 });

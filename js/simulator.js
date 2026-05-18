@@ -128,28 +128,88 @@ document.addEventListener('DOMContentLoaded', () => {
         const bSpd = parseFloat(charBaseSpd.value) || 100;
         const oSpd = parseFloat(charBonusSpd.value) || 0;
         const err = parseFloat(charErr.value) || 100;
-        
+
         const equipment = {
             lc: charLc.value,
             relic1: charRelic1.value,
             relic2: charRelic2.value,
             ornament: charOrnament.value
         };
-        
+
         // maxEP 100 で生成
         const entity = new Entity(`c${nextId++}`, name, false, bSpd, oSpd, 100, err, equipment);
         entities.push(entity);
-        
+
         updateSetupList();
     });
 
+    // ---- 保存ビルドからの読み込み(Feature 2) ----
+    const buildLoaderSelect  = document.getElementById('build-loader-select');
+    const buildLoaderAdd     = document.getElementById('build-loader-add');
+    const buildLoaderRefresh = document.getElementById('build-loader-refresh');
+
+    function refreshBuildLoaderList() {
+        if (!buildLoaderSelect) return;
+        if (!window.SRSIM?.Build) {
+            buildLoaderSelect.innerHTML = '<option value="">(SRSIM 未初期化)</option>';
+            return;
+        }
+        const builds = window.SRSIM.Build.list();
+        if (!builds.length) {
+            buildLoaderSelect.innerHTML = '<option value="">(保存ビルドなし — 限界効用逓減タブで保存してください)</option>';
+            return;
+        }
+        buildLoaderSelect.innerHTML = builds
+            .sort((a, b) => (b.meta?.updatedAt || '').localeCompare(a.meta?.updatedAt || ''))
+            .map(b => {
+                const ch = window.SRSIM.Registry.character.get(b.characterId);
+                return `<option value="${b.id}">${(b.name || '(無名)')} — ${ch?.name || b.characterId}</option>`;
+            }).join('');
+    }
+
+    if (buildLoaderRefresh) {
+        buildLoaderRefresh.addEventListener('click', refreshBuildLoaderList);
+    }
+
+    if (buildLoaderAdd) {
+        buildLoaderAdd.addEventListener('click', () => {
+            if (!window.SRSIM?.buildToEntity) {
+                alert('ビルドシステムが未初期化です');
+                return;
+            }
+            const id = buildLoaderSelect.value;
+            if (!id) { alert('読み込むビルドを選択してください'); return; }
+            const build = window.SRSIM.Build.get(id);
+            if (!build) { alert('ビルドが見つかりません'); return; }
+            try {
+                const entity = window.SRSIM.buildToEntity(build, { id: `c${nextId++}` });
+                entities.push(entity);
+                updateSetupList();
+            } catch (err) {
+                alert('ビルドの追加に失敗: ' + err.message);
+                console.error(err);
+            }
+        });
+    }
+
+    // 初期表示(モジュール起動を待ってから)
+    setTimeout(refreshBuildLoaderList, 0);
+
     function updateSetupList() {
         charList.innerHTML = '';
-        
+
         const mapName = (v) => {
+            if (window.SRSIM?.Registry) {
+                const r = window.SRSIM.Registry;
+                return r.lightcone.get(v)?.name
+                    || r.relicSet.get(v)?.name
+                    || r.ornament.get(v)?.name
+                    || (v === 'none' ? 'なし' : v);
+            }
+            // Fallback (旧UI用)
             if(v === 'none') return 'なし';
             if(v === 'eagle') return '昼夜の狭間を翔ける鷹';
-            if(v === 'messenger') return 'メッセ';
+            if(v === 'messenger') return 'メッセンジャー';
             if(v === 'ddd') return 'ダンス';
             if(v === 'vonwacq') return '生命のウェンワーク';
             return v;
@@ -162,29 +222,46 @@ document.addEventListener('DOMContentLoaded', () => {
             div.style.display = 'flex';
             div.style.justifyContent = 'space-between';
             div.style.alignItems = 'center';
-            
-            const lcName = mapName(e.equipment.lc);
-            const r1 = mapName(e.equipment.relic1);
-            const r2 = mapName(e.equipment.relic2);
-            const relicName = (r1 === r2) ? (r1 === 'なし' ? 'なし' : `${r1}4`) : `${r1}2+${r2}2`;
-            const ornamentName = mapName(e.equipment.ornament);
 
-            div.innerHTML = `
-                <div>
+            let detailHtml;
+            if (e.finalStats) {
+                // ビルド経由の Entity: 完全ステを表示
+                const d = e.finalStats.derived;
+                const ch = window.SRSIM.Registry.character.get(e.build.characterId);
+                const lcName = e.build.lightcone?.id ? mapName(e.build.lightcone.id) : 'なし';
+                detailHtml = `
+                    <strong>${e.name}</strong>
+                    <span class="build-tag">ビルド</span>
+                    <span style="font-size: 0.85rem; color: var(--text-muted); margin-left: 10px;">
+                        ${ch?.name || ''} | SPD ${d.spd.toFixed(1)} | ATK ${d.atk.toFixed(0)} | HP ${d.hp.toFixed(0)} | CR ${(d.critRate*100).toFixed(1)}% | CD ${(d.critDmg*100).toFixed(1)}% | 円錐:${lcName}
+                    </span>
+                `;
+            } else {
+                // 旧UI入力の Entity: 装備フラグから簡易表示
+                const lcName = mapName(e.equipment.lc);
+                const r1 = mapName(e.equipment.relic1);
+                const r2 = mapName(e.equipment.relic2);
+                const relicName = (r1 === r2) ? (r1 === 'なし' ? 'なし' : `${r1}4`) : `${r1}2+${r2}2`;
+                const ornamentName = mapName(e.equipment.ornament);
+                detailHtml = `
                     <strong>${e.name}</strong>
                     <span style="font-size: 0.85rem; color: var(--text-muted); margin-left: 10px;">
                         合計速度:${e.speed.toFixed(1)} | 円錐:${lcName} | 遺物:${relicName} | オーナメント:${ornamentName}
                     </span>
-                </div>
+                `;
+            }
+
+            div.innerHTML = `
+                <div>${detailHtml}</div>
                 <button class="delete-char-btn" data-id="${e.id}" style="background: transparent; border: 1px solid #ff6b6b; color: #ff6b6b; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.backgroundColor='rgba(255,107,107,0.1)'" onmouseout="this.style.backgroundColor='transparent'">削除</button>
             `;
-            
+
             div.querySelector('.delete-char-btn').addEventListener('click', (ev) => {
                 const targetId = ev.target.getAttribute('data-id');
                 entities = entities.filter(ent => ent.id !== targetId);
                 div.remove();
             });
-            
+
             charList.appendChild(div);
         });
     }
@@ -242,29 +319,63 @@ document.addEventListener('DOMContentLoaded', () => {
             buffsHtml += `<span class="buff-badge" style="margin-right: 5px; margin-bottom: 5px; display: inline-block;">${buffName} (${b.duration}T)</span>`;
         });
 
+        // ビルド経由の場合は完全ステ、そうでなければ簡易表示
+        let statsHtml = '';
+        if (entity.finalStats) {
+            const d = entity.finalStats.derived;
+            statsHtml = `
+                <div class="status-item"><span>攻撃力</span><strong>${d.atk.toFixed(1)}</strong></div>
+                <div class="status-item"><span>HP (最大値)</span><strong>${d.hp.toFixed(1)}</strong></div>
+                <div class="status-item"><span>防御力</span><strong>${d.def.toFixed(1)}</strong></div>
+                <div class="status-item"><span>会心率</span><strong>${(d.critRate*100).toFixed(2)}%</strong></div>
+                <div class="status-item"><span>会心ダメージ</span><strong>${(d.critDmg*100).toFixed(2)}%</strong></div>
+                <div class="status-item"><span>自属性ダメ枠</span><strong>${(d.dmgOwnElement*100).toFixed(2)}%</strong></div>
+                <div class="status-item"><span>撃破特効</span><strong>${((d.breakEffectPct-1)*100).toFixed(2)}%</strong></div>
+            `;
+        }
+
+        // 装備セクション (ビルド経由ならビルドから、旧UIなら equipment フラグから)
+        let equipHtml = '';
+        if (entity.build && window.SRSIM?.Registry) {
+            const r = window.SRSIM.Registry;
+            const lcName = entity.build.lightcone?.id ? r.lightcone.get(entity.build.lightcone.id)?.name : 'なし';
+            const setCounts = entity.setCounts || {};
+            const setSummary = Object.entries(setCounts).map(([id, n]) => {
+                const name = r.relicSet.get(id)?.name || r.ornament.get(id)?.name || id;
+                return `${name} ${n}pc`;
+            }).join(' / ') || 'なし';
+            equipHtml = `
+                <div class="status-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                    <span style="color:var(--text-muted); font-size:0.8rem;">光円錐: ${lcName} (重畳${entity.build.lightcone?.superimpose ?? '-'})</span>
+                    <span style="color:var(--text-muted); font-size:0.8rem;">セット: ${setSummary}</span>
+                </div>
+            `;
+        } else if (entity.equipment) {
+            equipHtml = `
+                <div class="status-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                    <span style="color:var(--text-muted); font-size:0.8rem;">光円錐: ${entity.equipment?.lc === 'ddd' ? 'ダンス・ダンス・ダンス' : 'なし'}</span>
+                    <span style="color:var(--text-muted); font-size:0.8rem;">遺物1: ${entity.equipment?.relic1 === 'eagle' ? '昼夜の狭間を翔ける鷹' : entity.equipment?.relic1 === 'messenger' ? 'メッセンジャー' : 'なし'}</span>
+                    <span style="color:var(--text-muted); font-size:0.8rem;">遺物2: ${entity.equipment?.relic2 === 'eagle' ? '昼夜の狭間を翔ける鷹' : entity.equipment?.relic2 === 'messenger' ? 'メッセンジャー' : 'なし'}</span>
+                    <span style="color:var(--text-muted); font-size:0.8rem;">オーナメント: ${entity.equipment?.ornament === 'vonwacq' ? '生命のウェンワーク' : 'なし'}</span>
+                </div>
+            `;
+        }
+
         statusModalBody.innerHTML = `
-            <div class="status-item">
-                <span>HP</span>
-                <strong>100%</strong>
-            </div>
+            ${statsHtml}
             <div class="status-item">
                 <span>EP</span>
                 <strong>${Math.floor(entity.currentEP)} / ${entity.maxEP}</strong>
             </div>
             <div class="status-item">
                 <span>速度</span>
-                <strong>${entity.speed.toFixed(1)} <span style="font-size:0.8rem; color:var(--text-muted);">(基礎${entity.baseSpd} + 加算${entity.bonusSpd})</span></strong>
+                <strong>${entity.speed.toFixed(1)} <span style="font-size:0.8rem; color:var(--text-muted);">(基礎${entity.baseSpd} + 加算${entity.bonusSpd.toFixed(1)})</span></strong>
             </div>
             <div class="status-item">
                 <span>残り行動値 (AV)</span>
                 <strong>${entity.actionValue.toFixed(1)}</strong>
             </div>
-            <div class="status-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
-                <span style="color:var(--text-muted); font-size:0.8rem;">光円錐: ${entity.equipment?.lc === 'ddd' ? 'ダンス・ダンス・ダンス' : 'なし'}</span>
-                <span style="color:var(--text-muted); font-size:0.8rem;">遺物1: ${entity.equipment?.relic1 === 'eagle' ? '昼夜の狭間を翔ける鷹' : entity.equipment?.relic1 === 'messenger' ? 'メッセンジャー' : 'なし'}</span>
-                <span style="color:var(--text-muted); font-size:0.8rem;">遺物2: ${entity.equipment?.relic2 === 'eagle' ? '昼夜の狭間を翔ける鷹' : entity.equipment?.relic2 === 'messenger' ? 'メッセンジャー' : 'なし'}</span>
-                <span style="color:var(--text-muted); font-size:0.8rem;">オーナメント: ${entity.equipment?.ornament === 'vonwacq' ? '生命のウェンワーク' : 'なし'}</span>
-            </div>
+            ${equipHtml}
             <div class="status-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
                 <span>バフ・デバフ一覧</span>
                 <div>${buffsHtml}</div>

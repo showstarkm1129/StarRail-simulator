@@ -1,0 +1,11 @@
+# Claude Code / 開発ツール用ローカル設定
+.claude/
+
+# OS / エディタ系
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*~
