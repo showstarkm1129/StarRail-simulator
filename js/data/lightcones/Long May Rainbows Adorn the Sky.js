@@ -1,4 +1,4 @@
-// 光円錐: 空の虹が消えぬように (ヒアンシーのモチーフ光円錐)
+// 光円錐: 空の虹が消えぬように
 //
 // 「包容」:
 //   速度+18%~30% (重畳ステ・常時)
@@ -8,8 +8,8 @@
 //
 // 簡易シミュ実装方針:
 //   - 常時系 (速度+%): stats[] に重畳別の SPD_PERCENT を載せる
-//   - トリガー型 (味方HP消費 → 付加ダメ、精霊スキル時の被ダメ+): 現状の hook 仕様に
-//     収まりにくいため、partyEffects は空配列 (将来の damage.js 実装時に hooks 拡張)
+//   - 味方HP消費 → 付加ダメ: 累計付加ダメ計算が必要なため hook (本ツール対象外)
+//   - 精霊スキル時 敵全体 被ダメ+%: partyEffect として登録 (DMG_TAKEN 枠、target='all')
 
 import { PATH } from '../../build/constants.js';
 import { STAT } from '../../build/statKeys.js';
@@ -38,7 +38,22 @@ Registry.lightcone.add({
     hooks: (superimpose) => ({}),
 
     // パーティ枠経由で focus キャラに与える効果
-    //   付加ダメ・被ダメ+効果は damage.js 実装時に再評価。
-    //   常時バフではないため、現状は空配列。
-    partyEffects: (superimpose) => [],
+    //   精霊スキル発動時、敵全体の受けるダメージ+18%~36% (2T、同系統と非累積)
+    //   S1=18% / S5=36% / 線形 +4.5%/重畳 → 18.0, 22.5, 27.0, 31.5, 36.0
+    partyEffects: (superimpose) => {
+        const TAKEN_BY_SI = [0.180, 0.225, 0.270, 0.315, 0.360];
+        const taken = TAKEN_BY_SI[Math.max(0, Math.min(4, superimpose - 1))];
+        return [
+            {
+                id: 'hyaSky_spirit_taken',
+                source: 'lc',
+                name: `精霊スキル発動時 敵被ダメ+${(taken*100).toFixed(1)}% (2T、同系統非累積)`,
+                description: `記憶の精霊が精霊スキルを発動した時、敵全体の受けるダメージ+${(taken*100).toFixed(1)}%、2T継続。同系統スキルは重ねがけ不可。`,
+                stats: { [STAT.DMG_TAKEN]: taken },
+                defaultActive: false,
+                target: 'all',
+                duration: 2,
+            },
+        ];
+    },
 });

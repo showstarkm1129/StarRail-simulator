@@ -55,14 +55,22 @@ Registry.character.add({
     //
     // 共通フィールド:
     //   id            : 一意 (キャラ内で)
-    //   source        : 'extra'|'ult'|'skill'|'talent'|'technique' (UI表示分類)
+    //   source        : 'extra'|'ult'|'skill'|'talent'|'technique'|'eidolon' (UI表示分類)
     //   name          : UI 表示名。命名規約は「効果名 (発動条件)」例: "必殺 攻撃力バフ"、
-    //                    "昇格6 軍勢 (常時発動)"、"昇格4 陣地 (戦闘開始2T)"
+    //                    "昇格6 軍勢 (常時発動)"、"昇格4 陣地 (戦闘開始2T)"。
+    //                    星魂条件付き効果は name に "E<n> " プレフィックスを付けない —
+    //                    UI 側で minEidolon バッジが自動表示される。
     //                    分かりにくい用語(caster/teammate/オーラ 等)は使わない。
     //   description   : ツールチップ。日本語の自然な文で書く。
     //   defaultActive : 初期 ON / OFF
     //   target        : 'all' (味方全体) / 'single' (メイン火力キャラが対象になった想定でのみ適用)
     //   duration      : 表示用 (計算には不使用)
+    //   minEidolon?   : 星魂条件 (E1〜E6)。指定時は teammate.eidolon >= minEidolon の場合のみ
+    //                    パーティ枠UIに表示される。UI 上では E<n>+ バッジが表示される。
+    //   stackable?    : { max, default } 累積系効果。
+    //                    stats (or computeStats の結果) は「1層あたり」の値として登録し、
+    //                    UI 側で × 現在層数 した最終値が envBuffs に渡る。
+    //                    max: 最大層数 (UI input の上限)、default: 初期層数 (defaultActive 時)
     //
     // 値の指定方法 (どちらか1つ):
     //   stats: { [STAT.KEY]: number }   固定値 (Lv 非依存)
@@ -107,6 +115,26 @@ Registry.character.add({
         //         [STAT.CRIT_DMG]: caster.derived.critDmg * mult.cdRatio + mult.cdFlat,
         //     }),
         //     defaultActive: false, target: 'all', duration: 2,
+        // },
+        // 例) 累積系 (stats は1層あたり、UI で層数を 1〜max で選択)
+        // {
+        //     id: 'aura_stack',
+        //     source: 'talent',
+        //     name: '○○層 1層あたり 与ダメ+15%',
+        //     description: '装備キャラの○○が「印」を獲得した時に+1層、max3層',
+        //     stats: { [STAT.DMG_ALL]: 0.15 },
+        //     stackable: { max: 3, default: 3 },
+        //     defaultActive: false, target: 'single', duration: 3,
+        // },
+        // 例) 星魂条件付き (name には E<n> プレフィックス不要 — minEidolon バッジが自動表示される)
+        // {
+        //     id: 'e2_skill_spd',
+        //     source: 'eidolon',
+        //     name: '急行軍 (戦闘スキル後 1T)',
+        //     description: '戦闘スキル発動時、指定された味方は行動後に速度+30%、1T',
+        //     stats: { [STAT.SPD_PERCENT]: 0.30 },
+        //     minEidolon: 2,
+        //     defaultActive: false, target: 'single', duration: 1,
         // },
     ],
 

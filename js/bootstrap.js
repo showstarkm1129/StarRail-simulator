@@ -8,9 +8,9 @@
 
 // データ層(import 時に副作用で Registry に登録される)
 import './data/characters/_index.js';
-import './data/lightcones/_index.js';
-import './data/relics/_index.js';
-import './data/ornaments/_index.js';
+import './data/Lightcones/_index.js';
+import './data/Cavern Relics/_index.js';
+import './data/Planar Ornaments/_index.js';
 
 // 計算・永続化・橋渡し
 import { Registry } from './build/registry.js';

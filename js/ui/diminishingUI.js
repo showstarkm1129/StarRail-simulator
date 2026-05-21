@@ -91,11 +91,12 @@ const state = {
     //     levelPreset: 'default'|'eidolon',   簡易モード用 (無凸MAX / 凸後MAX)
     //     buildId: string|null,                ビルドモード用 (BuildStore の id、優先)
     //     activeEffectIds: Set<string>,        合成ID: 'char.<id>' | 'lc.<id>' | 'set:<setId>:pc2.<id>' 等
+    //     stacksByEffectId: { [ekey]: number }, stackable 効果の現在層数 (1〜ef.stackable.max)
     //   }
     party: [
-        { mode: 'simple', characterId: null, levelPreset: 'eidolon', buildId: null, activeEffectIds: new Set() },
-        { mode: 'simple', characterId: null, levelPreset: 'eidolon', buildId: null, activeEffectIds: new Set() },
-        { mode: 'simple', characterId: null, levelPreset: 'eidolon', buildId: null, activeEffectIds: new Set() },
+        { mode: 'simple', characterId: null, levelPreset: 'eidolon', buildId: null, activeEffectIds: new Set(), stacksByEffectId: {} },
+        { mode: 'simple', characterId: null, levelPreset: 'eidolon', buildId: null, activeEffectIds: new Set(), stacksByEffectId: {} },
+        { mode: 'simple', characterId: null, levelPreset: 'eidolon', buildId: null, activeEffectIds: new Set(), stacksByEffectId: {} },
     ],
     // サブステの 3 モード独立 state。現在選択中の mode の結果のみ envBuffs に流す。
     //   manual : 自由入力 (stat → 値 を直接編集)
@@ -107,6 +108,27 @@ const state = {
     // lastResult: { totals: { [subKey]: 値 } } 計算済み結果。
     //   - tier ∈ {low,mid,high} のとき: 入力即時に決定的計算で更新
     //   - tier == 'random' のとき: シミュレートボタン押下時に都度乱数で更新
+    // 比較表の行表示フィルタ — true の行 key だけ renderComparison で描画される。
+    //   行 key の命名:
+    //     'atk' / 'crit' / 'def' / 'res' / 'taken' / 'break'
+    //     'dmg.base' / 'dmg.basic' / 'dmg.skill' / 'dmg.ult' / 'dmg.followup'
+    //     'total.base' / 'total.basic' / 'total.skill' / 'total.ult' / 'total.followup'
+    //   デフォルトは「現状の見た目」と一致するように共通行のみ ON、種別 4 つは OFF。
+    visibleRows: new Set([
+        'atk', 'crit', 'def', 'res', 'taken', 'break',
+        'dmg.base',
+        'total.base',
+    ]),
+    // 「表示項目」フィルタの開閉状態 (再描画で <details open> 状態を維持するため)
+    filterPanelOpen: false,
+    // 「現状の最終ステータス」(スナップショット前) のステータス行表示フィルタ。
+    // 既存 10 項目をデフォルト表示 (現状の見た目と一致)、デバフ/種別ダメは OFF。
+    visibleStats: new Set([
+        'atk', 'hp', 'def', 'spd',
+        'critRate', 'critDmg', 'critExpected',
+        'energyRegen', 'dmgOwnElement', 'breakEffect',
+    ]),
+    statsPanelOpen: false,
     subs: {
         mode: 'manual',
         manual: { /* statKey → 値 (envBuffs から init 時に復元) */ },
@@ -1261,15 +1283,51 @@ function partyBuildFor(slot) {
 // teammate に紐づく全 partyEffects をソース別に収集
 //   返り値: [{ srcKey, srcLabel, ef }, ...]
 //     srcKey 例: 'char' | 'lc' | 'set:messenger:pc4' | 'orn:vonwacq:pc2'
+//
+// 星魂条件 (ef.minEidolon) 付きの効果は、teammate の現在星魂が満たない場合は除外される。
 function gatherTeammateEffects(teammateBuild) {
     if (!teammateBuild) return [];
     const out = [];
     const ch = Registry.character.get(teammateBuild.characterId);
     if (!ch) return out;
 
-    // キャラ
+    const teammateEidolon = teammateBuild.eidolon || 0;
+
+    // キャラ (星魂条件 minEidolon でフィルタ)
     for (const ef of ch.partyEffects || []) {
+        if (ef.minEidolon && teammateEidolon < ef.minEidolon) continue;
         out.push({ srcKey: 'char', srcLabel: `キャラ: ${ch.name}`, ef });
+    }
+
+    // テスト用キャラ: 全 LC / 全セット (2pc+4pc) / 全オーナメントの partyEffects を
+    //   「全部所有している teammate」として一括列挙し、通常の equipped 装備処理は飛ばす。
+    //   光円錐の superimpose は ch.testAllSuperimpose (1〜5) を参照。未定義は 5 (S5)。
+    if (ch.isTestAllEquipment) {
+        const si = Math.max(1, Math.min(5, ch.testAllSuperimpose ?? 5));
+        for (const lc of Registry.lightcone.list()) {
+            const effs = typeof lc.partyEffects === 'function'
+                ? (lc.partyEffects(si) || [])
+                : (lc.partyEffects || []);
+            for (const ef of effs) {
+                out.push({ srcKey: `testlc:${lc.id}`, srcLabel: `[テスト] 光円錐: ${lc.name} S${si}`, ef });
+            }
+        }
+        for (const set of Registry.relicSet.list()) {
+            if (!set.partyEffects) continue;
+            for (const ef of (set.partyEffects.pc2 || [])) {
+                out.push({ srcKey: `testset:${set.id}:pc2`, srcLabel: `[テスト] セット: ${set.name} 2pc`, ef });
+            }
+            for (const ef of (set.partyEffects.pc4 || [])) {
+                out.push({ srcKey: `testset:${set.id}:pc4`, srcLabel: `[テスト] セット: ${set.name} 4pc`, ef });
+            }
+        }
+        for (const orn of Registry.ornament.list()) {
+            if (!orn.partyEffects) continue;
+            for (const ef of (orn.partyEffects.pc2 || [])) {
+                out.push({ srcKey: `testorn:${orn.id}:pc2`, srcLabel: `[テスト] 次元界: ${orn.name} 2pc`, ef });
+            }
+        }
+        return out;   // 通常の equipped 装備処理 (下記) はスキップ
     }
 
     // 光円錐
@@ -1411,17 +1469,63 @@ function renderParty() {
             recompute();
         });
     });
+
+    // stackable 効果の層数入力
+    grid.querySelectorAll('.dim-party-effect-stacks').forEach(inp => {
+        inp.addEventListener('input', () => {
+            const idx = parseInt(inp.dataset.idx, 10);
+            const ekey = inp.dataset.effectKey;
+            const max = parseInt(inp.max, 10) || 99;
+            const v = Math.max(1, Math.min(max, parseInt(inp.value, 10) || 1));
+            if (v !== parseInt(inp.value, 10)) inp.value = v;
+            if (!state.party[idx].stacksByEffectId) state.party[idx].stacksByEffectId = {};
+            state.party[idx].stacksByEffectId[ekey] = v;
+            // 入力フォーカス維持のため部分更新: stats span だけ書き換える
+            updatePartyEffectStatsDisplay(idx, ekey);
+            applyPartyToEnvBuffs();
+            recompute();
+        });
+    });
 }
 
-// キャラ/ビルド変更時に default-active な効果を自動チェック
+// 1 効果行の stats span だけを再計算して書き換える (フォーカスを保つ部分更新)
+function updatePartyEffectStatsDisplay(idx, ekey) {
+    const slot = state.party[idx];
+    const tBuild = partyBuildFor(slot);
+    if (!tBuild) return;
+    const tStats = StatComputer.compute(tBuild);
+    const effects = gatherTeammateEffects(tBuild);
+    const match = effects.find(({ srcKey, ef }) => effectKey(srcKey, ef.id) === ekey);
+    if (!match) return;
+    const { ef } = match;
+    const perLayer = resolveEffectStats(ef, tBuild, tStats);
+    if (!perLayer) return;
+    const stacks = slot.stacksByEffectId?.[ekey] ?? ef.stackable?.default ?? 1;
+    const final = applyStackMult(perLayer, stacks);
+    const row = document.querySelector(
+        `.dim-party-effect-row .dim-party-effect[data-idx="${idx}"][data-effect-key="${ekey}"]`
+    )?.closest('.dim-party-effect-row');
+    if (!row) return;
+    const statsEl = row.querySelector('.dim-party-effect-stats');
+    if (statsEl) {
+        statsEl.innerHTML = formatEffectStats(final, ef.stackable ? { perLayer, stacks } : null);
+    }
+}
+
+// キャラ/ビルド変更時に default-active な効果を自動チェック + stackable の初期層数設定
 function applyDefaultActiveEffects(idx) {
     const slot = state.party[idx];
     slot.activeEffectIds = new Set();
+    slot.stacksByEffectId = {};
     const tBuild = partyBuildFor(slot);
     if (!tBuild) return;
     const effects = gatherTeammateEffects(tBuild);
     for (const { srcKey, ef } of effects) {
-        if (ef.defaultActive) slot.activeEffectIds.add(effectKey(srcKey, ef.id));
+        const ekey = effectKey(srcKey, ef.id);
+        if (ef.defaultActive) slot.activeEffectIds.add(ekey);
+        if (ef.stackable) {
+            slot.stacksByEffectId[ekey] = ef.stackable.default ?? ef.stackable.max ?? 1;
+        }
     }
 }
 
@@ -1473,14 +1577,34 @@ function renderPartySlot(slot, idx) {
                 ${items.map(({ srcKey, ef, resolvedStats }) => {
                     const ekey = effectKey(srcKey, ef.id);
                     const checked = slot.activeEffectIds.has(ekey);
+                    const eidolonBadge = ef.minEidolon
+                        ? `<span class="dim-party-effect-eidolon" title="星魂 E${ef.minEidolon} 以上で解放">E${ef.minEidolon}+</span>`
+                        : '';
+                    // stackable: 層数を slot.stacksByEffectId から取得 (未設定なら default)
+                    const stacks = ef.stackable
+                        ? (slot.stacksByEffectId?.[ekey] ?? ef.stackable.default ?? ef.stackable.max ?? 1)
+                        : 1;
+                    const stackInputHtml = ef.stackable
+                        ? `<span class="dim-party-effect-stack-wrap" title="累積層数 (1〜${ef.stackable.max})">
+                              × <input type="number" class="dim-party-effect-stacks"
+                                       min="1" max="${ef.stackable.max}" value="${stacks}"
+                                       data-idx="${idx}" data-effect-key="${ekey}">
+                              <span class="dim-party-effect-stack-unit">層</span>
+                           </span>`
+                        : '';
+                    // 表示用 stats は 層数倍率込みの最終値、内訳表示のため perLayer も渡す
+                    const finalStats = applyStackMult(resolvedStats, stacks);
                     return `
-                        <label class="dim-party-effect-row" title="${escapeHtml(ef.description || '')}">
-                            <input type="checkbox" class="dim-party-effect"
-                                   data-idx="${idx}" data-effect-key="${ekey}"
-                                   ${checked ? 'checked' : ''}>
-                            <span class="dim-party-effect-name">${escapeHtml(ef.name)}</span>
-                            <span class="dim-party-effect-stats">${formatEffectStats(resolvedStats)}</span>
-                        </label>
+                        <div class="dim-party-effect-row" title="${escapeHtml(ef.description || '')}">
+                            <label class="dim-party-effect-main">
+                                <input type="checkbox" class="dim-party-effect"
+                                       data-idx="${idx}" data-effect-key="${ekey}"
+                                       ${checked ? 'checked' : ''}>
+                                <span class="dim-party-effect-name">${eidolonBadge}${escapeHtml(ef.name)}</span>
+                            </label>
+                            ${stackInputHtml}
+                            <span class="dim-party-effect-stats">${formatEffectStats(finalStats, ef.stackable ? { perLayer: resolvedStats, stacks } : null)}</span>
+                        </div>
                     `;
                 }).join('')}
             </div>
@@ -1526,17 +1650,36 @@ function renderPartySlot(slot, idx) {
     `;
 }
 
-function formatEffectStats(stats) {
+// stats: 表示する最終値 (stackable の場合は per-layer × stacks 済み)
+// stackInfo: stackable の場合のみ { perLayer, stacks } を渡す → 「×N 内訳」を併記
+function formatEffectStats(stats, stackInfo = null) {
     if (!stats) return '<span class="dim-party-effect-stats-empty">—</span>';
-    const parts = Object.entries(stats).map(([k, v]) => {
+    const fmt = (k, val) => {
         const isFlat = k.endsWith('Flat') || k === 'spdBase' || k === 'atkBase';
-        const valStr = isFlat ? `+${v.toFixed(1)}` : `+${(v * 100).toFixed(2)}%`;
-        return `${formatStatLabel(k)} ${valStr}`;
+        return isFlat ? `+${val.toFixed(1)}` : `+${(val * 100).toFixed(2)}%`;
+    };
+    const parts = Object.entries(stats).map(([k, v]) => {
+        if (stackInfo && stackInfo.stacks > 1 && stackInfo.perLayer && stackInfo.perLayer[k] != null) {
+            const per = stackInfo.perLayer[k];
+            return `${formatStatLabel(k)} ${fmt(k, per)} ×${stackInfo.stacks} = ${fmt(k, v)}`;
+        }
+        return `${formatStatLabel(k)} ${fmt(k, v)}`;
     });
     return parts.join(' / ');
 }
 
+// 全 stats 値に層数倍率を掛けて新しい dict を返す
+function applyStackMult(stats, stacks) {
+    if (!stats || stacks === 1) return stats;
+    const out = {};
+    for (const [k, v] of Object.entries(stats)) {
+        out[k] = v * stacks;
+    }
+    return out;
+}
+
 // パーティ効果を state.build.envBuffs に反映 (既存「パーティ.*」を一掃して書き直し)
+//   stackable 効果は slot.stacksByEffectId[ekey] 倍 (未設定なら ef.stackable.default) で計上
 function applyPartyToEnvBuffs() {
     state.build.envBuffs = (state.build.envBuffs || []).filter(b =>
         !(typeof b.label === 'string' && b.label.startsWith(PARTY_LABEL_PREFIX))
@@ -1552,10 +1695,13 @@ function applyPartyToEnvBuffs() {
             if (!slot.activeEffectIds.has(ekey)) continue;
             const stats = resolveEffectStats(ef, tBuild, tStats);
             if (!stats) continue;
+            const stackMult = ef.stackable
+                ? (slot.stacksByEffectId?.[ekey] ?? ef.stackable.default ?? ef.stackable.max ?? 1)
+                : 1;
             for (const [stat, value] of Object.entries(stats)) {
                 state.build.envBuffs.push({
                     stat,
-                    value,
+                    value: value * stackMult,
                     label: `${PARTY_LABEL_PREFIX}${idx}.${srcKey}.${ef.id}.${stat}`,
                 });
             }
@@ -1631,57 +1777,225 @@ function recompute() {
     try { nowStats = StatComputer.compute(state.build); }
     catch (err) { resultEl.innerHTML = `<div class="dim-error">計算エラー: ${err.message}</div>`; return; }
 
-    if (!state.snapshot) { resultEl.innerHTML = renderStatsOnly(nowStats); return; }
+    if (!state.snapshot) {
+        resultEl.innerHTML = renderStatsOnly(nowStats);
+        bindStatsFilter();
+        return;
+    }
     let cmp;
     try { cmp = Diminishing.compareBuilds(state.snapshot, state.build, state.options); }
     catch (err) { resultEl.innerHTML = `<div class="dim-error">比較エラー: ${err.message}</div>`; return; }
     resultEl.innerHTML = renderComparison(cmp);
+    bindComparisonFilter();
+}
+
+// 比較表上部のフィルタチェックボックスの change イベントを bind (renderComparison 毎に再 bind)
+function bindComparisonFilter() {
+    const details = document.querySelector('.dim-result-filter');
+    if (details) {
+        details.addEventListener('toggle', () => {
+            state.filterPanelOpen = details.open;
+        });
+    }
+    // 係数行 (visibleRows)
+    document.querySelectorAll('.dim-result-filter input[type="checkbox"][data-row-key]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const key = cb.dataset.rowKey;
+            if (cb.checked) state.visibleRows.add(key);
+            else            state.visibleRows.delete(key);
+            recompute();
+        });
+    });
+    // ステータス行 (visibleStats) — 比較表でも操作可
+    document.querySelectorAll('.dim-result-filter input[type="checkbox"][data-stat-key]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const key = cb.dataset.statKey;
+            if (cb.checked) state.visibleStats.add(key);
+            else            state.visibleStats.delete(key);
+            recompute();
+        });
+    });
+}
+
+// ステータス行の定義 (key, label, fmt, num)
+//   key:   visibleStats フィルタの ID
+//   label: 表示名
+//   fmt:   'flat1' | 'pct' | 'mul' | 'spd' | 'breakEffect'  (値整形 + 差分表示の形式)
+//   num:   (FinalStats) => number  数値抽出 (single 表示と diff 計算で共通使用)
+//   av?:   (FinalStats) => number  速度行のみ補足表示用 (AV)
+//
+// pre-snapshot (renderStatsOnly) と post-snapshot (renderComparison の最終ステ表)
+// の両方で使用される。同じ filter (state.visibleStats) で表示制御。
+const STATS_ROWS = [
+    { key: 'atk',           label: '攻撃力',           fmt: 'flat1', num: (s) => s.derived.atk },
+    { key: 'hp',            label: 'HP',               fmt: 'flat1', num: (s) => s.derived.hp },
+    { key: 'def',           label: '防御力',           fmt: 'flat1', num: (s) => s.derived.def },
+    { key: 'spd',           label: '速度',             fmt: 'spd',   num: (s) => s.derived.spd, av: (s) => s.derived.speedAV },
+    { key: 'critRate',      label: '会心率',           fmt: 'pct',   num: (s) => s.derived.critRate },
+    { key: 'critDmg',       label: '会心ダメ',         fmt: 'pct',   num: (s) => s.derived.critDmg },
+    { key: 'critExpected',  label: '会心期待値',       fmt: 'mul',   num: (s) => s.derived.critExpected },
+    { key: 'energyRegen',   label: 'EP回復効率',       fmt: 'pct',   num: (s) => s.derived.energyRegenPct },
+
+    // ===== 与ダメ枠 (個別) =====
+    { key: 'dmgOwnElement', label: '自属性ダメ枠 (共通+元素)', fmt: 'pct', num: (s) => s.derived.dmgOwnElement },
+    { key: 'dmgBasic',      label: '通常攻撃ダメ枠',   fmt: 'pct',   num: (s) => s.raw.dmgBasic    || 0 },
+    { key: 'dmgSkill',      label: '戦闘スキルダメ枠', fmt: 'pct',   num: (s) => s.raw.dmgSkill    || 0 },
+    { key: 'dmgUlt',        label: '必殺ダメ枠',       fmt: 'pct',   num: (s) => s.raw.dmgUlt      || 0 },
+    { key: 'dmgFollowup',   label: '追加攻撃ダメ枠',   fmt: 'pct',   num: (s) => s.raw.dmgFollowup || 0 },
+
+    // ===== 与ダメ合計 (共通+元素+種別) — 加算済み数値 =====
+    { key: 'dmgTotalBasic',    label: '与ダメ合計 (通常 = 共通+元素+通常)',
+      fmt: 'pct', num: (s) => s.derived.dmgOwnElement + (s.raw.dmgBasic    || 0) },
+    { key: 'dmgTotalSkill',    label: '与ダメ合計 (戦闘スキル = 共通+元素+スキル)',
+      fmt: 'pct', num: (s) => s.derived.dmgOwnElement + (s.raw.dmgSkill    || 0) },
+    { key: 'dmgTotalUlt',      label: '与ダメ合計 (必殺 = 共通+元素+必殺)',
+      fmt: 'pct', num: (s) => s.derived.dmgOwnElement + (s.raw.dmgUlt      || 0) },
+    { key: 'dmgTotalFollowup', label: '与ダメ合計 (追加攻撃 = 共通+元素+追加)',
+      fmt: 'pct', num: (s) => s.derived.dmgOwnElement + (s.raw.dmgFollowup || 0) },
+
+    // ===== デバフ枠 (個別) =====
+    { key: 'defDown',       label: '防御Down (敵)',    fmt: 'pct',   num: (s) => s.raw.defDown   || 0 },
+    { key: 'defIgnore',     label: '防御無視',         fmt: 'pct',   num: (s) => s.raw.defIgnore || 0 },
+
+    // ===== デバフ合計 =====
+    { key: 'defReductionTotal', label: '防御減少 合計 (Down+無視)',
+      fmt: 'pct', num: (s) => (s.raw.defDown || 0) + (s.raw.defIgnore || 0) },
+    { key: 'resPen',        label: '耐性貫通 / 耐性Down (合計)',
+      fmt: 'pct',   num: (s) => s.raw.resPen   || 0 },
+    { key: 'dmgTaken',      label: '被ダメ増 (合計)',  fmt: 'pct',   num: (s) => s.raw.dmgTaken || 0 },
+
+    // ===== その他 =====
+    { key: 'breakEffect',   label: '撃破特効',         fmt: 'breakEffect', num: (s) => s.derived.breakEffectPct },
+    { key: 'ehr',           label: '効果命中',         fmt: 'pct',   num: (s) => s.raw.ehr  || 0 },
+    { key: 'eres',          label: '効果抵抗',         fmt: 'pct',   num: (s) => s.raw.eres || 0 },
+];
+
+// 単一値表示
+function formatStatCell(row, s) {
+    const n = row.num(s);
+    switch (row.fmt) {
+        case 'flat1':       return n.toFixed(1);
+        case 'pct':         return `${(n * 100).toFixed(2)}%`;
+        case 'mul':         return `×${n.toFixed(4)}`;
+        case 'spd':         return `${n.toFixed(2)} (AV ${(row.av ? row.av(s) : 0).toFixed(1)})`;
+        case 'breakEffect': return `${((n - 1) * 100).toFixed(2)}%`;
+        default:            return String(n);
+    }
+}
+
+// 差分表示 (post-snapshot 用)
+function formatStatDiff(diff, fmt) {
+    const sign = diff >= 0 ? '+' : '';
+    switch (fmt) {
+        case 'flat1':       return `${sign}${diff.toFixed(1)}`;
+        case 'pct':         return `${sign}${(diff * 100).toFixed(2)}%pt`;
+        case 'mul':         return `${sign}${diff.toFixed(4)}`;
+        case 'spd':         return `${sign}${diff.toFixed(2)}`;
+        case 'breakEffect': return `${sign}${(diff * 100).toFixed(2)}%pt`;
+        default:            return String(diff);
+    }
 }
 
 function renderStatsOnly(s) {
-    const d = s.derived;
+    const rowsHtml = STATS_ROWS
+        .filter(r => state.visibleStats.has(r.key))
+        .map(r => `<tr><th>${r.label}</th><td>${formatStatCell(r, s)}</td></tr>`)
+        .join('');
     return `
+        ${renderStatsFilter()}
         <h3>現状の最終ステータス</h3>
-        <table class="dim-result-table">
-            <tr><th>攻撃力</th><td>${d.atk.toFixed(1)}</td></tr>
-            <tr><th>HP</th><td>${d.hp.toFixed(1)}</td></tr>
-            <tr><th>防御力</th><td>${d.def.toFixed(1)}</td></tr>
-            <tr><th>速度</th><td>${d.spd.toFixed(2)} (AV ${d.speedAV.toFixed(1)})</td></tr>
-            <tr><th>会心率</th><td>${(d.critRate * 100).toFixed(2)}%</td></tr>
-            <tr><th>会心ダメ</th><td>${(d.critDmg * 100).toFixed(2)}%</td></tr>
-            <tr><th>会心期待値</th><td>×${d.critExpected.toFixed(4)}</td></tr>
-            <tr><th>EP回復効率</th><td>${(d.energyRegenPct * 100).toFixed(2)}%</td></tr>
-            <tr><th>自属性ダメ枠合計</th><td>${(d.dmgOwnElement * 100).toFixed(2)}%</td></tr>
-            <tr><th>撃破特効</th><td>${((d.breakEffectPct - 1) * 100).toFixed(2)}%</td></tr>
-        </table>
+        <table class="dim-result-table">${rowsHtml}</table>
         <p class="dim-help">「現状をスナップショット」を押してから装備等を変更すると、火力貢献率が表示されます。</p>
     `;
 }
+
+// 現状ステータスの行フィルタ (折りたたみチェックボックス群)
+function renderStatsFilter() {
+    const checkboxes = STATS_ROWS.map(r => `
+        <label class="dim-filter-item">
+            <input type="checkbox" data-stat-key="${r.key}" ${state.visibleStats.has(r.key) ? 'checked' : ''}>
+            <span>${r.label}</span>
+        </label>
+    `).join('');
+    const visibleCount = STATS_ROWS.filter(r => state.visibleStats.has(r.key)).length;
+    return `
+        <details class="dim-result-filter" ${state.statsPanelOpen ? 'open' : ''}>
+            <summary>表示項目 (${visibleCount} / ${STATS_ROWS.length})</summary>
+            <div class="dim-filter-grid">${checkboxes}</div>
+        </details>
+    `;
+}
+
+// ステータス filter の change/toggle を bind (renderStatsOnly 毎に再 bind)
+function bindStatsFilter() {
+    const details = document.querySelector('.dim-result-filter');
+    if (details) {
+        details.addEventListener('toggle', () => {
+            state.statsPanelOpen = details.open;
+        });
+    }
+    document.querySelectorAll('.dim-result-filter input[type="checkbox"][data-stat-key]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const key = cb.dataset.statKey;
+            if (cb.checked) state.visibleStats.add(key);
+            else            state.visibleStats.delete(key);
+            recompute();
+        });
+    });
+}
+
+// 比較表の全行定義 (rowKey + 表示ラベル + factor 取得関数)
+//   visibleRows フィルタと共有するためトップレベルに定数化
+const COMPARISON_ROWS = [
+    { key: 'atk',           label: (opts) => `参照ステ (${factorLabel(opts.refStat)})`, get: (f) => f.atk },
+    { key: 'crit',          label: () => '会心係数',                                  get: (f) => f.crit },
+    { key: 'dmg.base',      label: () => '与ダメ枠 (共通)',                            get: (f) => f.dmgBonusByType.base },
+    { key: 'dmg.basic',     label: () => '与ダメ枠 (通常攻撃)',                        get: (f) => f.dmgBonusByType.basic },
+    { key: 'dmg.skill',     label: () => '与ダメ枠 (戦闘スキル)',                      get: (f) => f.dmgBonusByType.skill },
+    { key: 'dmg.ult',       label: () => '与ダメ枠 (必殺技)',                          get: (f) => f.dmgBonusByType.ult },
+    { key: 'dmg.followup',  label: () => '与ダメ枠 (追加攻撃)',                        get: (f) => f.dmgBonusByType.followup },
+    { key: 'def',           label: () => '防御係数',                                  get: (f) => f.def },
+    { key: 'res',           label: () => '耐性係数',                                  get: (f) => f.res },
+    { key: 'taken',         label: () => '被ダメ係数',                                get: (f) => f.taken },
+    { key: 'break',         label: () => '撃破係数',                                  get: (f) => f.break },
+];
+const TOTAL_ROWS = [
+    { key: 'total.base',     label: () => '火力総合 (共通)',     get: (f) => f.totals.base },
+    { key: 'total.basic',    label: () => '火力総合 (通常攻撃)',  get: (f) => f.totals.basic },
+    { key: 'total.skill',    label: () => '火力総合 (戦闘スキル)', get: (f) => f.totals.skill },
+    { key: 'total.ult',      label: () => '火力総合 (必殺技)',    get: (f) => f.totals.ult },
+    { key: 'total.followup', label: () => '火力総合 (追加攻撃)',  get: (f) => f.totals.followup },
+];
 
 function renderComparison(cmp) {
     const f = cmp.factors;
     const a = cmp.beforeStats.derived;
     const b = cmp.afterStats.derived;
-    const rows = [
-        { name: `参照ステ (${factorLabel(cmp.options.refStat)})`, ...f.atk },
-        { name: '会心係数',     ...f.crit },
-        { name: '与ダメ枠',     ...f.dmgBonus },
-        { name: '防御係数',     ...f.def },
-        { name: '耐性係数',     ...f.res },
-        { name: '撃破係数',     ...f.break },
-    ];
+
+    const factorRowsHtml = COMPARISON_ROWS
+        .filter(r => state.visibleRows.has(r.key))
+        .map(r => renderFactorRow({ name: r.label(cmp.options), ...r.get(f) }))
+        .join('');
+    const totalRowsHtml = TOTAL_ROWS
+        .filter(r => state.visibleRows.has(r.key))
+        .map(r => {
+            const t = r.get(f);
+            return `<tr class="dim-total-row">
+                <th>${r.label()}</th>
+                <td>—</td><td>—</td>
+                <td>×${t.ratio.toFixed(4)}</td>
+                <td class="${contribClass(t.contribution)}">${formatContrib(t.contribution)}</td>
+            </tr>`;
+        }).join('');
+
     return `
+        ${renderComparisonFilter()}
         <h3>火力貢献率</h3>
         <table class="dim-result-table">
             <thead><tr><th>項目</th><th>スナップショット</th><th>現在</th><th>比率</th><th>貢献率</th></tr></thead>
             <tbody>
-                ${rows.map(renderFactorRow).join('')}
-                <tr class="dim-total-row">
-                    <th>火力総合</th>
-                    <td>—</td><td>—</td>
-                    <td>×${f.total.ratio.toFixed(4)}</td>
-                    <td class="${contribClass(f.total.contribution)}">${formatContrib(f.total.contribution)}</td>
-                </tr>
+                ${factorRowsHtml}
+                ${totalRowsHtml}
             </tbody>
         </table>
 
@@ -1689,17 +2003,60 @@ function renderComparison(cmp) {
         <table class="dim-result-table">
             <thead><tr><th>項目</th><th>スナップショット</th><th>現在</th><th>差分</th></tr></thead>
             <tbody>
-                ${renderStatRow('攻撃力', a.atk, b.atk, 1)}
-                ${renderStatRow('HP',     a.hp,  b.hp,  1)}
-                ${renderStatRow('防御力', a.def, b.def, 1)}
-                ${renderStatRowSpd(a.spd, b.spd, cmp.info.spdDelta)}
-                ${renderStatRowPct('会心率',     a.critRate,       b.critRate)}
-                ${renderStatRowPct('会心ダメ',   a.critDmg,        b.critDmg)}
-                ${renderStatRowMul('会心期待値', a.critExpected,   b.critExpected)}
-                ${renderStatRowPct('自属性ダメ枠', a.dmgOwnElement, b.dmgOwnElement)}
-                ${renderStatRowPct('EP回復効率', a.energyRegenPct, b.energyRegenPct)}
+                ${renderComparisonStatsRows(cmp.beforeStats, cmp.afterStats)}
             </tbody>
         </table>
+    `;
+}
+
+// STATS_ROWS の visible 行を before/after/差分 形式で描画 (renderComparison の最終ステータス section)
+function renderComparisonStatsRows(before, after) {
+    return STATS_ROWS
+        .filter(r => state.visibleStats.has(r.key))
+        .map(r => {
+            const beforeNum = r.num(before);
+            const afterNum  = r.num(after);
+            const diff      = afterNum - beforeNum;
+            const beforeStr = formatStatCell(r, before);
+            const afterStr  = formatStatCell(r, after);
+            const diffStr   = formatStatDiff(diff, r.fmt);
+            return `<tr>
+                <th>${r.label}</th>
+                <td>${beforeStr}</td>
+                <td>${afterStr}</td>
+                <td class="${contribClass(diff)}">${diffStr}</td>
+            </tr>`;
+        }).join('');
+}
+
+// 比較表上部のフィルタ折りたたみセクション (チェックボックス群)
+//   火力貢献率 行 (visibleRows) と 最終ステータス 行 (visibleStats) の両方を 1 つの details にまとめる
+function renderComparisonFilter() {
+    const factorRows = [...COMPARISON_ROWS, ...TOTAL_ROWS];
+    const factorChecks = factorRows.map(r => `
+        <label class="dim-filter-item">
+            <input type="checkbox" data-row-key="${r.key}" ${state.visibleRows.has(r.key) ? 'checked' : ''}>
+            <span>${r.label({ refStat: state.options.refStat })}</span>
+        </label>
+    `).join('');
+    const statChecks = STATS_ROWS.map(r => `
+        <label class="dim-filter-item">
+            <input type="checkbox" data-stat-key="${r.key}" ${state.visibleStats.has(r.key) ? 'checked' : ''}>
+            <span>${r.label}</span>
+        </label>
+    `).join('');
+    const visibleFactors = factorRows.filter(r => state.visibleRows.has(r.key)).length;
+    const visibleStats   = STATS_ROWS.filter(r => state.visibleStats.has(r.key)).length;
+    return `
+        <details class="dim-result-filter" ${state.filterPanelOpen ? 'open' : ''}>
+            <summary>表示項目 (係数 ${visibleFactors}/${factorRows.length} ・ ステ ${visibleStats}/${STATS_ROWS.length})</summary>
+            <div class="dim-filter-section">
+                <h5 class="dim-filter-group-title">火力貢献率 — 係数行</h5>
+                <div class="dim-filter-grid">${factorChecks}</div>
+                <h5 class="dim-filter-group-title">最終ステータス — ステ行</h5>
+                <div class="dim-filter-grid">${statChecks}</div>
+            </div>
+        </details>
     `;
 }
 
@@ -1917,8 +2274,12 @@ function formatStatLabel(stat) {
         spdPercent: '速度%', spdFlat: '速度',
         critRate: '会心率', critDmg: '会心ダメ',
         dmgAll: '与ダメ枠', breakEffect: '撃破特効',
+        dmgBasic: '通常攻撃ダメ枠', dmgSkill: '戦闘スキルダメ枠',
+        dmgUlt: '必殺ダメ枠',       dmgFollowup: '追加攻撃ダメ枠',
         ehr: '効果命中', eres: '効果抵抗',
         energyRegen: 'EP回復',
+        resPen: '耐性貫通', defIgnore: '防御無視', defDown: '防御ダウン',
+        dmgTaken: '被ダメ増', healBonus: '治癒量', healTaken: '被治癒量',
         dmgPhysical: '物理ダメ', dmgFire: '炎ダメ', dmgIce: '氷ダメ',
         dmgLightning: '雷ダメ', dmgWind: '風ダメ', dmgQuantum: '量子ダメ', dmgImaginary: '虚数ダメ',
     };

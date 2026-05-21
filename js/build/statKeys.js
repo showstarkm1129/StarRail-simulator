@@ -33,6 +33,11 @@ export const STAT = Object.freeze({
     CRIT_DMG: 'critDmg',
     // 与ダメ枠
     DMG_ALL: 'dmgAll',                  // 全属性共通
+    // スキル種別ダメ枠 (該当スキル種別で攻撃した時のみ加算される独立枠)
+    DMG_BASIC:    'dmgBasic',           // 通常攻撃ダメ+%
+    DMG_SKILL:    'dmgSkill',           // 戦闘スキルダメ+%
+    DMG_ULT:      'dmgUlt',             // 必殺技ダメ+%
+    DMG_FOLLOWUP: 'dmgFollowup',        // 追加攻撃ダメ+%
     // 属性別ダメ枠は makeElementDmgKey() で生成 → 'dmgFire' 等
     // 防御係数枠
     DEF_DOWN: 'defDown',

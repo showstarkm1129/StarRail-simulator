@@ -237,6 +237,21 @@ Registry.character.add({
             target: 'all',
             duration: 2,
         },
+        // ===== 星魂条件付き =====
+        {
+            id: 'e2_skill_spd',
+            source: 'eidolon',
+            name: '急行軍 (戦闘スキル後 1T)',
+            description: '戦闘スキルを発動した時、指定された味方は行動した後に速度+30%、1ターン継続',
+            stats: { [STAT.SPD_PERCENT]: 0.30 },
+            minEidolon: 2,
+            defaultActive: false,
+            target: 'single',
+            duration: 1,
+        },
+        // E6「気勢貫天」は skill_dmg バフの継続時間を +1T するメタ効果。
+        // 限界効用逓減ツールはスナップショット計算のため duration を扱わず、
+        // 新規ステ追加もないため partyEffect としては登録しない。
     ],
 
     // 追加能力(昇格2/4/6)
