@@ -17,10 +17,10 @@
 //   - ref_stat (atk/hp/def): 装備変更で大きく動く
 //   - crit_factor:           CR/CD サブステ・メインステ
 //   - dmgBonus_factor:       球の元素ダメ%、与ダメバフ
-//   - def_factor:            防御無視/防御Down系装備
-//   - res_factor:            耐性貫通系装備
+//   - def_factor:            防御無視/防御Down系装備・デバフ
+//   - res_factor:            耐性貫通系装備・耐性Down系デバフ
 //   - break_factor:          靭性状態に依存(本ツールでは固定値で扱う)
-//   - taken_factor:          被ダメ増デバフ(敵側、対象外)
+//   - taken_factor:          被ダメ増デバフ(攻撃者から見た敵側の係数。本ツールで対象に追加)
 
 import { StatComputer } from './statComputer.js';
 import { STAT, STAT_DEFAULTS, makeElementDmgKey } from './statKeys.js';
@@ -65,8 +65,9 @@ export const Diminishing = Object.freeze({
 //         atk:       { before, after, ratio, contribution },  // ratio = after/before, contribution = ratio - 1
 //         crit:      { before, after, ratio, contribution },
 //         dmgBonus:  { before, after, ratio, contribution },
-//         def:       { before, after, ratio, contribution },
-//         res:       { before, after, ratio, contribution },
+//         def:       { before, after, ratio, contribution },  // 防御無視 + 防御Down (敵デバフ)
+//         res:       { before, after, ratio, contribution },  // 耐性貫通 + 耐性Down (敵デバフ)
+//         taken:     { before, after, ratio, contribution },  // 被ダメ増 (敵デバフ)
 //         break:     { before, after, ratio, contribution },
 //         total:     { ratio, contribution },                 // 全枠の積
 //       },
@@ -89,7 +90,7 @@ function compareBuilds(buildBefore, buildAfter, opts = {}) {
 
     const factors = {};
     let totalRatio = 1;
-    for (const key of ['atk', 'crit', 'dmgBonus', 'def', 'res', 'break']) {
+    for (const key of ['atk', 'crit', 'dmgBonus', 'def', 'res', 'taken', 'break']) {
         const b = beforeFactors[key];
         const a = afterFactors[key];
         const ratio = b > 0 ? (a / b) : 0;
@@ -101,10 +102,35 @@ function compareBuilds(buildBefore, buildAfter, opts = {}) {
         };
         totalRatio *= ratio;
     }
-    factors.total = {
-        ratio: totalRatio,
-        contribution: totalRatio - 1,
-    };
+
+    // スキル種別 breakdown — 与ダメ枠を 5 種類で別途比較
+    factors.dmgBonusByType = {};
+    for (const t of DMG_TYPE_KEYS) {
+        const b = beforeFactors.dmgBonusByType[t];
+        const a = afterFactors.dmgBonusByType[t];
+        const ratio = b > 0 ? (a / b) : 0;
+        factors.dmgBonusByType[t] = {
+            before: b,
+            after: a,
+            ratio,
+            contribution: ratio - 1,
+        };
+    }
+
+    // 火力総合 (種別別) = atk × crit × dmgBonusByType[t] × def × res × taken × break
+    //   factors.total は factors.totals.base のエイリアスとして残す (後方互換)
+    factors.totals = {};
+    const nonDmgRatio = factors.atk.ratio * factors.crit.ratio
+                       * factors.def.ratio * factors.res.ratio
+                       * factors.taken.ratio * factors.break.ratio;
+    for (const t of DMG_TYPE_KEYS) {
+        const r = nonDmgRatio * factors.dmgBonusByType[t].ratio;
+        factors.totals[t] = {
+            ratio: r,
+            contribution: r - 1,
+        };
+    }
+    factors.total = factors.totals.base;
 
     return {
         beforeStats,
@@ -130,7 +156,7 @@ function compareWithModification(buildBefore, modifyFn, opts = {}) {
 // ---- ダメージ係数の算出 -------------------------------------------------
 
 // 1ビルドの FinalStats から、ダメージ式の各乗算枠の数値を求める。
-//   返り値: { atk, crit, dmgBonus, def, res, break }
+//   返り値: { atk, crit, dmgBonus, def, res, taken, break }
 function computeDamageFactors(finalStats, opts = DEFAULT_OPTIONS) {
     const r = finalStats.raw;
     const d = finalStats.derived;
@@ -154,10 +180,19 @@ function computeDamageFactors(finalStats, opts = DEFAULT_OPTIONS) {
         ? (1 + cd)
         : (1 + Math.min(cr, 1.0) * cd);
 
-    // 与ダメージ係数 (全属性共通 + 自属性別枠)
+    // 与ダメージ係数 (全属性共通 + 自属性別枠) — base
+    //   さらにスキル種別ダメ枠 (DMG_BASIC/SKILL/ULT/FOLLOWUP) を加算した
+    //   種別別の dmgBonusByType を別途算出する。
     const elementKey = element ? makeElementDmgKey(element) : null;
-    const dmgBonus = r[STAT.DMG_ALL] + (elementKey ? (r[elementKey] || 0) : 0);
-    const dmgFactor = 1 + dmgBonus;
+    const baseBonus = r[STAT.DMG_ALL] + (elementKey ? (r[elementKey] || 0) : 0);
+    const dmgFactor = 1 + baseBonus;
+    const dmgBonusByType = {
+        base:     1 + baseBonus,
+        basic:    1 + baseBonus + (r[STAT.DMG_BASIC]    || 0),
+        skill:    1 + baseBonus + (r[STAT.DMG_SKILL]    || 0),
+        ult:      1 + baseBonus + (r[STAT.DMG_ULT]      || 0),
+        followup: 1 + baseBonus + (r[STAT.DMG_FOLLOWUP] || 0),
+    };
 
     // 防御係数 (Lv80固定: 100 / ((20 + 敵Lv) × (1 - 防御Down - 防御無視) + 100))
     const defReduction = Math.min(1.0, r[STAT.DEF_DOWN] + r[STAT.DEF_IGNORE]);
@@ -166,18 +201,28 @@ function computeDamageFactors(finalStats, opts = DEFAULT_OPTIONS) {
     // 属性耐性係数 (1 - (敵基礎耐性 - 耐性貫通))
     const resFactor = 1 - (opts.enemyBaseRes - r[STAT.RES_PEN]);
 
+    // 被ダメ係数 (敵側デバフ: 被ダメ増・脆弱化付与など)
+    //   damage *= (1 + DMG_TAKEN)
+    //   注: STAT.DMG_TAKEN は敵の受けるダメージ係数として envBuffs 等で正の値で加算される
+    const takenFactor = 1 + (r[STAT.DMG_TAKEN] || 0);
+
     // 撃破係数 (靭性が残ってるなら 0.9、撃破中なら 1.0)
     const breakFactor = opts.breakState === 'broken' ? 1.0 : 0.9;
 
     return {
         atk: refStatValue,        // ref_stat そのもの (skill_mult はキャンセルされるので不要)
         crit: critFactor,
-        dmgBonus: dmgFactor,
+        dmgBonus: dmgFactor,      // = dmgBonusByType.base (後方互換)
+        dmgBonusByType,           // 新規 — スキル種別 breakdown 表示用
         def: defFactor,
         res: resFactor,
+        taken: takenFactor,
         break: breakFactor,
     };
 }
+
+// スキル種別 breakdown 用の key 一覧。base = 共通枠のみ、他 4 つは + DMG_<TYPE>。
+const DMG_TYPE_KEYS = ['base', 'basic', 'skill', 'ult', 'followup'];
 
 // ---- ビルド操作ヘルパ (immutable) ---------------------------------------
 

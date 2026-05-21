@@ -3,3 +3,6 @@
 
 import './template.js';
 import './bronya.js';
+import './hyacine.js';
+import './testAll.js';
+import './testAllS1.js';
