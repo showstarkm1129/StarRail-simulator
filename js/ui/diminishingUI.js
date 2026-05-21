@@ -81,6 +81,35 @@ function getLevelKeysForCharacter(character) {
 
 // ---- 状態 --------------------------------------------------------------
 
+const DEFAULT_VISIBLE_ROWS = new Set([
+    'atk', 'crit', 'def', 'res', 'taken', 'break',
+    'dmg.base',
+    'total.base',
+]);
+
+const DEFAULT_VISIBLE_STATS = new Set([
+    'atk', 'hp', 'def', 'spd',
+    'critRate', 'critDmg', 'critExpected',
+    'energyRegen', 'dmgOwnElement', 'breakEffect',
+]);
+
+const STATS_CATEGORIES = {
+    basic: '① 基礎ステータス',
+    crit: '② 会心関連',
+    dmg_individual: '③ 与ダメバフ (種類別)',
+    dmg_total: '④ 与ダメ合計 (実効値)',
+    debuff: '⑤ デバフ・防御・耐性',
+    other: '⑥ その他・特殊',
+};
+
+const FACTOR_CATEGORIES = {
+    basic_crit: '① 基礎・会心係数',
+    dmg: '② 与ダメージ係数',
+    debuff: '③ 防御・耐性・被ダメ係数',
+    break: '④ 撃破係数',
+    total: '⑤ 火力総合 (結果)',
+};
+
 const state = {
     build: null,
     snapshot: null,
@@ -114,20 +143,12 @@ const state = {
     //     'dmg.base' / 'dmg.basic' / 'dmg.skill' / 'dmg.ult' / 'dmg.followup'
     //     'total.base' / 'total.basic' / 'total.skill' / 'total.ult' / 'total.followup'
     //   デフォルトは「現状の見た目」と一致するように共通行のみ ON、種別 4 つは OFF。
-    visibleRows: new Set([
-        'atk', 'crit', 'def', 'res', 'taken', 'break',
-        'dmg.base',
-        'total.base',
-    ]),
+    visibleRows: new Set(DEFAULT_VISIBLE_ROWS),
     // 「表示項目」フィルタの開閉状態 (再描画で <details open> 状態を維持するため)
     filterPanelOpen: false,
     // 「現状の最終ステータス」(スナップショット前) のステータス行表示フィルタ。
     // 既存 10 項目をデフォルト表示 (現状の見た目と一致)、デバフ/種別ダメは OFF。
-    visibleStats: new Set([
-        'atk', 'hp', 'def', 'spd',
-        'critRate', 'critDmg', 'critExpected',
-        'energyRegen', 'dmgOwnElement', 'breakEffect',
-    ]),
+    visibleStats: new Set(DEFAULT_VISIBLE_STATS),
     statsPanelOpen: false,
     subs: {
         mode: 'manual',
@@ -1815,6 +1836,57 @@ function bindComparisonFilter() {
             recompute();
         });
     });
+    // Quick Actions
+    document.querySelectorAll('.dim-result-filter .btn-filter-action').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.dataset.action;
+            const type = btn.dataset.type;
+            if (type === 'row') {
+                const factorRows = [...COMPARISON_ROWS, ...TOTAL_ROWS];
+                if (action === 'all') {
+                    factorRows.forEach(r => state.visibleRows.add(r.key));
+                } else if (action === 'none') {
+                    state.visibleRows.clear();
+                } else if (action === 'default') {
+                    state.visibleRows = new Set(DEFAULT_VISIBLE_ROWS);
+                }
+            } else if (type === 'stat') {
+                if (action === 'all') {
+                    STATS_ROWS.forEach(r => state.visibleStats.add(r.key));
+                } else if (action === 'none') {
+                    state.visibleStats.clear();
+                } else if (action === 'default') {
+                    state.visibleStats = new Set(DEFAULT_VISIBLE_STATS);
+                }
+            }
+            recompute();
+        });
+    });
+    // Subgroup Actions
+    document.querySelectorAll('.dim-result-filter .btn-subgroup-action').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.dataset.action;
+            const category = btn.dataset.category;
+            const type = btn.dataset.type;
+            if (type === 'row') {
+                const factorRows = [...COMPARISON_ROWS, ...TOTAL_ROWS];
+                const targetRows = factorRows.filter(r => r.category === category);
+                if (action === 'all') {
+                    targetRows.forEach(r => state.visibleRows.add(r.key));
+                } else if (action === 'none') {
+                    targetRows.forEach(r => state.visibleRows.delete(r.key));
+                }
+            } else if (type === 'stat') {
+                const targetRows = STATS_ROWS.filter(r => r.category === category);
+                if (action === 'all') {
+                    targetRows.forEach(r => state.visibleStats.add(r.key));
+                } else if (action === 'none') {
+                    targetRows.forEach(r => state.visibleStats.delete(r.key));
+                }
+            }
+            recompute();
+        });
+    });
 }
 
 // ステータス行の定義 (key, label, fmt, num)
@@ -1827,47 +1899,47 @@ function bindComparisonFilter() {
 // pre-snapshot (renderStatsOnly) と post-snapshot (renderComparison の最終ステ表)
 // の両方で使用される。同じ filter (state.visibleStats) で表示制御。
 const STATS_ROWS = [
-    { key: 'atk',           label: '攻撃力',           fmt: 'flat1', num: (s) => s.derived.atk },
-    { key: 'hp',            label: 'HP',               fmt: 'flat1', num: (s) => s.derived.hp },
-    { key: 'def',           label: '防御力',           fmt: 'flat1', num: (s) => s.derived.def },
-    { key: 'spd',           label: '速度',             fmt: 'spd',   num: (s) => s.derived.spd, av: (s) => s.derived.speedAV },
-    { key: 'critRate',      label: '会心率',           fmt: 'pct',   num: (s) => s.derived.critRate },
-    { key: 'critDmg',       label: '会心ダメ',         fmt: 'pct',   num: (s) => s.derived.critDmg },
-    { key: 'critExpected',  label: '会心期待値',       fmt: 'mul',   num: (s) => s.derived.critExpected },
-    { key: 'energyRegen',   label: 'EP回復効率',       fmt: 'pct',   num: (s) => s.derived.energyRegenPct },
+    { key: 'atk',           label: '攻撃力',           fmt: 'flat1', num: (s) => s.derived.atk, category: 'basic' },
+    { key: 'hp',            label: 'HP',               fmt: 'flat1', num: (s) => s.derived.hp, category: 'basic' },
+    { key: 'def',           label: '防御力',           fmt: 'flat1', num: (s) => s.derived.def, category: 'basic' },
+    { key: 'spd',           label: '速度',             fmt: 'spd',   num: (s) => s.derived.spd, av: (s) => s.derived.speedAV, category: 'basic' },
+    { key: 'critRate',      label: '会心率',           fmt: 'pct',   num: (s) => s.derived.critRate, category: 'crit' },
+    { key: 'critDmg',       label: '会心ダメ',         fmt: 'pct',   num: (s) => s.derived.critDmg, category: 'crit' },
+    { key: 'critExpected',  label: '会心期待値',       fmt: 'mul',   num: (s) => s.derived.critExpected, category: 'crit' },
+    { key: 'energyRegen',   label: 'EP回復効率',       fmt: 'pct',   num: (s) => s.derived.energyRegenPct, category: 'basic' },
 
     // ===== 与ダメ枠 (個別) =====
-    { key: 'dmgOwnElement', label: '自属性ダメ枠 (共通+元素)', fmt: 'pct', num: (s) => s.derived.dmgOwnElement },
-    { key: 'dmgBasic',      label: '通常攻撃ダメ枠',   fmt: 'pct',   num: (s) => s.raw.dmgBasic    || 0 },
-    { key: 'dmgSkill',      label: '戦闘スキルダメ枠', fmt: 'pct',   num: (s) => s.raw.dmgSkill    || 0 },
-    { key: 'dmgUlt',        label: '必殺ダメ枠',       fmt: 'pct',   num: (s) => s.raw.dmgUlt      || 0 },
-    { key: 'dmgFollowup',   label: '追加攻撃ダメ枠',   fmt: 'pct',   num: (s) => s.raw.dmgFollowup || 0 },
+    { key: 'dmgOwnElement', label: '自属性ダメ枠 (共通+元素)', fmt: 'pct', num: (s) => s.derived.dmgOwnElement, category: 'dmg_individual' },
+    { key: 'dmgBasic',      label: '通常攻撃ダメ枠',   fmt: 'pct',   num: (s) => s.raw.dmgBasic    || 0, category: 'dmg_individual' },
+    { key: 'dmgSkill',      label: '戦闘スキルダメ枠', fmt: 'pct',   num: (s) => s.raw.dmgSkill    || 0, category: 'dmg_individual' },
+    { key: 'dmgUlt',        label: '必殺ダメ枠',       fmt: 'pct',   num: (s) => s.raw.dmgUlt      || 0, category: 'dmg_individual' },
+    { key: 'dmgFollowup',   label: '追加攻撃ダメ枠',   fmt: 'pct',   num: (s) => s.raw.dmgFollowup || 0, category: 'dmg_individual' },
 
     // ===== 与ダメ合計 (共通+元素+種別) — 加算済み数値 =====
-    { key: 'dmgTotalBasic',    label: '与ダメ合計 (通常 = 共通+元素+通常)',
-      fmt: 'pct', num: (s) => s.derived.dmgOwnElement + (s.raw.dmgBasic    || 0) },
-    { key: 'dmgTotalSkill',    label: '与ダメ合計 (戦闘スキル = 共通+元素+スキル)',
-      fmt: 'pct', num: (s) => s.derived.dmgOwnElement + (s.raw.dmgSkill    || 0) },
-    { key: 'dmgTotalUlt',      label: '与ダメ合計 (必殺 = 共通+元素+必殺)',
-      fmt: 'pct', num: (s) => s.derived.dmgOwnElement + (s.raw.dmgUlt      || 0) },
-    { key: 'dmgTotalFollowup', label: '与ダメ合計 (追加攻撃 = 共通+元素+追加)',
-      fmt: 'pct', num: (s) => s.derived.dmgOwnElement + (s.raw.dmgFollowup || 0) },
+    { key: 'dmgTotalBasic',    label: '通常与ダメ合計 (通常 = 共通+属性+通常)',
+      fmt: 'pct', num: (s) => s.derived.dmgOwnElement + (s.raw.dmgBasic    || 0), category: 'dmg_total' },
+    { key: 'dmgTotalSkill',    label: 'スキル与ダメ合計 (戦闘スキル = 共通+属性+スキル)',
+      fmt: 'pct', num: (s) => s.derived.dmgOwnElement + (s.raw.dmgSkill    || 0), category: 'dmg_total' },
+    { key: 'dmgTotalUlt',      label: '必殺与ダメ合計 (必殺 = 共通+属性+必殺)',
+      fmt: 'pct', num: (s) => s.derived.dmgOwnElement + (s.raw.dmgUlt      || 0), category: 'dmg_total' },
+    { key: 'dmgTotalFollowup', label: '追加攻撃与ダメ合計 (追加攻撃 = 共通+属性+追加)',
+      fmt: 'pct', num: (s) => s.derived.dmgOwnElement + (s.raw.dmgFollowup || 0), category: 'dmg_total' },
 
     // ===== デバフ枠 (個別) =====
-    { key: 'defDown',       label: '防御Down (敵)',    fmt: 'pct',   num: (s) => s.raw.defDown   || 0 },
-    { key: 'defIgnore',     label: '防御無視',         fmt: 'pct',   num: (s) => s.raw.defIgnore || 0 },
+    { key: 'defDown',       label: '防御Down (敵)',    fmt: 'pct',   num: (s) => s.raw.defDown   || 0, category: 'debuff' },
+    { key: 'defIgnore',     label: '防御無視',         fmt: 'pct',   num: (s) => s.raw.defIgnore || 0, category: 'debuff' },
 
     // ===== デバフ合計 =====
     { key: 'defReductionTotal', label: '防御減少 合計 (Down+無視)',
-      fmt: 'pct', num: (s) => (s.raw.defDown || 0) + (s.raw.defIgnore || 0) },
+      fmt: 'pct', num: (s) => (s.raw.defDown || 0) + (s.raw.defIgnore || 0), category: 'debuff' },
     { key: 'resPen',        label: '耐性貫通 / 耐性Down (合計)',
-      fmt: 'pct',   num: (s) => s.raw.resPen   || 0 },
-    { key: 'dmgTaken',      label: '被ダメ増 (合計)',  fmt: 'pct',   num: (s) => s.raw.dmgTaken || 0 },
+      fmt: 'pct',   num: (s) => s.raw.resPen   || 0, category: 'debuff' },
+    { key: 'dmgTaken',      label: '被ダメ増 (合計)',  fmt: 'pct',   num: (s) => s.raw.dmgTaken || 0, category: 'debuff' },
 
     // ===== その他 =====
-    { key: 'breakEffect',   label: '撃破特効',         fmt: 'breakEffect', num: (s) => s.derived.breakEffectPct },
-    { key: 'ehr',           label: '効果命中',         fmt: 'pct',   num: (s) => s.raw.ehr  || 0 },
-    { key: 'eres',          label: '効果抵抗',         fmt: 'pct',   num: (s) => s.raw.eres || 0 },
+    { key: 'breakEffect',   label: '撃破特効',         fmt: 'breakEffect', num: (s) => s.derived.breakEffectPct, category: 'other' },
+    { key: 'ehr',           label: '効果命中',         fmt: 'pct',   num: (s) => s.raw.ehr  || 0, category: 'other' },
+    { key: 'eres',          label: '効果抵抗',         fmt: 'pct',   num: (s) => s.raw.eres || 0, category: 'other' },
 ];
 
 // 単一値表示
@@ -1897,31 +1969,81 @@ function formatStatDiff(diff, fmt) {
 }
 
 function renderStatsOnly(s) {
-    const rowsHtml = STATS_ROWS
-        .filter(r => state.visibleStats.has(r.key))
-        .map(r => `<tr><th>${r.label}</th><td>${formatStatCell(r, s)}</td></tr>`)
-        .join('');
+    const grouped = {};
+    for (const catKey of Object.keys(STATS_CATEGORIES)) {
+        grouped[catKey] = [];
+    }
+    for (const r of STATS_ROWS) {
+        if (state.visibleStats.has(r.key)) {
+            grouped[r.category].push(r);
+        }
+    }
+
+    const tbodyHtml = Object.entries(STATS_CATEGORIES).map(([catKey, catName]) => {
+        const rows = grouped[catKey] || [];
+        if (rows.length === 0) return '';
+        const headerRow = `<tr class="dim-table-category-header"><td colspan="2">${catName}</td></tr>`;
+        const rowsHtml = rows.map(r => `<tr><th>${r.label}</th><td>${formatStatCell(r, s)}</td></tr>`).join('');
+        return headerRow + rowsHtml;
+    }).join('');
+
     return `
         ${renderStatsFilter()}
         <h3>現状の最終ステータス</h3>
-        <table class="dim-result-table">${rowsHtml}</table>
+        <table class="dim-result-table">
+            <tbody>
+                ${tbodyHtml}
+            </tbody>
+        </table>
         <p class="dim-help">「現状をスナップショット」を押してから装備等を変更すると、火力貢献率が表示されます。</p>
     `;
 }
-
 // 現状ステータスの行フィルタ (折りたたみチェックボックス群)
 function renderStatsFilter() {
-    const checkboxes = STATS_ROWS.map(r => `
-        <label class="dim-filter-item">
-            <input type="checkbox" data-stat-key="${r.key}" ${state.visibleStats.has(r.key) ? 'checked' : ''}>
-            <span>${r.label}</span>
-        </label>
-    `).join('');
+    const grouped = {};
+    for (const catKey of Object.keys(STATS_CATEGORIES)) {
+        grouped[catKey] = [];
+    }
+    for (const r of STATS_ROWS) {
+        grouped[r.category].push(r);
+    }
+
+    const sectionsHtml = Object.entries(STATS_CATEGORIES).map(([catKey, catName]) => {
+        const rows = grouped[catKey] || [];
+        if (rows.length === 0) return '';
+        const checkboxes = rows.map(r => `
+            <label class="dim-filter-item">
+                <input type="checkbox" data-stat-key="${r.key}" ${state.visibleStats.has(r.key) ? 'checked' : ''}>
+                <span>${r.label}</span>
+            </label>
+        `).join('');
+        return `
+            <div class="dim-filter-group">
+                <h6 class="dim-filter-subgroup-title">
+                    <span>${catName}</span>
+                    <span class="dim-filter-subgroup-actions">
+                        <button type="button" class="btn-subgroup-action" data-action="all" data-category="${catKey}" data-type="stat">全選択</button>
+                        <button type="button" class="btn-subgroup-action" data-action="none" data-category="${catKey}" data-type="stat">全解除</button>
+                    </span>
+                </h6>
+                <div class="dim-filter-grid">${checkboxes}</div>
+            </div>
+        `;
+    }).join('');
+
     const visibleCount = STATS_ROWS.filter(r => state.visibleStats.has(r.key)).length;
     return `
         <details class="dim-result-filter" ${state.statsPanelOpen ? 'open' : ''}>
             <summary>表示項目 (${visibleCount} / ${STATS_ROWS.length})</summary>
-            <div class="dim-filter-grid">${checkboxes}</div>
+            <div class="dim-filter-section">
+                <div class="dim-filter-global-actions">
+                    <span>ステータス行:</span>
+                    <button type="button" class="btn-filter-action" data-action="all" data-type="stat">すべて選択</button>
+                    <button type="button" class="btn-filter-action" data-action="none" data-type="stat">すべて解除</button>
+                    <button type="button" class="btn-filter-action" data-action="default" data-type="stat">デフォルト</button>
+                </div>
+                ${sectionsHtml}
+            </div>
         </details>
     `;
 }
@@ -1942,29 +2064,62 @@ function bindStatsFilter() {
             recompute();
         });
     });
+    document.querySelectorAll('.dim-result-filter .btn-filter-action').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.dataset.action;
+            const type = btn.dataset.type;
+            if (type === 'stat') {
+                if (action === 'all') {
+                    STATS_ROWS.forEach(r => state.visibleStats.add(r.key));
+                } else if (action === 'none') {
+                    state.visibleStats.clear();
+                } else if (action === 'default') {
+                    state.visibleStats = new Set(DEFAULT_VISIBLE_STATS);
+                }
+            }
+            recompute();
+        });
+    });
+    // Subgroup Actions
+    document.querySelectorAll('.dim-result-filter .btn-subgroup-action').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.dataset.action;
+            const category = btn.dataset.category;
+            const type = btn.dataset.type;
+            if (type === 'stat') {
+                const targetRows = STATS_ROWS.filter(r => r.category === category);
+                if (action === 'all') {
+                    targetRows.forEach(r => state.visibleStats.add(r.key));
+                } else if (action === 'none') {
+                    targetRows.forEach(r => state.visibleStats.delete(r.key));
+                }
+            }
+            recompute();
+        });
+    });
 }
 
 // 比較表の全行定義 (rowKey + 表示ラベル + factor 取得関数)
 //   visibleRows フィルタと共有するためトップレベルに定数化
 const COMPARISON_ROWS = [
-    { key: 'atk',           label: (opts) => `参照ステ (${factorLabel(opts.refStat)})`, get: (f) => f.atk },
-    { key: 'crit',          label: () => '会心係数',                                  get: (f) => f.crit },
-    { key: 'dmg.base',      label: () => '与ダメ枠 (共通)',                            get: (f) => f.dmgBonusByType.base },
-    { key: 'dmg.basic',     label: () => '与ダメ枠 (通常攻撃)',                        get: (f) => f.dmgBonusByType.basic },
-    { key: 'dmg.skill',     label: () => '与ダメ枠 (戦闘スキル)',                      get: (f) => f.dmgBonusByType.skill },
-    { key: 'dmg.ult',       label: () => '与ダメ枠 (必殺技)',                          get: (f) => f.dmgBonusByType.ult },
-    { key: 'dmg.followup',  label: () => '与ダメ枠 (追加攻撃)',                        get: (f) => f.dmgBonusByType.followup },
-    { key: 'def',           label: () => '防御係数',                                  get: (f) => f.def },
-    { key: 'res',           label: () => '耐性係数',                                  get: (f) => f.res },
-    { key: 'taken',         label: () => '被ダメ係数',                                get: (f) => f.taken },
-    { key: 'break',         label: () => '撃破係数',                                  get: (f) => f.break },
+    { key: 'atk',           label: (opts) => `参照ステ (${factorLabel(opts.refStat)})`, get: (f) => f.atk, category: 'basic_crit' },
+    { key: 'crit',          label: () => '会心係数',                                  get: (f) => f.crit, category: 'basic_crit' },
+    { key: 'dmg.base',      label: () => '与ダメ枠 (共通)',                            get: (f) => f.dmgBonusByType.base, category: 'dmg' },
+    { key: 'dmg.basic',     label: () => '与ダメ枠 (通常攻撃)',                        get: (f) => f.dmgBonusByType.basic, category: 'dmg' },
+    { key: 'dmg.skill',     label: () => '与ダメ枠 (戦闘スキル)',                      get: (f) => f.dmgBonusByType.skill, category: 'dmg' },
+    { key: 'dmg.ult',       label: () => '与ダメ枠 (必殺技)',                          get: (f) => f.dmgBonusByType.ult, category: 'dmg' },
+    { key: 'dmg.followup',  label: () => '与ダメ枠 (追加攻撃)',                        get: (f) => f.dmgBonusByType.followup, category: 'dmg' },
+    { key: 'def',           label: () => '防御係数',                                  get: (f) => f.def, category: 'debuff' },
+    { key: 'res',           label: () => '耐性係数',                                  get: (f) => f.res, category: 'debuff' },
+    { key: 'taken',         label: () => '被ダメ係数',                                get: (f) => f.taken, category: 'debuff' },
+    { key: 'break',         label: () => '撃破係数',                                  get: (f) => f.break, category: 'break' },
 ];
 const TOTAL_ROWS = [
-    { key: 'total.base',     label: () => '火力総合 (共通)',     get: (f) => f.totals.base },
-    { key: 'total.basic',    label: () => '火力総合 (通常攻撃)',  get: (f) => f.totals.basic },
-    { key: 'total.skill',    label: () => '火力総合 (戦闘スキル)', get: (f) => f.totals.skill },
-    { key: 'total.ult',      label: () => '火力総合 (必殺技)',    get: (f) => f.totals.ult },
-    { key: 'total.followup', label: () => '火力総合 (追加攻撃)',  get: (f) => f.totals.followup },
+    { key: 'total.base',     label: () => '火力総合 (共通)',     get: (f) => f.totals.base, category: 'total' },
+    { key: 'total.basic',    label: () => '火力総合 (通常攻撃)',  get: (f) => f.totals.basic, category: 'total' },
+    { key: 'total.skill',    label: () => '火力総合 (戦闘スキル)', get: (f) => f.totals.skill, category: 'total' },
+    { key: 'total.ult',      label: () => '火力総合 (必殺技)',    get: (f) => f.totals.ult, category: 'total' },
+    { key: 'total.followup', label: () => '火力総合 (追加攻撃)',  get: (f) => f.totals.followup, category: 'total' },
 ];
 
 function renderComparison(cmp) {
@@ -1972,21 +2127,36 @@ function renderComparison(cmp) {
     const a = cmp.beforeStats.derived;
     const b = cmp.afterStats.derived;
 
-    const factorRowsHtml = COMPARISON_ROWS
-        .filter(r => state.visibleRows.has(r.key))
-        .map(r => renderFactorRow({ name: r.label(cmp.options), ...r.get(f) }))
-        .join('');
-    const totalRowsHtml = TOTAL_ROWS
-        .filter(r => state.visibleRows.has(r.key))
-        .map(r => {
-            const t = r.get(f);
-            return `<tr class="dim-total-row">
-                <th>${r.label()}</th>
-                <td>—</td><td>—</td>
-                <td>×${t.ratio.toFixed(4)}</td>
-                <td class="${contribClass(t.contribution)}">${formatContrib(t.contribution)}</td>
-            </tr>`;
+    const factorRows = [...COMPARISON_ROWS, ...TOTAL_ROWS];
+    const grouped = {};
+    for (const catKey of Object.keys(FACTOR_CATEGORIES)) {
+        grouped[catKey] = [];
+    }
+    for (const r of factorRows) {
+        if (state.visibleRows.has(r.key)) {
+            grouped[r.category].push(r);
+        }
+    }
+
+    const tbodyHtml = Object.entries(FACTOR_CATEGORIES).map(([catKey, catName]) => {
+        const rows = grouped[catKey] || [];
+        if (rows.length === 0) return '';
+        const headerRow = `<tr class="dim-table-category-header"><td colspan="5">${catName}</td></tr>`;
+        const rowsHtml = rows.map(r => {
+            if (r.category === 'total') {
+                const t = r.get(f);
+                return `<tr class="dim-total-row">
+                    <th>${r.label()}</th>
+                    <td>—</td><td>—</td>
+                    <td>×${t.ratio.toFixed(4)}</td>
+                    <td class="${contribClass(t.contribution)}">${formatContrib(t.contribution)}</td>
+                </tr>`;
+            } else {
+                return renderFactorRow({ name: r.label(cmp.options), ...r.get(f) });
+            }
         }).join('');
+        return headerRow + rowsHtml;
+    }).join('');
 
     return `
         ${renderComparisonFilter()}
@@ -1994,8 +2164,7 @@ function renderComparison(cmp) {
         <table class="dim-result-table">
             <thead><tr><th>項目</th><th>スナップショット</th><th>現在</th><th>比率</th><th>貢献率</th></tr></thead>
             <tbody>
-                ${factorRowsHtml}
-                ${totalRowsHtml}
+                ${tbodyHtml}
             </tbody>
         </table>
 
@@ -2011,9 +2180,21 @@ function renderComparison(cmp) {
 
 // STATS_ROWS の visible 行を before/after/差分 形式で描画 (renderComparison の最終ステータス section)
 function renderComparisonStatsRows(before, after) {
-    return STATS_ROWS
-        .filter(r => state.visibleStats.has(r.key))
-        .map(r => {
+    const grouped = {};
+    for (const catKey of Object.keys(STATS_CATEGORIES)) {
+        grouped[catKey] = [];
+    }
+    for (const r of STATS_ROWS) {
+        if (state.visibleStats.has(r.key)) {
+            grouped[r.category].push(r);
+        }
+    }
+
+    return Object.entries(STATS_CATEGORIES).map(([catKey, catName]) => {
+        const rows = grouped[catKey] || [];
+        if (rows.length === 0) return '';
+        const headerRow = `<tr class="dim-table-category-header"><td colspan="4">${catName}</td></tr>`;
+        const rowsHtml = rows.map(r => {
             const beforeNum = r.num(before);
             const afterNum  = r.num(after);
             const diff      = afterNum - beforeNum;
@@ -2027,34 +2208,109 @@ function renderComparisonStatsRows(before, after) {
                 <td class="${contribClass(diff)}">${diffStr}</td>
             </tr>`;
         }).join('');
+        return headerRow + rowsHtml;
+    }).join('');
 }
 
 // 比較表上部のフィルタ折りたたみセクション (チェックボックス群)
 //   火力貢献率 行 (visibleRows) と 最終ステータス 行 (visibleStats) の両方を 1 つの details にまとめる
 function renderComparisonFilter() {
     const factorRows = [...COMPARISON_ROWS, ...TOTAL_ROWS];
-    const factorChecks = factorRows.map(r => `
-        <label class="dim-filter-item">
-            <input type="checkbox" data-row-key="${r.key}" ${state.visibleRows.has(r.key) ? 'checked' : ''}>
-            <span>${r.label({ refStat: state.options.refStat })}</span>
-        </label>
-    `).join('');
-    const statChecks = STATS_ROWS.map(r => `
-        <label class="dim-filter-item">
-            <input type="checkbox" data-stat-key="${r.key}" ${state.visibleStats.has(r.key) ? 'checked' : ''}>
-            <span>${r.label}</span>
-        </label>
-    `).join('');
+
+    // Group factors by category
+    const groupedFactors = {};
+    for (const catKey of Object.keys(FACTOR_CATEGORIES)) {
+        groupedFactors[catKey] = [];
+    }
+    for (const r of factorRows) {
+        groupedFactors[r.category].push(r);
+    }
+    const factorSectionsHtml = Object.entries(FACTOR_CATEGORIES).map(([catKey, catName]) => {
+        const rows = groupedFactors[catKey] || [];
+        if (rows.length === 0) return '';
+        const checkboxes = rows.map(r => `
+            <label class="dim-filter-item">
+                <input type="checkbox" data-row-key="${r.key}" ${state.visibleRows.has(r.key) ? 'checked' : ''}>
+                <span>${r.label({ refStat: state.options.refStat })}</span>
+            </label>
+        `).join('');
+        return `
+            <div class="dim-filter-group">
+                <h6 class="dim-filter-subgroup-title">
+                    <span>${catName}</span>
+                    <span class="dim-filter-subgroup-actions">
+                        <button type="button" class="btn-subgroup-action" data-action="all" data-category="${catKey}" data-type="row">全選択</button>
+                        <button type="button" class="btn-subgroup-action" data-action="none" data-category="${catKey}" data-type="row">全解除</button>
+                    </span>
+                </h6>
+                <div class="dim-filter-grid">${checkboxes}</div>
+            </div>
+        `;
+    }).join('');
+
+    // Group stats by category
+    const groupedStats = {};
+    for (const catKey of Object.keys(STATS_CATEGORIES)) {
+        groupedStats[catKey] = [];
+    }
+    for (const r of STATS_ROWS) {
+        groupedStats[r.category].push(r);
+    }
+
+    const statSectionsHtml = Object.entries(STATS_CATEGORIES).map(([catKey, catName]) => {
+        const rows = groupedStats[catKey] || [];
+        if (rows.length === 0) return '';
+        const checkboxes = rows.map(r => `
+            <label class="dim-filter-item">
+                <input type="checkbox" data-stat-key="${r.key}" ${state.visibleStats.has(r.key) ? 'checked' : ''}>
+                <span>${r.label}</span>
+            </label>
+        `).join('');
+        return `
+            <div class="dim-filter-group">
+                <h6 class="dim-filter-subgroup-title">
+                    <span>${catName}</span>
+                    <span class="dim-filter-subgroup-actions">
+                        <button type="button" class="btn-subgroup-action" data-action="all" data-category="${catKey}" data-type="stat">全選択</button>
+                        <button type="button" class="btn-subgroup-action" data-action="none" data-category="${catKey}" data-type="stat">全解除</button>
+                    </span>
+                </h6>
+                <div class="dim-filter-grid">${checkboxes}</div>
+            </div>
+        `;
+    }).join('');
     const visibleFactors = factorRows.filter(r => state.visibleRows.has(r.key)).length;
     const visibleStats   = STATS_ROWS.filter(r => state.visibleStats.has(r.key)).length;
+
     return `
         <details class="dim-result-filter" ${state.filterPanelOpen ? 'open' : ''}>
             <summary>表示項目 (係数 ${visibleFactors}/${factorRows.length} ・ ステ ${visibleStats}/${STATS_ROWS.length})</summary>
             <div class="dim-filter-section">
-                <h5 class="dim-filter-group-title">火力貢献率 — 係数行</h5>
-                <div class="dim-filter-grid">${factorChecks}</div>
-                <h5 class="dim-filter-group-title">最終ステータス — ステ行</h5>
-                <div class="dim-filter-grid">${statChecks}</div>
+                <!-- 係数行コントロール -->
+                <div class="dim-filter-main-group">
+                    <h5 class="dim-filter-group-title">
+                        火力貢献率 — 係数行
+                        <span class="dim-filter-actions">
+                            <button type="button" class="btn-filter-action" data-action="all" data-type="row">すべて選択</button>
+                            <button type="button" class="btn-filter-action" data-action="none" data-type="row">すべて解除</button>
+                            <button type="button" class="btn-filter-action" data-action="default" data-type="row">デフォルト</button>
+                        </span>
+                    </h5>
+                    ${factorSectionsHtml}
+                </div>
+
+                <!-- ステータス行コントロール -->
+                <div class="dim-filter-main-group" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                    <h5 class="dim-filter-group-title">
+                        最終ステータス — ステ行
+                        <span class="dim-filter-actions">
+                            <button type="button" class="btn-filter-action" data-action="all" data-type="stat">すべて選択</button>
+                            <button type="button" class="btn-filter-action" data-action="none" data-type="stat">すべて解除</button>
+                            <button type="button" class="btn-filter-action" data-action="default" data-type="stat">デフォルト</button>
+                        </span>
+                    </h5>
+                    ${statSectionsHtml}
+                </div>
             </div>
         </details>
     `;

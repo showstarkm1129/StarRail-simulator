@@ -1897,3 +1897,82 @@ textarea {
     border-radius: 4px;
     padding: 0.4rem 0.5rem;
 }
+
+/* ===== 限界効用逓減：表示項目のカテゴリー分け & 一括操作スタイル ===== */
+.dim-filter-group {
+    margin-bottom: 0.75rem;
+}
+.dim-filter-group:last-child {
+    margin-bottom: 0;
+}
+.dim-filter-subgroup-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 0.4rem 0 0.2rem 0;
+    padding-bottom: 0.15rem;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+.dim-filter-subgroup-actions {
+    display: inline-flex;
+    gap: 0.3rem;
+}
+.btn-subgroup-action {
+    background-color: transparent;
+    color: var(--accent-gold);
+    border: none;
+    padding: 0 0.2rem;
+    font-size: 0.68rem;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+}
+.btn-subgroup-action:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+.dim-filter-global-actions,
+.dim-filter-actions {
+    display: inline-flex;
+    gap: 0.4rem;
+    margin-left: 0.5rem;
+    align-items: center;
+    vertical-align: middle;
+}
+.dim-filter-global-actions {
+    margin-bottom: 0.6rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    display: flex;
+    flex-wrap: wrap;
+}
+.btn-filter-action {
+    background-color: transparent;
+    color: var(--accent-gold);
+    border: 1px solid rgba(212, 175, 55, 0.4);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.btn-filter-action:hover {
+    background-color: rgba(212, 175, 55, 0.1);
+    border-color: var(--accent-gold);
+}
+
+/* テーブル内のカテゴリーヘッダー行 */
+.dim-table-category-header {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+.dim-table-category-header td {
+    color: var(--accent-gold);
+    font-size: 0.78rem;
+    font-weight: bold;
+    padding: 0.35rem 0.7rem !important;
+    border-bottom: 1px solid var(--border-color);
+}
+
