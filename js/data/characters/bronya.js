@@ -25,14 +25,13 @@ Registry.character.add({
     maxEnergy: 120,
 
     // 軌跡完凸時に常時加算されるステ
-    //   軌跡ステータスボーナス: 風ダメ+22.4% / 会心ダメ+24% / 効果抵抗+10%
-    //   追加能力 昇格6 軍勢: 与ダメ+10% (フィールド上にいる時=常時)
+    //   軌跡ステータスボーナス(ノード): 風ダメ+22.4% / 会心ダメ+24% / 効果抵抗+10%
+    //   追加能力 昇格6 軍勢(与ダメ+10%): selfEffects で管理 → traces には含めない
     traces: {
         stats: {
             [ELEMENT_DMG_KEYS.wind]: 0.224,
             [STAT.CRIT_DMG]:         0.24,
             [STAT.EFFECT_RES]:       0.10,
-            [STAT.DMG_ALL]:          0.10,
         },
         // 内訳(参考表示用): 各ノードに分かれる
         breakdown: [
@@ -249,9 +248,24 @@ Registry.character.add({
             target: 'single',
             duration: 1,
         },
-        // E6「気勢貫天」は skill_dmg バフの継続時間を +1T するメタ効果。
-        // 限界効用逓減ツールはスナップショット計算のため duration を扱わず、
-        // 新規ステ追加もないため partyEffect としては登録しない。
+    ],
+    selfEffects: [
+        {
+            id: 'trace_dmg_all',
+            source: 'extra',
+            name: '昇格6 軍勢 (フィールド上にいる時)',
+            description: 'ブローニャがフィールド上にいる時、自身に与ダメージ+10% (Focus として出撃している場合に選択)',
+            stats: { [STAT.DMG_ALL]: 0.10 },
+            defaultActive: false,
+        },
+        {
+            id: 'trace_crit_rate',
+            source: 'extra',
+            name: '昇格2 号令 (通常攻撃時)',
+            description: '通常攻撃の会心率が100%まで上がる。通常攻撃のダメージを計算する際、自身の会心率+100%。',
+            stats: { [STAT.CRIT_RATE]: 1.00 },
+            defaultActive: false,
+        },
     ],
 
     // 追加能力(昇格2/4/6)
@@ -267,7 +281,8 @@ Registry.character.add({
         {
             tier: 6, name: '軍勢',
             description: 'ブローニャがフィールド上にいる時、味方全体の与ダメージ+10%。',
-            // 常時アクティブ扱いとして traces.stats に組み込み済み
+            // Focus の場合 → selfEffects で制御
+            // Support の場合 → partyEffects (aura_tier6) で制御
         },
     ],
 

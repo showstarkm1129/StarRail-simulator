@@ -4,5 +4,7 @@
 import './template.js';
 import './bronya.js';
 import './hyacine.js';
+import './Castorice.js';
+import './Evernight.js';
 import './testAll.js';
 import './testAllS1.js';

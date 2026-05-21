@@ -333,6 +333,14 @@ function renderShell() {
                 </div>
             </div>
 
+            <div class="dim-panel dim-self-buffs-panel" id="dim-self-buffs-panel">
+                <h3>自身バフ・デバフ設定 (本人の能力・装備効果)</h3>
+                <p class="dim-panel-hint">
+                    メイン（Focus）キャラクター本人のパーティ効果や自己バフ効果を選択し、ステータスに反映させます。
+                </p>
+                <div id="dim-self-buffs-content" class="dim-self-buffs-content"></div>
+            </div>
+
             <div class="dim-panel dim-party-panel">
                 <h3>パーティ (他メンバーのバフ)</h3>
                 <p class="dim-panel-hint">
@@ -410,6 +418,8 @@ function refreshAllForms() {
     fillLevelInputs();
     fillPresetSelects();
     refreshBuildList();
+    applyDefaultActiveSelfEffects(true);
+    renderSelfBuffs();
     renderParty();
     renderCharDetail();
 }
@@ -1033,6 +1043,7 @@ function bindAll() {
         renderParty();    // 選択肢の表示更新
         applyPartyToEnvBuffs();
         renderCharDetail();
+        onEquipmentChange(false);
         recompute();
     });
     document.getElementById('dim-eidolon').addEventListener('change', e => {
@@ -1040,14 +1051,17 @@ function bindAll() {
         // 星魂上昇でLv上限が変わる可能性があるためLv inputを再描画
         fillLevelInputs();
         renderCharDetail();
+        onEquipmentChange(true);
         recompute();
     });
     document.getElementById('dim-lc').addEventListener('change', e => {
         state.build.lightcone.id = e.target.value || null;
+        onEquipmentChange(true);
         recompute();
     });
     document.getElementById('dim-lc-si').addEventListener('change', e => {
         state.build.lightcone.superimpose = parseInt(e.target.value, 10);
+        onEquipmentChange(true);
         recompute();
     });
 
@@ -1055,6 +1069,7 @@ function bindAll() {
     document.querySelectorAll('.dim-relic-set').forEach(sel => {
         sel.addEventListener('change', e => {
             state.build.relics[sel.dataset.slot].setId = e.target.value || null;
+            onEquipmentChange(true);
             recompute();
         });
     });
@@ -1153,6 +1168,7 @@ function bindAll() {
             document.getElementById('dim-preset-cavInd').style.display = (mode === 'individual') ? 'grid' : 'none';
             if (mode === 'none') {
                 for (const slot of RELIC_SLOTS) state.build.relics[slot].setId = null;
+                onEquipmentChange(true);
                 recompute();
             }
         });
@@ -1163,6 +1179,7 @@ function bindAll() {
         const id = e.target.value || null;
         for (const slot of RELIC_SLOTS) state.build.relics[slot].setId = id;
         for (const slot of RELIC_SLOTS) fillRelicSetSelect(slot);
+        onEquipmentChange(true);
         recompute();
     });
 
@@ -1175,6 +1192,7 @@ function bindAll() {
         state.build.relics[SLOT.BODY].setId = b;
         state.build.relics[SLOT.FEET].setId = b;
         for (const slot of RELIC_SLOTS) fillRelicSetSelect(slot);
+        onEquipmentChange(true);
         recompute();
     };
     document.getElementById('dim-preset-cav-22a').addEventListener('change', apply22);
@@ -1186,6 +1204,7 @@ function bindAll() {
     document.getElementById('dim-preset-planar').addEventListener('change', e => {
         const id = e.target.value || null;
         for (const slot of ORNAMENT_SLOTS) state.build.relics[slot].setId = id;
+        onEquipmentChange(true);
         recompute();
     });
 
@@ -1415,6 +1434,324 @@ function resolveEffectStats(ef, teammateBuild, teammateStats) {
 
 // 合成 effect ID: srcKey + '.' + ef.id (チェックボックスの状態管理用)
 const effectKey = (srcKey, efId) => `${srcKey}.${efId}`;
+
+// focus キャラクターの effects (partyEffects + selfEffects) を収集
+function gatherFocusEffects(build) {
+    if (!build || !build.characterId) return [];
+    const out = [];
+    const ch = Registry.character.get(build.characterId);
+    if (!ch) return out;
+
+    const eidolon = build.eidolon || 0;
+
+    // 1. キャラ
+    for (const ef of ch.partyEffects || []) {
+        if (ef.minEidolon && eidolon < ef.minEidolon) continue;
+        out.push({ srcKey: 'char', srcLabel: `キャラ: ${ch.name}`, ef, type: 'party' });
+    }
+    for (const ef of ch.selfEffects || []) {
+        if (ef.minEidolon && eidolon < ef.minEidolon) continue;
+        out.push({ srcKey: 'char', srcLabel: `キャラ: ${ch.name}`, ef, type: 'self' });
+    }
+
+    // 2. 光円錐
+    if (build.lightcone?.id) {
+        const lc = Registry.lightcone.get(build.lightcone.id);
+        if (lc) {
+            const si = Math.max(1, Math.min(5, build.lightcone.superimpose || 1));
+            const lcEffects = typeof lc.partyEffects === 'function'
+                ? (lc.partyEffects(si) || [])
+                : (lc.partyEffects || []);
+            for (const ef of lcEffects) {
+                out.push({ srcKey: 'lc', srcLabel: `光円錐: ${lc.name} S${si}`, ef, type: 'party' });
+            }
+            const lcSelfEffects = typeof lc.selfEffects === 'function'
+                ? (lc.selfEffects(si) || [])
+                : (lc.selfEffects || []);
+            for (const ef of lcSelfEffects) {
+                out.push({ srcKey: 'lc', srcLabel: `光円錐: ${lc.name} S${si}`, ef, type: 'self' });
+            }
+        }
+    }
+
+    // 3. 遺物セット (cavern)
+    const cavCounts = countSetsByType(build.relics, SET_TYPE.CAVERN);
+    for (const [setId, cnt] of Object.entries(cavCounts)) {
+        const set = Registry.relicSet.get(setId);
+        if (!set) continue;
+        if (set.partyEffects) {
+            if (cnt >= 2) for (const ef of set.partyEffects.pc2 || []) {
+                out.push({ srcKey: `set:${setId}:pc2`, srcLabel: `セット: ${set.name} 2pc`, ef, type: 'party' });
+            }
+            if (cnt >= 4) for (const ef of set.partyEffects.pc4 || []) {
+                out.push({ srcKey: `set:${setId}:pc4`, srcLabel: `セット: ${set.name} 4pc`, ef, type: 'party' });
+            }
+        }
+        if (set.selfEffects) {
+            if (cnt >= 2) for (const ef of set.selfEffects.pc2 || []) {
+                out.push({ srcKey: `set:${setId}:pc2`, srcLabel: `セット: ${set.name} 2pc`, ef, type: 'self' });
+            }
+            if (cnt >= 4) for (const ef of set.selfEffects.pc4 || []) {
+                out.push({ srcKey: `set:${setId}:pc4`, srcLabel: `セット: ${set.name} 4pc`, ef, type: 'self' });
+            }
+        }
+    }
+
+    // 4. オーナメント (planar)
+    const ornCounts = countSetsByType(build.relics, SET_TYPE.PLANAR);
+    for (const [setId, cnt] of Object.entries(ornCounts)) {
+        const orn = Registry.ornament.get(setId);
+        if (!orn) continue;
+        if (orn.partyEffects) {
+            if (cnt >= 2) for (const ef of orn.partyEffects.pc2 || []) {
+                out.push({ srcKey: `orn:${setId}:pc2`, srcLabel: `次元界: ${orn.name} 2pc`, ef, type: 'party' });
+            }
+        }
+        if (orn.selfEffects) {
+            if (cnt >= 2) for (const ef of orn.selfEffects.pc2 || []) {
+                out.push({ srcKey: `orn:${setId}:pc2`, srcLabel: `次元界: ${orn.name} 2pc`, ef, type: 'self' });
+            }
+        }
+    }
+
+    return out;
+}
+
+const SELF_LABEL_PREFIX = '自身バフ.';
+
+function applySelfBuffsToEnvBuffs() {
+    // 既存の自身バフを一掃
+    state.build.envBuffs = (state.build.envBuffs || []).filter(b =>
+        !(typeof b.label === 'string' && b.label.startsWith(SELF_LABEL_PREFIX))
+    );
+
+    if (!state.build || !state.build.characterId) return;
+
+    // 依存関係を解決するために、自身バフ適用前（かつパーティバフとサブステは適用済み）のベースステータスを計算
+    let baseStats = null;
+    try {
+        baseStats = StatComputer.compute(state.build);
+    } catch (err) {
+        console.error('[applySelfBuffsToEnvBuffs] baseStats compute failed', err);
+        return;
+    }
+
+    const effects = gatherFocusEffects(state.build);
+    const activeSet = new Set(state.build.activeSelfEffectIds || []);
+    const stacksMap = state.build.selfStacksByEffectId || {};
+
+    for (const { srcKey, ef } of effects) {
+        const ekey = effectKey(srcKey, ef.id);
+        if (!activeSet.has(ekey)) continue;
+
+        const stats = resolveEffectStats(ef, state.build, baseStats);
+        if (!stats) continue;
+
+        const stacks = ef.stackable
+            ? (stacksMap[ekey] ?? ef.stackable.default ?? ef.stackable.max ?? 1)
+            : 1;
+
+        for (const [stat, value] of Object.entries(stats)) {
+            state.build.envBuffs.push({
+                stat,
+                value: value * stacks,
+                label: `${SELF_LABEL_PREFIX}${srcKey}.${ef.id}.${stat}`,
+            });
+        }
+    }
+}
+
+function applyDefaultActiveSelfEffects(preserveExisting = false) {
+    const build = state.build;
+    if (!build) return;
+    build.activeSelfEffectIds ||= [];
+    build.selfStacksByEffectId ||= {};
+    const effects = gatherFocusEffects(build);
+    const activeSet = new Set(preserveExisting ? build.activeSelfEffectIds : []);
+    const nextStacks = {};
+
+    for (const { srcKey, ef } of effects) {
+        const ekey = effectKey(srcKey, ef.id);
+        if (!preserveExisting && ef.defaultActive) {
+            activeSet.add(ekey);
+        } else if (preserveExisting) {
+            if (ef.defaultActive && !build.activeSelfEffectIds.includes(ekey)) {
+                activeSet.add(ekey);
+            }
+        }
+        if (ef.stackable) {
+            nextStacks[ekey] = build.selfStacksByEffectId[ekey] ?? ef.stackable.default ?? ef.stackable.max ?? 1;
+        }
+    }
+
+    const validKeys = new Set(effects.map(({ srcKey, ef }) => effectKey(srcKey, ef.id)));
+    for (const k of activeSet) {
+        if (!validKeys.has(k)) {
+            activeSet.delete(k);
+        }
+    }
+
+    build.activeSelfEffectIds = Array.from(activeSet);
+    build.selfStacksByEffectId = nextStacks;
+}
+
+function renderSelfBuffs() {
+    const wrap = document.getElementById('dim-self-buffs-content');
+    if (!wrap) return;
+
+    const build = state.build;
+    if (!build || !build.characterId) {
+        wrap.innerHTML = '<p class="dim-panel-hint">キャラクターを選択してください</p>';
+        return;
+    }
+
+    build.activeSelfEffectIds ||= [];
+    build.selfStacksByEffectId ||= {};
+
+    const effects = gatherFocusEffects(build);
+
+    const partyEffectsList = effects.filter(e => e.type === 'party');
+    const selfEffectsList = effects.filter(e => e.type === 'self');
+
+    const renderList = (list) => {
+        if (list.length === 0) {
+            return '<p class="dim-panel-hint">対象の効果がありません</p>';
+        }
+
+        const groups = new Map();
+        for (const item of list) {
+            if (!groups.has(item.srcLabel)) groups.set(item.srcLabel, []);
+            groups.get(item.srcLabel).push(item);
+        }
+
+        const cleanBuild = JSON.parse(JSON.stringify(build));
+        cleanBuild.envBuffs = (cleanBuild.envBuffs || []).filter(b =>
+            !(typeof b.label === 'string' && b.label.startsWith(SELF_LABEL_PREFIX))
+        );
+        let baseStats = null;
+        try {
+            baseStats = StatComputer.compute(cleanBuild);
+        } catch (err) {
+            console.error('[renderSelfBuffs] baseStats compute failed', err);
+        }
+
+        return Array.from(groups.entries()).map(([srcLabel, items]) => `
+            <div class="dim-party-source-group">
+                <h5 class="dim-party-source-label">${escapeHtml(srcLabel)}</h5>
+                ${items.map(({ srcKey, ef }) => {
+                    const ekey = effectKey(srcKey, ef.id);
+                    const checked = build.activeSelfEffectIds.includes(ekey);
+                    const eidolonBadge = ef.minEidolon
+                        ? `<span class="dim-party-effect-eidolon" title="星魂 E${ef.minEidolon} 以上で解放">E${ef.minEidolon}+</span>`
+                        : '';
+                    const stacks = ef.stackable
+                        ? (build.selfStacksByEffectId[ekey] ?? ef.stackable.default ?? ef.stackable.max ?? 1)
+                        : 1;
+                    const stackInputHtml = ef.stackable
+                        ? `<span class="dim-party-effect-stack-wrap" title="累積層数 (1〜${ef.stackable.max})">
+                              × <input type="number" class="dim-party-effect-stacks dim-self-effect-stacks"
+                                       min="1" max="${ef.stackable.max}" value="${stacks}"
+                                       data-effect-key="${ekey}">
+                              <span class="dim-party-effect-stack-unit">層</span>
+                           </span>`
+                        : '';
+                    
+                    const resolvedStats = baseStats ? resolveEffectStats(ef, build, baseStats) : null;
+                    const finalStats = applyStackMult(resolvedStats, stacks);
+
+                    return `
+                        <div class="dim-party-effect-row" title="${escapeHtml(ef.description || '')}">
+                            <label class="dim-party-effect-main">
+                                <input type="checkbox" class="dim-self-effect"
+                                       data-effect-key="${ekey}"
+                                       ${checked ? 'checked' : ''}>
+                                <span class="dim-party-effect-name">${eidolonBadge}${escapeHtml(ef.name)}</span>
+                            </label>
+                            ${stackInputHtml}
+                            <span class="dim-self-effect-stats" data-effect-key="${ekey}">${formatEffectStats(finalStats, ef.stackable ? { perLayer: resolvedStats, stacks } : null)}</span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `).join('');
+    };
+
+    wrap.innerHTML = `
+        <div class="dim-self-buffs-grid">
+            <div class="dim-self-buffs-col">
+                <h4 class="dim-self-buffs-col-title">自身へのパーティ効果 (partyEffect)</h4>
+                ${renderList(partyEffectsList)}
+            </div>
+            <div class="dim-self-buffs-col">
+                <h4 class="dim-self-buffs-col-title">自己バフ・デバフ (自身のみ)</h4>
+                ${renderList(selfEffectsList)}
+            </div>
+        </div>
+    `;
+
+    wrap.querySelectorAll('.dim-self-effect').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const key = cb.dataset.effectKey;
+            const activeSet = new Set(build.activeSelfEffectIds || []);
+            if (cb.checked) activeSet.add(key);
+            else activeSet.delete(key);
+            build.activeSelfEffectIds = Array.from(activeSet);
+            applySelfBuffsToEnvBuffs();
+            recompute();
+            renderSelfBuffs();
+        });
+    });
+
+    wrap.querySelectorAll('.dim-self-effect-stacks').forEach(inp => {
+        inp.addEventListener('input', () => {
+            const ekey = inp.dataset.effectKey;
+            const max = parseInt(inp.max, 10) || 99;
+            const v = Math.max(1, Math.min(max, parseInt(inp.value, 10) || 1));
+            if (v !== parseInt(inp.value, 10)) inp.value = v;
+            build.selfStacksByEffectId[ekey] = v;
+            
+            updateSelfEffectStatsDisplay(ekey);
+            applySelfBuffsToEnvBuffs();
+            recompute();
+        });
+    });
+}
+
+function updateSelfEffectStatsDisplay(ekey) {
+    const build = state.build;
+    if (!build) return;
+
+    const cleanBuild = JSON.parse(JSON.stringify(build));
+    cleanBuild.envBuffs = (cleanBuild.envBuffs || []).filter(b =>
+        !(typeof b.label === 'string' && b.label.startsWith(SELF_LABEL_PREFIX))
+    );
+    let baseStats = null;
+    try {
+        baseStats = StatComputer.compute(cleanBuild);
+    } catch (err) {
+        console.error('[updateSelfEffectStatsDisplay] baseStats compute failed', err);
+        return;
+    }
+
+    const effects = gatherFocusEffects(build);
+    const match = effects.find(({ srcKey, ef }) => effectKey(srcKey, ef.id) === ekey);
+    if (!match) return;
+    const { ef } = match;
+    const perLayer = resolveEffectStats(ef, build, baseStats);
+    if (!perLayer) return;
+    const stacks = build.selfStacksByEffectId[ekey] ?? ef.stackable?.default ?? 1;
+    const final = applyStackMult(perLayer, stacks);
+
+    const statsEl = document.querySelector(`.dim-self-effect-stats[data-effect-key="${ekey}"]`);
+    if (statsEl) {
+        statsEl.innerHTML = formatEffectStats(final, ef.stackable ? { perLayer, stacks } : null);
+    }
+}
+
+function onEquipmentChange(preserveExisting = true) {
+    applyDefaultActiveSelfEffects(preserveExisting);
+    renderSelfBuffs();
+}
 
 function renderParty() {
     const grid = document.getElementById('dim-party-grid');
@@ -1794,6 +2131,9 @@ function updateSnapshotStatus() {
 function recompute() {
     const resultEl = document.getElementById('dim-result');
     if (!resultEl) return;
+    
+    applySelfBuffsToEnvBuffs();
+
     let nowStats;
     try { nowStats = StatComputer.compute(state.build); }
     catch (err) { resultEl.innerHTML = `<div class="dim-error">計算エラー: ${err.message}</div>`; return; }

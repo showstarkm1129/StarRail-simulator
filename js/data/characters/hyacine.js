@@ -31,24 +31,21 @@ Registry.character.add({
     base: { atk: 388, hp: 1086, def: 630, spd: 110 },
     maxEnergy: 140,
 
-    // 常時加算ステ (軌跡ステータスボーナス + 追加能力の常時系)
-    //   軌跡ステータスボーナス: 速度+14 / 効果抵抗+18% / 最大HP+10%
-    //   昇格2 微笑む暗雲      : 本人の会心率+100% (味方には及ばない)
-    //   昇格4 優しい雷雨      : 本人の効果抵抗+50%
-    //   昇格6 凪いだ暴風      : 速度>200 で HP+20% (条件付き → 未加算)
+    // 常時加算ステ (軌跡ステータスボーナス・ノードのみ)
+    //   軌跡ステータスボーナス(ノード): 速度+14 / 効果抵抗+18% / 最大HP+10%
+    //   昇格2 微笑む暗雲      : 本人の会心率+100% → selfEffects で管理
+    //   昇格4 優しい雷雨      : 本人の効果抵抗+50% → selfEffects で管理
+    //   昇格6 凪いだ暴風      : 速度>200 で HP+20% (条件付き) → selfEffects で管理
     traces: {
         stats: {
             [STAT.SPD_FLAT]:   14,
-            [STAT.EFFECT_RES]: 0.18 + 0.50,    // 軌跡18% + 昇格4の50%
+            [STAT.EFFECT_RES]: 0.18,   // 軌跡ノード分のみ
             [STAT.HP_PERCENT]: 0.10,
-            [STAT.CRIT_RATE]:  1.00,           // 昇格2 本人会心率+100%
         },
         breakdown: [
-            { node: '速度強化',         stat: STAT.SPD_FLAT,   value: 14 },
-            { node: '効果抵抗強化(軌跡)', stat: STAT.EFFECT_RES, value: 0.18 },
-            { node: 'HP強化',           stat: STAT.HP_PERCENT, value: 0.10 },
-            { node: '昇格2 微笑む暗雲 (本人会心率+100%)', stat: STAT.CRIT_RATE,  value: 1.00 },
-            { node: '昇格4 優しい雷雨 (本人効果抵抗+50%)', stat: STAT.EFFECT_RES, value: 0.50 },
+            { node: '速度強化',             stat: STAT.SPD_FLAT,   value: 14 },
+            { node: '効果抵抗強化(軌跡ノード)', stat: STAT.EFFECT_RES, value: 0.18 },
+            { node: 'HP強化',               stat: STAT.HP_PERCENT, value: 0.10 },
         ],
     },
 
@@ -259,6 +256,32 @@ Registry.character.add({
             defaultActive: true,
             target: 'all',
             duration: 'permanent',
+        },
+    ],
+    selfEffects: [
+        {
+            id: 'trace_crit_rate',
+            source: 'extra',
+            name: '昇格2 微笑む暗雲 (常時：本人の会心率+100%)',
+            description: 'ヒアンシーと「イカルン」の会心率+100%。常時ONにする場合は選択してください。',
+            stats: { [STAT.CRIT_RATE]: 1.00 },
+            defaultActive: false,
+        },
+        {
+            id: 'trace_effect_res',
+            source: 'extra',
+            name: '昇格4 優しい雷雨 (常時：本人の効果抵抗+50%)',
+            description: 'ヒアンシーの効果抵抗+50%。常時ONにする場合は選択してください。',
+            stats: { [STAT.EFFECT_RES]: 0.50 },
+            defaultActive: false,
+        },
+        {
+            id: 'trace_spd_hp',
+            source: 'extra',
+            name: '昇格6 凪いだ暴風 (速度＞200)',
+            description: 'ヒアンシーの速度が200を超える時、ヒアンシーと「イカルン」の最大HP+20%。条件を満たす場合に選択。',
+            stats: { [STAT.HP_PERCENT]: 0.20 },
+            defaultActive: false,
         },
     ],
 
