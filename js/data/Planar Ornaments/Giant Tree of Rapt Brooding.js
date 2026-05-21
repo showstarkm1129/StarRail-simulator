@@ -22,4 +22,5 @@ Registry.ornament.add({
     },
 
     partyEffects: { pc2: [] },
+    hooks: {},
 });

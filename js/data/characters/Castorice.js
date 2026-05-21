@@ -21,7 +21,7 @@ Registry.character.add({
     path: PATH.REMEMBRANCE,
     rarity: 5,
 
-    base: { atk: 523, hp: 1629, def: 485, spd: 95 },
+    base: { atk: 523, hp: 1629, def: 485, spd: 95, aggro: 100 },
     maxEnergy: 34000, // 新蕾の上限
 
     // 常時加算ステ (軌跡ステータスボーナス + 追加能力の常時系)
@@ -83,7 +83,7 @@ Registry.character.add({
             name: '哀悼、死海の小波',
             type: 'attack', target: 'single',
             element: ELEMENT.QUANTUM,
-            energy: 20,
+            spGain: 1, energyGain: 20, toughness: 10, hitSplit: [1.0],
             description: '指定した敵単体にキャストリスの最大HPX%分の量子属性ダメージを与える。',
             maxLevel: { default: 6, withEidolon: 7 }, // E3 で +1
             levels: [
@@ -96,7 +96,7 @@ Registry.character.add({
             name: '沈黙、幽蝶の慈しみ / 骸爪、冥竜の抱擁',
             type: 'attack', target: 'all',
             element: ELEMENT.QUANTUM,
-            energy: 30,
+            spCost: 1, energyGain: 30, toughness: 20, hitSplit: [1.0],
             description: '味方それぞれの残りHP30％分を消費し、指定した敵単体にキャストリスの最大HPX％分の量子属性ダメージを与え、隣接する敵にキャストリスの最大HPY％分の量子属性ダメージを与える。死竜がフィールドにいる時、味方それぞれの残りHP40％分を消費し、敵全体にキャストリスの最大HPZ％分とW％分の量子属性ダメージを与える。残りHPが足りない場合残りHPが1になる。',
             maxLevel: { default: 10, withEidolon: 12 }, // E5 で +2
             levels: [
@@ -118,7 +118,7 @@ Registry.character.add({
         ult: {
             name: '亡者の怒咆、蘇生の鐘',
             type: 'support', target: 'all_ally',
-            energy: 34000,
+            energyCost: 34000, energyGain: 5, spCost: 0, toughness: 0, hitSplit: [],
             description: '記憶の精霊「死竜」を召喚し、その行動順を100%早める。同時に、境界「遺世 of 冥域」を展開し、敵全体の全属性耐性をX%ダウンさせる。',
             maxLevel: { default: 10, withEidolon: 12 }, // E3 で +2
             levels: [
@@ -148,6 +148,7 @@ Registry.character.add({
             name: '冥茫裂く爪痕 / 晦冥焼き払う息吹',
             type: 'attack', target: 'all',
             element: ELEMENT.QUANTUM,
+            spCost: 0, energyGain: 0, toughness: 20, hitSplit: [1.0],
             description: '敵全体にキャストリスの最大HPX%分の量子属性ダメージを与える。または、死竜の最大HP25%分を消費し、敵全体に最大HPY%分の量子属性ダメージを与える（重複発動可能、最大Z%/W%までダメージアップ）。',
             maxLevel: { default: 6, withEidolon: 7 }, // E5 で +1
             levels: [
@@ -196,7 +197,7 @@ Registry.character.add({
             }),
             defaultActive: false,
             target: 'all',
-            duration: 3,
+            duration: 3, tickRule: 'target_turn_end', dispellable: false,
         },
         {
             id: 'memory_talent_dmg_buff',
@@ -206,7 +207,7 @@ Registry.character.add({
             stats: { [STAT.DMG_ALL]: 0.10 },
             defaultActive: false,
             target: 'all',
-            duration: 3,
+            duration: 3, tickRule: 'target_turn_end', dispellable: true,
         },
         // ===== 星魂条件付き =====
         {
@@ -218,7 +219,7 @@ Registry.character.add({
             minEidolon: 4,
             defaultActive: true,
             target: 'all',
-            duration: 'permanent',
+            duration: 'permanent', tickRule: 'none', dispellable: false,
         },
     ],
     selfEffects: [
@@ -228,7 +229,7 @@ Registry.character.add({
             name: '追加能力 反転した炬火 (HP≧50%)',
             description: 'キャストリスの残りHPが自身の最大HP50%以上の時、自身の速度+40%',
             stats: { [STAT.SPD_PERCENT]: 0.40 },
-            defaultActive: false,
+            defaultActive: false, duration: 'permanent', tickRule: 'none', dispellable: false,
         },
     ],
 
@@ -249,6 +250,10 @@ Registry.character.add({
     ],
 
     hooks: {
-        // 必要になり次第追加
+        // onTurnStart(ctx)   {},
+        // onTurnEnd(ctx)     {},
+        // onAttack(ctx)      {},
+        // onHit(ctx)         {},
+        // onSkillUse(ctx)    {},
     },
 });

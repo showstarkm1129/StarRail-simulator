@@ -32,7 +32,11 @@ Registry.lightcone.add({
     // 常時系は無し (朗唱層数依存・華彩中効果はトリガー型)
     stats: [{}, {}, {}, {}, {}],
 
-    hooks: (superimpose) => ({}),
+    hooks: (superimpose) => ({
+        // onTurnStart(ctx) {},
+        // onHit(ctx) {},
+        // onSkillUse(ctx) {}
+    }),
 
     partyEffects: (superimpose) => {
         const idx = Math.max(0, Math.min(4, superimpose - 1));
@@ -47,6 +51,8 @@ Registry.lightcone.add({
                 defaultActive: false,
                 target: 'all',
                 duration: 1,
+                tickRule: 'target_turn_start',
+                dispellable: false,
             },
         ];
     },

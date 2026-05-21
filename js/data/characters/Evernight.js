@@ -22,7 +22,7 @@ Registry.character.add({
     path: PATH.REMEMBRANCE,
     rarity: 5,
 
-    base: { atk: 543, hp: 1319, def: 582, spd: 99 },
+    base: { atk: 543, hp: 1319, def: 582, spd: 99, aggro: 100 },
     maxEnergy: 240,
 
     // 常時加算ステ (軌跡ステータスボーナスのみ)
@@ -92,7 +92,7 @@ Registry.character.add({
             name: '歳月はここより霞む',
             type: 'attack', target: 'single',
             element: ELEMENT.ICE,
-            energy: 20,
+            spGain: 1, energyGain: 20, toughness: 10, hitSplit: [1.0],
             description: '指定した敵単体に長夜月の最大HPX%分の氷属性ダメージを与える。',
             maxLevel: { default: 6, withEidolon: 7 }, // E3 で +1
             levels: [
@@ -104,7 +104,7 @@ Registry.character.add({
         skill: {
             name: '白昼は静かに去る',
             type: 'summon', target: 'all_ally',
-            energy: 30,
+            spCost: 1, energyGain: 30, toughness: 0, hitSplit: [],
             description: '長夜月の残りHP10%分のHPを消費して、記憶の精霊「長夜」を召喚する。味方の記憶の精霊全体の会心ダメージが長夜月の会心ダメージX%分アップする、2ターン継続。長夜がすでにフィールド上にいる場合、長夜のHPをその最大HP50%分回復する。「憶質」を2獲得、「至暗の謎」状態の場合は追加で12獲得。',
             maxLevel: { default: 10, withEidolon: 12 }, // E3 で +2
             // 精霊会心ダメバフ = 長夜月の会心ダメ × cdRatio + cdFlat
@@ -120,7 +120,7 @@ Registry.character.add({
             name: '眠れぬ世界に永き眠りを',
             type: 'attack', target: 'all',
             element: ELEMENT.ICE,
-            energy: 240,
+            energyCost: 240, energyGain: 5, spCost: 0, toughness: 30, hitSplit: [1.0],
             description: '記憶の精霊「長夜」を召喚。長夜は敵全体に自身の最大HPX%分の氷属性ダメージを与え、長夜月は「至暗の謎」状態に入る。「至暗の謎」中、敵全体の受けるダメージ+Y%、長夜月と長夜の与ダメージ+Z%、行動制限系デバフに抵抗できる。',
             maxLevel: { default: 10, withEidolon: 12 }, // E5 で +2
             // X% (全体ダメ), Y% (被ダメアップ), Z% (与ダメアップ)
@@ -156,6 +156,7 @@ Registry.character.add({
             name: '雨のように降る記憶 / 露のように儚い夢',
             type: 'attack', target: 'all',
             element: ELEMENT.ICE,
+            spCost: 0, energyGain: 0, toughness: 20, hitSplit: [1.0],
             description: '「雨のように降る記憶」: 敵単体に「長夜」の最大HPX%分の氷属性ダメージを与え、長夜月の「憶質」4につきさらに長夜の最大HPY%分の氷属性ダメージを与える。「露のように儚い夢」: 「憶質」16以上で発動。所持「憶質」1につきメインターゲットに長夜の最大HPZ%分、その他ターゲットにW%分の氷属性ダメージ。発動後、HPと「憶質」をすべて消費し退場。',
             maxLevel: { default: 6, withEidolon: 7 }, // E5 で +1
             // X% (単体ダメ), Y% (追加ダメ/憶質4あたり), Z% (夢・単体/憶質1あたり), W% (夢・その他/憶質1あたり)
@@ -197,12 +198,23 @@ Registry.character.add({
             name: '戦闘スキル 精霊全体会心ダメバフ (白昼は静かに去る)',
             description: '味方の記憶の精霊全体の会心ダメージが (長夜月の会心ダメ × X%) + X% アップ、2ターン継続。',
             fromLevel: 'skill',
-            computeStats: (lv, mult, caster) => ({
-                [STAT.CRIT_DMG]: caster.derived.critDmg * mult.cdRatio + mult.cdFlat,
-            }),
+            computeStats: (lv, mult, caster) => {
+                const stats = { [STAT.CRIT_DMG]: caster.derived.critDmg * mult.cdRatio + mult.cdFlat };
+                Object.defineProperty(stats, '__meta', {
+                    value: {
+                        [STAT.CRIT_DMG]: {
+                            label: '自身の会心ダメ',
+                            ratio: mult.cdRatio,
+                            flat: mult.cdFlat
+                        }
+                    },
+                    enumerable: false
+                });
+                return stats;
+            },
             defaultActive: false,
             target: 'all',
-            duration: 2,
+            duration: 2, tickRule: 'target_turn_end', dispellable: true,
         },
         // --- 必殺技 ---
         {
@@ -216,7 +228,7 @@ Registry.character.add({
             }),
             defaultActive: false,
             target: 'all',
-            duration: 3,
+            duration: 3, tickRule: 'target_turn_end', dispellable: true,
         },
         {
             id: 'ult_dmg_buff',
@@ -229,7 +241,7 @@ Registry.character.add({
             }),
             defaultActive: false,
             target: 'all',
-            duration: 3,
+            duration: 3, tickRule: 'target_turn_end', dispellable: true,
         },
         // --- 天賦 ---
         {
@@ -243,7 +255,7 @@ Registry.character.add({
             }),
             defaultActive: false,
             target: 'all',
-            duration: 2,
+            duration: 2, tickRule: 'target_turn_end', dispellable: true,
         },
         // --- 精霊天賦 ---
         {
@@ -257,7 +269,7 @@ Registry.character.add({
             }),
             defaultActive: false,
             target: 'all',
-            duration: 'permanent',
+            duration: 'permanent', tickRule: 'none', dispellable: false,
         },
         // --- 精霊退場時速度バフ ---
         {
@@ -269,7 +281,7 @@ Registry.character.add({
             stackable: { max: 50, default: 10 },
             defaultActive: false,
             target: 'single',
-            duration: 1,
+            duration: 1, tickRule: 'target_turn_end', dispellable: true,
         },
         // --- 秘技 ---
         {
@@ -283,7 +295,7 @@ Registry.character.add({
             }),
             defaultActive: false,
             target: 'all',
-            duration: 2,
+            duration: 2, tickRule: 'target_turn_end', dispellable: true,
         },
         // --- 追加能力 ---
         {
@@ -294,7 +306,7 @@ Registry.character.add({
             stats: { [STAT.CRIT_DMG]: 0.15 },
             defaultActive: false,
             target: 'all',
-            duration: 2,
+            duration: 2, tickRule: 'target_turn_end', dispellable: true,
         },
         // --- 昇格6: 記憶の運命キャラ数に応じた精霊会心ダメアップ ---
         {
@@ -316,7 +328,7 @@ Registry.character.add({
             },
             defaultActive: false,
             target: 'all',
-            duration: 2,
+            duration: 2, tickRule: 'target_turn_end', dispellable: true,
         },
         // ===== 星魂条件付き =====
         {
@@ -328,7 +340,7 @@ Registry.character.add({
             minEidolon: 1,
             defaultActive: false,
             target: 'all',
-            duration: 'permanent',
+            duration: 'permanent', tickRule: 'none', dispellable: false,
         },
         {
             id: 'e1_spirit_dmg_3',
@@ -339,7 +351,7 @@ Registry.character.add({
             minEidolon: 1,
             defaultActive: false,
             target: 'all',
-            duration: 'permanent',
+            duration: 'permanent', tickRule: 'none', dispellable: false,
         },
         {
             id: 'e1_spirit_dmg_2',
@@ -350,7 +362,7 @@ Registry.character.add({
             minEidolon: 1,
             defaultActive: false,
             target: 'all',
-            duration: 'permanent',
+            duration: 'permanent', tickRule: 'none', dispellable: false,
         },
         {
             id: 'e1_spirit_dmg_1',
@@ -361,7 +373,7 @@ Registry.character.add({
             minEidolon: 1,
             defaultActive: false,
             target: 'all',
-            duration: 'permanent',
+            duration: 'permanent', tickRule: 'none', dispellable: false,
         },
         {
             id: 'e6_res_pen',
@@ -372,7 +384,7 @@ Registry.character.add({
             minEidolon: 6,
             defaultActive: true,
             target: 'all',
-            duration: 'permanent',
+            duration: 'permanent', tickRule: 'none', dispellable: false,
         },
     ],
     selfEffects: [
@@ -382,7 +394,7 @@ Registry.character.add({
             name: '追加能力 暗い夜の孤独な月 (常時)',
             description: '長夜月と記憶の精霊「長夜」の会心率+35%。',
             stats: { [STAT.CRIT_RATE]: 0.35 },
-            defaultActive: false,
+            defaultActive: false, duration: 'permanent', tickRule: 'none', dispellable: false,
         },
     ],
 
@@ -403,6 +415,10 @@ Registry.character.add({
     ],
 
     hooks: {
-        // 必要になり次第追加
+        // onTurnStart(ctx)   {},
+        // onTurnEnd(ctx)     {},
+        // onAttack(ctx)      {},
+        // onHit(ctx)         {},
+        // onSkillUse(ctx)    {},
     },
 });

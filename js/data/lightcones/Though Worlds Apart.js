@@ -33,7 +33,11 @@ Registry.lightcone.add({
 
     stats: ATK_BY_SI.map(v => ({ [STAT.ATK_PERCENT]: v })),
 
-    hooks: (superimpose) => ({}),
+    hooks: (superimpose) => ({
+        // onTurnStart(ctx) {},
+        // onHit(ctx) {},
+        // onSkillUse(ctx) {}
+    }),
 
     partyEffects: (superimpose) => {
         const idx = Math.max(0, Math.min(4, superimpose - 1));
@@ -49,6 +53,8 @@ Registry.lightcone.add({
                 defaultActive: false,
                 target: 'all',
                 duration: 3,
+                tickRule: 'target_turn_start',
+                dispellable: false,
             },
             {
                 id: 'banriSanga_summon_bonus',
@@ -59,6 +65,8 @@ Registry.lightcone.add({
                 defaultActive: false,
                 target: 'single',
                 duration: 3,
+                tickRule: 'target_turn_start',
+                dispellable: false,
             },
         ];
     },

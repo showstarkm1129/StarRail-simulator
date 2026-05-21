@@ -23,4 +23,8 @@ Registry.relicSet.add({
             },
         },
     },
+
+    hooks: {
+        // onAttack(ctx) {}
+    },
 });

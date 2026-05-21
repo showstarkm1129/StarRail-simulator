@@ -36,7 +36,11 @@ Registry.lightcone.add({
         { [STAT.ATK_PERCENT]: 1.28 },
     ],
 
-    hooks: (superimpose) => ({}),
+    hooks: (superimpose) => ({
+        // onTurnStart(ctx) {},
+        // onHit(ctx) {},
+        // onSkillUse(ctx) {}
+    }),
 
     partyEffects: (superimpose) => {
         const skillDmg = SKILL_DMG_BY_SI[Math.max(0, Math.min(4, superimpose - 1))];
@@ -50,6 +54,8 @@ Registry.lightcone.add({
                 defaultActive: false,
                 target: 'single',
                 duration: 3,
+                tickRule: 'target_turn_start',
+                dispellable: false,
             },
         ];
     },

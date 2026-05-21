@@ -41,7 +41,11 @@ Registry.lightcone.add({
         { [STAT.HP_PERCENT]: HP_BY_SI[4], [STAT.DEF_IGNORE]: DEF_IGN_BY_SI[4] },
     ],
 
-    hooks: (superimpose) => ({}),
+    hooks: (superimpose) => ({
+        // onTurnStart(ctx) {},
+        // onHit(ctx) {},
+        // onSkillUse(ctx) {}
+    }),
 
     partyEffects: (superimpose) => [],
 });

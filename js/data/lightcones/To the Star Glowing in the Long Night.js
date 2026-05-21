@@ -49,7 +49,11 @@ Registry.lightcone.add({
         { [STAT.HP_PERCENT]: HP_BY_SI[4], [STAT.DEF_IGNORE]: DEF_IGN_BY_SI[4], [STAT.DMG_ALL]: DMG_BY_SI[4] },
     ],
 
-    hooks: (superimpose) => ({}),
+    hooks: (superimpose) => ({
+        // onTurnStart(ctx) {},
+        // onHit(ctx) {},
+        // onSkillUse(ctx) {}
+    }),
 
     // パーティ枠 (装備者が teammate の場合) 経由のバフは無し — 効果は装備者本人に集中
     partyEffects: (superimpose) => [],

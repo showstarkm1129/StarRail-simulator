@@ -36,7 +36,11 @@ Registry.lightcone.add({
         { [STAT.CRIT_DMG]: 0.60 },
     ],
 
-    hooks: (superimpose) => ({}),
+    hooks: (superimpose) => ({
+        // onTurnStart(ctx) {},
+        // onHit(ctx) {},
+        // onSkillUse(ctx) {}
+    }),
 
     partyEffects: (superimpose) => {
         const idx = Math.max(0, Math.min(4, superimpose - 1));
@@ -55,6 +59,8 @@ Registry.lightcone.add({
                 defaultActive: false,
                 target: 'all',
                 duration: 'permanent',
+                tickRule: 'none',
+                dispellable: false,
             },
         ];
     },

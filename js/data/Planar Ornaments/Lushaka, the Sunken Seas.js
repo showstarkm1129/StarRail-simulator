@@ -31,7 +31,10 @@ Registry.ornament.add({
                 defaultActive: true,
                 target: 'single',
                 duration: 'permanent',
+                tickRule: 'none',
+                dispellable: false,
             },
         ],
     },
+    hooks: {},
 });

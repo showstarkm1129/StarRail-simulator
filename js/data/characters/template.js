@@ -22,6 +22,7 @@ Registry.character.add({
         hp: 1000,
         def: 400,
         spd: 100,
+        aggro: 125,               // 狙われやすさ(運命による基準値)
     },
     maxEnergy: 100,
 
@@ -45,9 +46,11 @@ Registry.character.add({
 
     // スキル定義(現フェーズでは枠だけ。将来 damage.js が読む)
     skills: {
-        basic:  { type: 'attack', target: 'single', mult: { atk: 1.00 }, energy: 20 },
-        skill:  { type: 'attack', target: 'single', mult: { atk: 2.50 }, energy: 30 },
-        ult:    { type: 'attack', target: 'all',    mult: { atk: 3.00 }, energy: 120 },
+        basic:  { type: 'attack', target: 'single', mult: { atk: 1.00 }, spGain: 1, energyGain: 20, toughness: 10, hitSplit: [1.0] },
+        skill:  { type: 'attack', target: 'single', mult: { atk: 2.50 }, spCost: 1, energyGain: 30, toughness: 20, hitSplit: [1.0] },
+        ult:    { type: 'attack', target: 'all',    mult: { atk: 3.00 }, energyCost: 120, energyGain: 5, toughness: 30, hitSplit: [1.0] },
+        // bounce: { type: 'attack', target: 'bounce', bounceCount: 5, mult: { atk: 0.50 }, spCost: 1, energyGain: 30, toughness: 10, hitSplit: [1.0] },
+        // shield: { type: 'buff', target: 'all_ally', shieldStat: STAT.DEF_BASE, spCost: 1, energyGain: 30, toughness: 0, hitSplit: [], levels: [ { shieldPct: 0.16, shieldFlat: 100 } ] },
         talent: { type: 'passive' },
     },
 
@@ -64,7 +67,9 @@ Registry.character.add({
     //   description   : ツールチップ。日本語の自然な文で書く。
     //   defaultActive : 初期 ON / OFF
     //   target        : 'all' (味方全体) / 'single' (メイン火力キャラが対象になった想定でのみ適用)
-    //   duration      : 表示用 (計算には不使用)
+    //   duration      : 表示用、およびシミュレータ上での生存ターン数
+    //   tickRule      : ターン減少基準 ('caster_turn_end', 'target_turn_end', 'target_turn_start' 等)
+    //   dispellable   : 解除可能か (true/false)
     //   minEidolon?   : 星魂条件 (E1〜E6)。指定時は teammate.eidolon >= minEidolon の場合のみ
     //                    パーティ枠UIに表示される。UI 上では E<n>+ バッジが表示される。
     //   stackable?    : { max, default } 累積系効果。
@@ -93,6 +98,7 @@ Registry.character.add({
         //     defaultActive: true,
         //     target: 'all',
         //     duration: 'permanent',
+        //     dispellable: false,
         // },
         // 例) Lv 連動
         // {
@@ -137,6 +143,36 @@ Registry.character.add({
         //     defaultActive: false, target: 'single', duration: 1,
         // },
     ],
+    selfEffects: [
+        // 自身へのバフなどをここに記述
+    ],
+    enemyEffects: [
+        // 例) 敵へのデバフや状態異常
+        // {
+        //     id: 'ult_def_down',
+        //     source: 'ult',
+        //     name: '必殺 防御力ダウン',
+        //     description: '必殺発動時、敵全体の防御力-X%、2T。',
+        //     debuffType: 'stat_down',
+        //     baseChance: 1.0,
+        //     stats: { [STAT.DEF_DOWN]: 0.20 }, // 必要なデバフステータスを適宜使用
+        //     defaultActive: false,
+        //     target: 'all',
+        //     duration: 2, tickRule: 'target_turn_start', dispellable: true,
+        // },
+        // 例) 持続ダメージ (DoT)
+        // {
+        //     id: 'talent_shock',
+        //     source: 'talent',
+        //     name: '感電 (天賦)',
+        //     description: '敵に感電状態を付与。ターン開始時に攻撃力の120%の雷属性持続ダメージ、2T。',
+        //     debuffType: 'dot',
+        //     dotType: 'shock',
+        //     dotMultiplier: { atk: 1.20 },
+        //     baseChance: 1.0,
+        //     defaultActive: false, target: 'single', duration: 2, tickRule: 'target_turn_start', dispellable: true,
+        // },
+    ],
 
     // 特殊効果フック(計画書18節「型に収まらないバフはコードで書く」)
     hooks: {
@@ -154,9 +190,12 @@ Registry.character.add({
 
         // 以下はトリガー型(StatComputer.collectHooks() で集められる)。
         // 本フェーズでは登録のみ。発火配線は次フェーズで simulator から行う。
+        // onTurnStart(ctx)   { /* ターン開始時 */ },
+        // onTurnEnd(ctx)     { /* ターン終了時 */ },
         // onUltUse(ctx)      { /* 必殺技使用時 */ },
         // onCombatStart(ctx) { /* 戦闘開始時 */ },
         // onSkillUse(ctx)    { /* 戦闘スキル使用時 */ },
-        // onAttack(ctx)      { /* 攻撃時 */ },
+        // onAttack(ctx)      { /* 攻撃直前 */ },
+        // onHit(ctx)         { /* 攻撃命中時 */ },
     },
 });

@@ -46,15 +46,50 @@ Registry.lightcone.add({
         { [STAT.SPD_PERCENT]: SPD_BY_SI[4] },
     ],
 
-    hooks: (superimpose) => ({}),
+    hooks: (superimpose) => ({
+        // onTurnStart(ctx) {},
+        // onHit(ctx) {},
+        // onSkillUse(ctx) {}
+    }),
 
     partyEffects: (superimpose) => {
         const si = Math.max(0, Math.min(4, superimpose - 1));
-        const voidTaken   = VOID_BY_SI[si];
         const verseCD     = VERSE_BY_SI[si];
         const boostMult   = BOOST_BY_SI[si];
-        const voidBoost   = voidTaken * boostMult;
         const verseBoost  = verseCD   * boostMult;
+        return [
+            {
+                id: 'aiWaIma_verse',
+                source: 'lc',
+                name: `「詩句」 味方全体 会心ダメ+${(verseCD*100).toFixed(1)}%`,
+                description: `装備キャラの記憶の精霊が敵に精霊スキル発動時、「詩句」獲得 → 味方全体の会心ダメ +${(verseCD*100).toFixed(1)}%。`,
+                stats: { [STAT.CRIT_DMG]: verseCD },
+                defaultActive: false,
+                target: 'all',
+                duration: 'conditional',
+                tickRule: 'none',
+                dispellable: false,
+            },
+            {
+                id: 'aiWaIma_both_boost_party',
+                source: 'lc',
+                name: `「詩句」同時所持ブースト 味方会心ダメ+${(verseBoost*100).toFixed(2)}%`,
+                description: `「空白」と「詩句」を同時所持時、詩句の効果が ${(boostMult*100).toFixed(1)}% 分アップ。`,
+                stats: { [STAT.CRIT_DMG]: verseBoost },
+                defaultActive: false,
+                target: 'all',
+                duration: 'conditional',
+                tickRule: 'none',
+                dispellable: false,
+            },
+        ];
+    },
+
+    enemyEffects: (superimpose) => {
+        const si = Math.max(0, Math.min(4, superimpose - 1));
+        const voidTaken   = VOID_BY_SI[si];
+        const boostMult   = BOOST_BY_SI[si];
+        const voidBoost   = voidTaken * boostMult;
         return [
             {
                 id: 'aiWaIma_void',
@@ -65,26 +100,22 @@ Registry.lightcone.add({
                 defaultActive: false,
                 target: 'all',
                 duration: 'conditional',
+                tickRule: 'none',
+                dispellable: false,
+                baseChance: 1.0,
             },
             {
-                id: 'aiWaIma_verse',
+                id: 'aiWaIma_both_boost_enemy',
                 source: 'lc',
-                name: `「詩句」 味方全体 会心ダメ+${(verseCD*100).toFixed(1)}%`,
-                description: `装備キャラの記憶の精霊が敵に精霊スキル発動時、「詩句」獲得 → 味方全体の会心ダメ +${(verseCD*100).toFixed(1)}%。`,
-                stats: { [STAT.CRIT_DMG]: verseCD },
+                name: `「空白」同時所持ブースト 敵被ダメ+${(voidBoost*100).toFixed(2)}%`,
+                description: `「空白」と「詩句」を同時所持時、空白の効果が ${(boostMult*100).toFixed(1)}% 分アップ。`,
+                stats: { [STAT.DMG_TAKEN]: voidBoost },
                 defaultActive: false,
                 target: 'all',
                 duration: 'conditional',
-            },
-            {
-                id: 'aiWaIma_both_boost',
-                source: 'lc',
-                name: `「空白」+「詩句」同時所持 効果+${(boostMult*100).toFixed(1)}% (差分加算)`,
-                description: `両方所持時、空白/詩句の効果が ${(boostMult*100).toFixed(1)}% 分アップ。空白+${(voidBoost*100).toFixed(2)}%pt (DMG_TAKEN)、詩句+${(verseBoost*100).toFixed(2)}%pt (CRIT_DMG)。空白/詩句と併用して ON にする。`,
-                stats: { [STAT.DMG_TAKEN]: voidBoost, [STAT.CRIT_DMG]: verseBoost },
-                defaultActive: false,
-                target: 'all',
-                duration: 'conditional',
+                tickRule: 'none',
+                dispellable: false,
+                baseChance: 1.0,
             },
         ];
     },

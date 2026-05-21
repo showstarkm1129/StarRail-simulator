@@ -21,7 +21,7 @@ Registry.character.add({
     path: PATH.HARMONY,
     rarity: 5,
 
-    base: { atk: 582, hp: 1241, def: 533, spd: 99 },
+    base: { atk: 582, hp: 1241, def: 533, spd: 99, aggro: 100 },
     maxEnergy: 120,
 
     // 軌跡完凸時に常時加算されるステ
@@ -90,7 +90,7 @@ Registry.character.add({
             name: '疾風の弾丸',
             type: 'attack', target: 'single',
             element: ELEMENT.WIND,
-            energy: 20,
+            spGain: 1, energyGain: 20, toughness: 10, hitSplit: [1.0],
             description: '指定した敵単体にブローニャの攻撃力X%分の風属性ダメージを与える。',
             maxLevel: { default: 6, withEidolon: 7 },  // E5で+1
             // X% (攻撃力倍率)
@@ -103,7 +103,7 @@ Registry.character.add({
         skill: {
             name: '作戦再展開',
             type: 'buff', target: 'single_ally',
-            energy: 30,
+            spCost: 1, energyGain: 30, toughness: 0, hitSplit: [],
             description: '指定した味方単体のデバフを1つ解除し、その味方を即座に行動させ、与ダメージ+X%、1ターン継続。自身に対してこのスキルを発動した時、即時行動の効果は発動しない。',
             maxLevel: { default: 10, withEidolon: 12 },  // E5で+2
             // X% (与ダメ枠バフ)
@@ -117,7 +117,7 @@ Registry.character.add({
         ult: {
             name: 'ベロブルグ行進曲',
             type: 'buff', target: 'all_ally',
-            energy: 120,
+            energyCost: 120, energyGain: 5, spCost: 0, toughness: 0, hitSplit: [],
             description: '味方全体の攻撃力+X%、会心ダメージがブローニャの会心ダメージのY%+Z%アップする、2ターン継続。',
             maxLevel: { default: 10, withEidolon: 12 },  // E3で+2
             // X% (攻撃力バフ), Y% (caster.CD × Y%), Z% (CD固定値加算)
@@ -175,7 +175,7 @@ Registry.character.add({
             stats: { [STAT.DMG_ALL]: 0.10 },
             defaultActive: true,
             target: 'all',
-            duration: 'permanent',
+            duration: 'permanent', tickRule: 'none', dispellable: false,
         },
         {
             id: 'ult_atk',
@@ -188,7 +188,7 @@ Registry.character.add({
             }),
             defaultActive: false,
             target: 'all',
-            duration: 2,
+            duration: 2, tickRule: 'target_turn_end', dispellable: true,
         },
         {
             id: 'ult_cd',
@@ -196,12 +196,23 @@ Registry.character.add({
             name: '必殺 会心ダメ (発動者CDに連動)',
             description: '必殺発動時、味方全体の会心ダメ = (発動者ブローニャの会心ダメ × Y%) + Z%、2T',
             fromLevel: 'ult',
-            computeStats: (lv, mult, caster) => ({
-                [STAT.CRIT_DMG]: caster.derived.critDmg * mult.cdRatio + mult.cdFlat,
-            }),
+            computeStats: (lv, mult, caster) => {
+                const stats = { [STAT.CRIT_DMG]: caster.derived.critDmg * mult.cdRatio + mult.cdFlat };
+                Object.defineProperty(stats, '__meta', {
+                    value: {
+                        [STAT.CRIT_DMG]: {
+                            label: '自身の会心ダメ',
+                            ratio: mult.cdRatio,
+                            flat: mult.cdFlat
+                        }
+                    },
+                    enumerable: false
+                });
+                return stats;
+            },
             defaultActive: false,
             target: 'all',
-            duration: 2,
+            duration: 2, tickRule: 'target_turn_end', dispellable: true,
         },
         {
             id: 'skill_dmg',
@@ -214,7 +225,7 @@ Registry.character.add({
             }),
             defaultActive: false,
             target: 'single',
-            duration: 1,
+            duration: 1, tickRule: 'target_turn_end', dispellable: true,
         },
         {
             id: 'tier4_def',
@@ -224,7 +235,7 @@ Registry.character.add({
             stats: { [STAT.DEF_PERCENT]: 0.20 },
             defaultActive: false,
             target: 'all',
-            duration: 2,
+            duration: 2, tickRule: 'target_turn_end', dispellable: true,
         },
         {
             id: 'technique',
@@ -234,7 +245,7 @@ Registry.character.add({
             stats: { [STAT.ATK_PERCENT]: 0.15 },
             defaultActive: false,
             target: 'all',
-            duration: 2,
+            duration: 2, tickRule: 'target_turn_end', dispellable: true,
         },
         // ===== 星魂条件付き =====
         {
@@ -246,25 +257,17 @@ Registry.character.add({
             minEidolon: 2,
             defaultActive: false,
             target: 'single',
-            duration: 1,
+            duration: 1, tickRule: 'target_turn_end', dispellable: true,
         },
     ],
     selfEffects: [
-        {
-            id: 'trace_dmg_all',
-            source: 'extra',
-            name: '昇格6 軍勢 (フィールド上にいる時)',
-            description: 'ブローニャがフィールド上にいる時、自身に与ダメージ+10% (Focus として出撃している場合に選択)',
-            stats: { [STAT.DMG_ALL]: 0.10 },
-            defaultActive: false,
-        },
         {
             id: 'trace_crit_rate',
             source: 'extra',
             name: '昇格2 号令 (通常攻撃時)',
             description: '通常攻撃の会心率が100%まで上がる。通常攻撃のダメージを計算する際、自身の会心率+100%。',
             stats: { [STAT.CRIT_RATE]: 1.00 },
-            defaultActive: false,
+            defaultActive: false, duration: 'permanent', tickRule: 'none', dispellable: false,
         },
     ],
 
@@ -287,6 +290,10 @@ Registry.character.add({
     ],
 
     hooks: {
-        // 必要になり次第追加
+        // onTurnStart(ctx)   {},
+        // onTurnEnd(ctx)     {},
+        // onAttack(ctx)      {},
+        // onHit(ctx)         {},
+        // onSkillUse(ctx)    {},
     },
 });

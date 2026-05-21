@@ -26,4 +26,5 @@ Registry.ornament.add({
     //   { pc2: [...] } の形式 (オーナメントは pc2 のみ)
     //   ウェンワークは装着者自身のみに作用するため空配列
     partyEffects: { pc2: [] },
+    hooks: {},
 });

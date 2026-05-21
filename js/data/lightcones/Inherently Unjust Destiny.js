@@ -11,7 +11,7 @@
 //   - 「バリア付与時の自己 CD+%」は装備者自身のみ。teammate→focus partyEffect ではないため
 //     partyEffects には登録しない。
 //   - 「追加攻撃命中時の敵被ダメ+%」は敵デバフ。Diminishing の taken factor に作用するため
-//     partyEffect として登録 (DMG_TAKEN 枠、target='all')。基礎確率は計算上 100% として扱う。
+//     enemyEffects として登録 (DMG_TAKEN 枠、target='single')。
 
 import { PATH } from '../../build/constants.js';
 import { STAT } from '../../build/statKeys.js';
@@ -31,21 +31,29 @@ Registry.lightcone.add({
     // 重畳1〜5: 自己 DEF +40/46/52/58/64%
     stats: DEF_BY_SI.map(v => ({ [STAT.DEF_PERCENT]: v })),
 
-    hooks: (superimpose) => ({}),
+    hooks: (superimpose) => ({
+        // onTurnStart(ctx) {},
+        // onHit(ctx) {},
+        // onSkillUse(ctx) {}
+    }),
 
-    partyEffects: (superimpose) => {
+    enemyEffects: (superimpose) => {
         const idx = Math.max(0, Math.min(4, superimpose - 1));
         const taken = TAKEN_BY_SI[idx];
+        const baseChance = 1.0 + 0.15 * idx;
         return [
             {
                 id: 'fukoUnmei_taken',
                 source: 'lc',
                 name: `追加攻撃命中時 敵被ダメ+${(taken*100).toFixed(1)}% (2T)`,
-                description: `装備キャラの追加攻撃が敵に命中する時、100%の基礎確率で攻撃を受ける敵の被ダメージ+${(taken*100).toFixed(1)}%、2T継続。`,
+                description: `装備キャラの追加攻撃が敵に命中する時、${(baseChance*100).toFixed(0)}%の基礎確率で攻撃を受ける敵の被ダメージ+${(taken*100).toFixed(1)}%、2T継続。`,
                 stats: { [STAT.DMG_TAKEN]: taken },
                 defaultActive: false,
-                target: 'all',
+                target: 'single', // Enemy target
                 duration: 2,
+                tickRule: 'target_turn_start',
+                dispellable: false,
+                baseChance: baseChance,
             },
         ];
     },

@@ -34,7 +34,11 @@ Registry.lightcone.add({
         { [STAT.ENERGY_REGEN]: 0.18 },
     ],
 
-    hooks: (superimpose) => ({}),
+    hooks: (superimpose) => ({
+        // onTurnStart(ctx) {},
+        // onHit(ctx) {},
+        // onSkillUse(ctx) {}
+    }),
 
     partyEffects: (superimpose) => {
         const dmg = DMG_BY_SI[Math.max(0, Math.min(4, superimpose - 1))];
@@ -48,6 +52,8 @@ Registry.lightcone.add({
                 defaultActive: false,
                 target: 'single',
                 duration: 1,
+                tickRule: 'target_turn_start',
+                dispellable: false,
             },
         ];
     },

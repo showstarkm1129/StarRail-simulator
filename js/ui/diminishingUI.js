@@ -2039,14 +2039,22 @@ function formatEffectStats(stats, stackInfo = null) {
         return isFlat ? `+${val.toFixed(1)}` : `+${(val * 100).toFixed(2)}%`;
     };
     const parts = Object.entries(stats).map(([k, v]) => {
+        let formula = '';
+        if (stats.__meta && stats.__meta[k]) {
+            const m = stats.__meta[k];
+            const ratioStr = (m.ratio * 100).toString().replace(/\.0+$/, '') + '%';
+            const flatStr = m.flat ? ` + ${(m.flat * 100).toString().replace(/\.0+$/, '')}%` : '';
+            formula = `${m.label}の${ratioStr}${flatStr} = `;
+        }
+
         if (stackInfo && stackInfo.stacks > 1 && stackInfo.perLayer && stackInfo.perLayer[k] != null) {
             if (stackInfo.ef && stackInfo.ef.stackable?.type === 'step') {
-                return `${formatStatLabel(k)} ${fmt(k, v)}`;
+                return `${formatStatLabel(k)} ${formula}${fmt(k, v)}`;
             }
             const per = stackInfo.perLayer[k];
-            return `${formatStatLabel(k)} ${fmt(k, per)} ×${stackInfo.stacks} = ${fmt(k, v)}`;
+            return `${formatStatLabel(k)} ${formula}${fmt(k, per)} ×${stackInfo.stacks} = ${fmt(k, v)}`;
         }
-        return `${formatStatLabel(k)} ${fmt(k, v)}`;
+        return `${formatStatLabel(k)} ${formula}${fmt(k, v)}`;
     });
     return parts.join(' / ');
 }
@@ -2060,6 +2068,9 @@ function applyStackMult(stats, stacks, ef = null) {
     const out = {};
     for (const [k, v] of Object.entries(stats)) {
         out[k] = v * stacks;
+    }
+    if (stats.__meta) {
+        Object.defineProperty(out, '__meta', { value: stats.__meta, enumerable: false });
     }
     return out;
 }

@@ -28,7 +28,7 @@ Registry.character.add({
     path: PATH.REMEMBRANCE,
     rarity: 5,
 
-    base: { atk: 388, hp: 1086, def: 630, spd: 110 },
+    base: { atk: 388, hp: 1086, def: 630, spd: 110, aggro: 100 },
     maxEnergy: 140,
 
     // 常時加算ステ (軌跡ステータスボーナス・ノードのみ)
@@ -88,7 +88,7 @@ Registry.character.add({
             name: '雲を撫でるそよ風',
             type: 'attack', target: 'single',
             element: ELEMENT.WIND,
-            energy: 20,
+            spGain: 1, energyGain: 20, toughness: 10, hitSplit: [1.0],
             description: '指定した敵単体にヒアンシーの最大HPX%分の風属性ダメージを与える。',
             maxLevel: { default: 6, withEidolon: 7 },   // E3 で +1
             // X% (最大HP倍率)
@@ -101,7 +101,7 @@ Registry.character.add({
         skill: {
             name: '降り注ぐ彩虹の愛',
             type: 'heal', target: 'all_ally',
-            energy: 30,
+            spCost: 1, energyGain: 30, toughness: 0, hitSplit: [],
             description: '記憶の精霊「イカルン」を召喚し、イカルン以外の味方全体のHPをヒアンシーの最大HPX%+Y回復、イカルンのHPをヒアンシーの最大HPZ%+W回復。',
             maxLevel: { default: 10, withEidolon: 12 },  // E5 で +2
             // X%+Y (全体回復), Z%+W (イカルン回復)
@@ -124,7 +124,7 @@ Registry.character.add({
         ult: {
             name: '晨昏に飛び込むわたしたち',
             type: 'support', target: 'all_ally',
-            energy: 140,
+            energyCost: 140, energyGain: 5, spCost: 0, toughness: 0, hitSplit: [],
             description: '記憶の精霊「イカルン」を召喚し回復を行い、ヒアンシーは「雨上がり」状態 (3T) に入る。雨上がり中、味方それぞれの最大HPがA%+Bアップ。',
             maxLevel: { default: 10, withEidolon: 12 },  // E3 で +2
             // X%+Y (全体回復), Z%+W (イカルン回復), A%+B (最大HPアップ)
@@ -161,6 +161,7 @@ Registry.character.add({
             name: '黒雲退散！',
             type: 'attack', target: 'all',
             element: ELEMENT.WIND,
+            spCost: 0, energyGain: 0, toughness: 20, hitSplit: [1.0],
             description: '敵全体に、ヒアンシーとイカルンの本戦闘における累計治癒量のX%分の風属性ダメージを与える。発動後、累計治癒量の50%がクリア (E6で12%)。',
             maxLevel: { default: 6, withEidolon: 7 },    // E3 で +1
             // X% (累計治癒量の倍率)
@@ -211,7 +212,7 @@ Registry.character.add({
             }),
             defaultActive: false,
             target: 'all',
-            duration: 2,
+            duration: 2, tickRule: 'target_turn_end', dispellable: true,
         },
         {
             id: 'technique_max_hp',
@@ -221,7 +222,7 @@ Registry.character.add({
             stats: { [STAT.HP_PERCENT]: 0.20 },
             defaultActive: false,
             target: 'all',
-            duration: 2,
+            duration: 2, tickRule: 'target_turn_end', dispellable: true,
         },
         // ===== 星魂条件付き =====
         {
@@ -233,7 +234,7 @@ Registry.character.add({
             minEidolon: 1,
             defaultActive: false,
             target: 'all',
-            duration: 2,
+            duration: 2, tickRule: 'target_turn_end', dispellable: true,
         },
         {
             id: 'e2_hp_loss_spd',
@@ -244,7 +245,7 @@ Registry.character.add({
             minEidolon: 2,
             defaultActive: false,
             target: 'single',
-            duration: 2,
+            duration: 2, tickRule: 'target_turn_end', dispellable: true,
         },
         {
             id: 'e6_res_pen',
@@ -255,7 +256,7 @@ Registry.character.add({
             minEidolon: 6,
             defaultActive: true,
             target: 'all',
-            duration: 'permanent',
+            duration: 'permanent', tickRule: 'none', dispellable: false,
         },
     ],
     selfEffects: [
@@ -265,7 +266,7 @@ Registry.character.add({
             name: '昇格2 微笑む暗雲 (常時：本人の会心率+100%)',
             description: 'ヒアンシーと「イカルン」の会心率+100%。常時ONにする場合は選択してください。',
             stats: { [STAT.CRIT_RATE]: 1.00 },
-            defaultActive: false,
+            defaultActive: false, duration: 'permanent', tickRule: 'none', dispellable: false,
         },
         {
             id: 'trace_effect_res',
@@ -273,7 +274,7 @@ Registry.character.add({
             name: '昇格4 優しい雷雨 (常時：本人の効果抵抗+50%)',
             description: 'ヒアンシーの効果抵抗+50%。常時ONにする場合は選択してください。',
             stats: { [STAT.EFFECT_RES]: 0.50 },
-            defaultActive: false,
+            defaultActive: false, duration: 'permanent', tickRule: 'none', dispellable: false,
         },
         {
             id: 'trace_spd_hp',
@@ -281,7 +282,7 @@ Registry.character.add({
             name: '昇格6 凪いだ暴風 (速度＞200)',
             description: 'ヒアンシーの速度が200を超える時、ヒアンシーと「イカルン」の最大HP+20%。条件を満たす場合に選択。',
             stats: { [STAT.HP_PERCENT]: 0.20 },
-            defaultActive: false,
+            defaultActive: false, duration: 'permanent', tickRule: 'none', dispellable: false,
         },
     ],
 
@@ -302,6 +303,10 @@ Registry.character.add({
     ],
 
     hooks: {
-        // 必要になり次第追加
+        // onTurnStart(ctx)   {},
+        // onTurnEnd(ctx)     {},
+        // onAttack(ctx)      {},
+        // onHit(ctx)         {},
+        // onSkillUse(ctx)    {},
     },
 });

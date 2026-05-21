@@ -35,7 +35,11 @@ Registry.lightcone.add({
         { [STAT.ENERGY_REGEN]: 0.20 },
     ],
 
-    hooks: (superimpose) => ({}),
+    hooks: (superimpose) => ({
+        // onTurnStart(ctx) {},
+        // onHit(ctx) {},
+        // onSkillUse(ctx) {}
+    }),
 
     partyEffects: (superimpose) => {
         const per = ATK_PER_STACK_BY_SI[Math.max(0, Math.min(4, superimpose - 1))];
@@ -50,6 +54,8 @@ Registry.lightcone.add({
                 defaultActive: false,
                 target: 'single',
                 duration: 2,
+                tickRule: 'target_turn_start',
+                dispellable: false,
             },
         ];
     },

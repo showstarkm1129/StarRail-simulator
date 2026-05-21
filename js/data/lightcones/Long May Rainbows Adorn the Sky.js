@@ -9,7 +9,7 @@
 // 簡易シミュ実装方針:
 //   - 常時系 (速度+%): stats[] に重畳別の SPD_PERCENT を載せる
 //   - 味方HP消費 → 付加ダメ: 累計付加ダメ計算が必要なため hook (本ツール対象外)
-//   - 精霊スキル時 敵全体 被ダメ+%: partyEffect として登録 (DMG_TAKEN 枠、target='all')
+//   - 精霊スキル時 敵全体 被ダメ+%: enemyEffects として登録 (DMG_TAKEN 枠、target='all')
 
 import { PATH } from '../../build/constants.js';
 import { STAT } from '../../build/statKeys.js';
@@ -35,12 +35,16 @@ Registry.lightcone.add({
     ],
 
     // 重畳に応じた hook 群 (現状トリガー型未実装のため空)
-    hooks: (superimpose) => ({}),
+    hooks: (superimpose) => ({
+        // onTurnStart(ctx) {},
+        // onHit(ctx) {},
+        // onSkillUse(ctx) {}
+    }),
 
     // パーティ枠経由で focus キャラに与える効果
     //   精霊スキル発動時、敵全体の受けるダメージ+18%~36% (2T、同系統と非累積)
     //   S1=18% / S5=36% / 線形 +4.5%/重畳 → 18.0, 22.5, 27.0, 31.5, 36.0
-    partyEffects: (superimpose) => {
+    enemyEffects: (superimpose) => {
         const TAKEN_BY_SI = [0.180, 0.225, 0.270, 0.315, 0.360];
         const taken = TAKEN_BY_SI[Math.max(0, Math.min(4, superimpose - 1))];
         return [
@@ -53,6 +57,9 @@ Registry.lightcone.add({
                 defaultActive: false,
                 target: 'all',
                 duration: 2,
+                tickRule: 'target_turn_start',
+                dispellable: false,
+                baseChance: 1.0,
             },
         ];
     },

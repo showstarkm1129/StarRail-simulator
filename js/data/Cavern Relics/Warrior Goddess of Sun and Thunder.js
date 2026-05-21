@@ -38,7 +38,13 @@ Registry.relicSet.add({
                 defaultActive: false,
                 target: 'all',
                 duration: 2,
+                tickRule: 'turnStart',
+                dispellable: false,
             },
         ],
+    },
+
+    hooks: {
+        // onAttack(ctx) {}
     },
 });
