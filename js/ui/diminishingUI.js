@@ -439,8 +439,18 @@ function fillEidolonSelect() {
 }
 function fillLightconeSelect() {
     const sel = document.getElementById('dim-lc');
+    // 各キャラには対応する運命 (path) の光円錐のみ装備可能。
+    // ただし isTestAllEquipment = true のテストキャラは全光円錐を許容。
+    const ch = Registry.character.get(state.build.characterId);
+    const isTestAll = !!ch?.isTestAllEquipment;
+    const charPath = ch?.path;
+    const lcs = Registry.lightcone.list().filter(lc => {
+        if (isTestAll) return true;
+        if (!charPath) return true;        // キャラ未選択時は全表示 (fallback)
+        return lc.path === charPath;
+    });
     sel.innerHTML = [`<option value="">(なし)</option>`].concat(
-        Registry.lightcone.list().map(lc =>
+        lcs.map(lc =>
             `<option value="${lc.id}" ${lc.id === state.build.lightcone?.id ? 'selected' : ''}>${lc.name}</option>`
         )
     ).join('');
@@ -1036,10 +1046,20 @@ function bindAll() {
     document.getElementById('dim-char').addEventListener('change', e => {
         state.build.characterId = e.target.value;
         // キャラ変更時はLvを無凸MAXで再初期化
-        state.build.traceLevel = presetDefaultMaxLevels(Registry.character.get(e.target.value));
+        const newCh = Registry.character.get(e.target.value);
+        state.build.traceLevel = presetDefaultMaxLevels(newCh);
+        // 運命不一致の光円錐は自動解除 (testAll は全装備許容のためスキップ)
+        const curLcId = state.build.lightcone?.id;
+        if (curLcId && newCh && !newCh.isTestAllEquipment) {
+            const curLc = Registry.lightcone.get(curLcId);
+            if (curLc && curLc.path !== newCh.path) {
+                state.build.lightcone.id = null;
+            }
+        }
         // ※ パーティ枠に同キャラがいてもクリアしない (セルフバフ計算を許容)
         //   常時オーラ等は二重計上になるためユーザー側で off にすること
         fillLevelInputs();
+        fillLightconeSelect();   // キャラの運命に合わせて選択肢を絞り直す
         renderParty();    // 選択肢の表示更新
         applyPartyToEnvBuffs();
         renderCharDetail();
@@ -1551,10 +1571,12 @@ function applySelfBuffsToEnvBuffs() {
             ? (stacksMap[ekey] ?? ef.stackable.default ?? ef.stackable.max ?? 1)
             : 1;
 
-        for (const [stat, value] of Object.entries(stats)) {
+        const finalStats = applyStackMult(stats, stacks, ef);
+
+        for (const [stat, value] of Object.entries(finalStats)) {
             state.build.envBuffs.push({
                 stat,
-                value: value * stacks,
+                value: value,
                 label: `${SELF_LABEL_PREFIX}${srcKey}.${ef.id}.${stat}`,
             });
         }
@@ -1657,7 +1679,7 @@ function renderSelfBuffs() {
                         : '';
                     
                     const resolvedStats = baseStats ? resolveEffectStats(ef, build, baseStats) : null;
-                    const finalStats = applyStackMult(resolvedStats, stacks);
+                    const finalStats = applyStackMult(resolvedStats, stacks, ef);
 
                     return `
                         <div class="dim-party-effect-row" title="${escapeHtml(ef.description || '')}">
@@ -1668,7 +1690,7 @@ function renderSelfBuffs() {
                                 <span class="dim-party-effect-name">${eidolonBadge}${escapeHtml(ef.name)}</span>
                             </label>
                             ${stackInputHtml}
-                            <span class="dim-self-effect-stats" data-effect-key="${ekey}">${formatEffectStats(finalStats, ef.stackable ? { perLayer: resolvedStats, stacks } : null)}</span>
+                            <span class="dim-self-effect-stats" data-effect-key="${ekey}">${formatEffectStats(finalStats, ef.stackable ? { perLayer: resolvedStats, stacks, ef } : null)}</span>
                         </div>
                     `;
                 }).join('')}
@@ -1740,11 +1762,11 @@ function updateSelfEffectStatsDisplay(ekey) {
     const perLayer = resolveEffectStats(ef, build, baseStats);
     if (!perLayer) return;
     const stacks = build.selfStacksByEffectId[ekey] ?? ef.stackable?.default ?? 1;
-    const final = applyStackMult(perLayer, stacks);
+    const final = applyStackMult(perLayer, stacks, ef);
 
     const statsEl = document.querySelector(`.dim-self-effect-stats[data-effect-key="${ekey}"]`);
     if (statsEl) {
-        statsEl.innerHTML = formatEffectStats(final, ef.stackable ? { perLayer, stacks } : null);
+        statsEl.innerHTML = formatEffectStats(final, ef.stackable ? { perLayer, stacks, ef } : null);
     }
 }
 
@@ -1859,14 +1881,14 @@ function updatePartyEffectStatsDisplay(idx, ekey) {
     const perLayer = resolveEffectStats(ef, tBuild, tStats);
     if (!perLayer) return;
     const stacks = slot.stacksByEffectId?.[ekey] ?? ef.stackable?.default ?? 1;
-    const final = applyStackMult(perLayer, stacks);
+    const final = applyStackMult(perLayer, stacks, ef);
     const row = document.querySelector(
         `.dim-party-effect-row .dim-party-effect[data-idx="${idx}"][data-effect-key="${ekey}"]`
     )?.closest('.dim-party-effect-row');
     if (!row) return;
     const statsEl = row.querySelector('.dim-party-effect-stats');
     if (statsEl) {
-        statsEl.innerHTML = formatEffectStats(final, ef.stackable ? { perLayer, stacks } : null);
+        statsEl.innerHTML = formatEffectStats(final, ef.stackable ? { perLayer, stacks, ef } : null);
     }
 }
 
@@ -1951,7 +1973,7 @@ function renderPartySlot(slot, idx) {
                            </span>`
                         : '';
                     // 表示用 stats は 層数倍率込みの最終値、内訳表示のため perLayer も渡す
-                    const finalStats = applyStackMult(resolvedStats, stacks);
+                    const finalStats = applyStackMult(resolvedStats, stacks, ef);
                     return `
                         <div class="dim-party-effect-row" title="${escapeHtml(ef.description || '')}">
                             <label class="dim-party-effect-main">
@@ -1961,7 +1983,7 @@ function renderPartySlot(slot, idx) {
                                 <span class="dim-party-effect-name">${eidolonBadge}${escapeHtml(ef.name)}</span>
                             </label>
                             ${stackInputHtml}
-                            <span class="dim-party-effect-stats">${formatEffectStats(finalStats, ef.stackable ? { perLayer: resolvedStats, stacks } : null)}</span>
+                            <span class="dim-party-effect-stats">${formatEffectStats(finalStats, ef.stackable ? { perLayer: resolvedStats, stacks, ef } : null)}</span>
                         </div>
                     `;
                 }).join('')}
@@ -2018,6 +2040,9 @@ function formatEffectStats(stats, stackInfo = null) {
     };
     const parts = Object.entries(stats).map(([k, v]) => {
         if (stackInfo && stackInfo.stacks > 1 && stackInfo.perLayer && stackInfo.perLayer[k] != null) {
+            if (stackInfo.ef && stackInfo.ef.stackable?.type === 'step') {
+                return `${formatStatLabel(k)} ${fmt(k, v)}`;
+            }
             const per = stackInfo.perLayer[k];
             return `${formatStatLabel(k)} ${fmt(k, per)} ×${stackInfo.stacks} = ${fmt(k, v)}`;
         }
@@ -2027,7 +2052,10 @@ function formatEffectStats(stats, stackInfo = null) {
 }
 
 // 全 stats 値に層数倍率を掛けて新しい dict を返す
-function applyStackMult(stats, stacks) {
+function applyStackMult(stats, stacks, ef = null) {
+    if (ef && ef.stackable && ef.stackable.type === 'step' && ef.stackable.stepValues) {
+        return ef.stackable.stepValues[stacks] || stats;
+    }
     if (!stats || stacks === 1) return stats;
     const out = {};
     for (const [k, v] of Object.entries(stats)) {
@@ -2056,10 +2084,11 @@ function applyPartyToEnvBuffs() {
             const stackMult = ef.stackable
                 ? (slot.stacksByEffectId?.[ekey] ?? ef.stackable.default ?? ef.stackable.max ?? 1)
                 : 1;
-            for (const [stat, value] of Object.entries(stats)) {
+            const finalStats = applyStackMult(stats, stackMult, ef);
+            for (const [stat, value] of Object.entries(finalStats)) {
                 state.build.envBuffs.push({
                     stat,
-                    value: value * stackMult,
+                    value: value,
                     label: `${PARTY_LABEL_PREFIX}${idx}.${srcKey}.${ef.id}.${stat}`,
                 });
             }

@@ -297,43 +297,23 @@ Registry.character.add({
             duration: 2,
         },
         // --- 昇格6: 記憶の運命キャラ数に応じた精霊会心ダメアップ ---
-        //   非線形スケーリング (5%/15%/50%/65%) のため、人数別に個別定義
         {
-            id: 'trace_a6_remembrance_1',
+            id: 'trace_a6_remembrance',
             source: 'extra',
-            name: '昇格6 記憶1名 精霊会心ダメ+5% (夜明けに降り出す雨)',
-            description: 'パーティに「記憶」の運命を歩むキャラが1名いる場合、戦闘スキル継続中に味方の記憶の精霊全体の会心ダメージ+5%。',
-            stats: { [STAT.CRIT_DMG]: 0.05 },
-            defaultActive: false,
-            target: 'all',
-            duration: 2,
-        },
-        {
-            id: 'trace_a6_remembrance_2',
-            source: 'extra',
-            name: '昇格6 記憶2名 精霊会心ダメ+15% (夜明けに降り出す雨)',
-            description: 'パーティに「記憶」の運命を歩むキャラが2名いる場合、戦闘スキル継続中に味方の記憶の精霊全体の会心ダメージ+15%。',
-            stats: { [STAT.CRIT_DMG]: 0.15 },
-            defaultActive: false,
-            target: 'all',
-            duration: 2,
-        },
-        {
-            id: 'trace_a6_remembrance_3',
-            source: 'extra',
-            name: '昇格6 記憶3名 精霊会心ダメ+50% (夜明けに降り出す雨)',
-            description: 'パーティに「記憶」の運命を歩むキャラが3名いる場合、戦闘スキル継続中に味方の記憶の精霊全体の会心ダメージ+50%。',
-            stats: { [STAT.CRIT_DMG]: 0.50 },
-            defaultActive: false,
-            target: 'all',
-            duration: 2,
-        },
-        {
-            id: 'trace_a6_remembrance_4',
-            source: 'extra',
-            name: '昇格6 記憶4名以上 精霊会心ダメ+65% (夜明けに降り出す雨)',
-            description: 'パーティに「記憶」の運命を歩むキャラが4名以上いる場合、戦闘スキル継続中に味方の記憶の精霊全体の会心ダメージ+65%。',
-            stats: { [STAT.CRIT_DMG]: 0.65 },
+            name: '昇格6 記憶人数 精霊会心ダメバフ (夜明けに降り出す雨)',
+            description: 'パーティに「記憶」の運命を歩むキャラが1名以上の時、戦闘スキル継続中に味方の記憶の精霊全体の会心ダメージアップ。(1名:+5%、2名:+15%、3名:+50%、4名以上:+65%)',
+            stats: { [STAT.CRIT_DMG]: 0 }, // fallback
+            stackable: {
+                max: 4,
+                default: 1,
+                type: 'step',
+                stepValues: {
+                    1: { [STAT.CRIT_DMG]: 0.05 },
+                    2: { [STAT.CRIT_DMG]: 0.15 },
+                    3: { [STAT.CRIT_DMG]: 0.50 },
+                    4: { [STAT.CRIT_DMG]: 0.65 },
+                }
+            },
             defaultActive: false,
             target: 'all',
             duration: 2,

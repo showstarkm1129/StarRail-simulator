@@ -80,7 +80,8 @@ js/data/
 ## 命名規則
 
 - データフォルダ名は **HSR 公式英名** (`Lightcones` / `Cavern Relics` / `Planar Ornaments`)
-- データファイル名は HSR 公式英名(ユーザーが変更する)
+- データファイル名は HSR 公式英名 (例: `Epoch Etched in Golden Blood.js`)
+- ユーザーが手動で正規英名にリネーム中の段階では `_index.js` と既存ファイル名を勝手に変更しない (作業衝突防止)
 
 ## スタットキーの扱い
 
