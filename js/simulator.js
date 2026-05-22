@@ -13,6 +13,10 @@ class Entity {
         this.actionValue = 0;
         this.speed = 0;
         
+        this.maxHP = 1000;
+        this.currentHP = 1000;
+        this.isSummon = false;
+        
         // セット効果フラグ (setCounts が後から付与された場合にも対応するフォールバック)
         this.hasEagle4     = (this.setCounts?.eagle     >= 4) || (this.equipment.relic1 === 'eagle'     && this.equipment.relic2 === 'eagle');
         this.hasMessenger4 = (this.setCounts?.messenger >= 4) || (this.equipment.relic1 === 'messenger' && this.equipment.relic2 === 'messenger');
@@ -90,17 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let nextId = 1;
 
     // Elements
-    const charName = document.getElementById('char-name');
-    const charBaseSpd = document.getElementById('char-base-spd');
-    const charBonusSpd = document.getElementById('char-bonus-spd');
-    const charErr = document.getElementById('char-err');
-    
-    const charLc = document.getElementById('char-lc');
-    const charRelic1 = document.getElementById('char-relic1');
-    const charRelic2 = document.getElementById('char-relic2');
-    const charOrnament = document.getElementById('char-ornament');
-    
-    const addCharBtn = document.getElementById('add-char-btn');
+
     const charList = document.getElementById('char-list');
     const startBtn = document.getElementById('start-combat-btn');
     
@@ -122,26 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusModalName = document.getElementById('status-modal-name');
     const statusModalBody = document.getElementById('status-modal-body');
 
-    // キャラクターの追加
-    addCharBtn.addEventListener('click', () => {
-        const name = charName.value || `キャラ${nextId}`;
-        const bSpd = parseFloat(charBaseSpd.value) || 100;
-        const oSpd = parseFloat(charBonusSpd.value) || 0;
-        const err = parseFloat(charErr.value) || 100;
 
-        const equipment = {
-            lc: charLc.value,
-            relic1: charRelic1.value,
-            relic2: charRelic2.value,
-            ornament: charOrnament.value
-        };
-
-        // maxEP 100 で生成
-        const entity = new Entity(`c${nextId++}`, name, false, bSpd, oSpd, 100, err, equipment);
-        entities.push(entity);
-
-        updateSetupList();
-    });
 
     // ---- 保存ビルドからの読み込み(Feature 2) ----
     const buildLoaderSelect  = document.getElementById('build-loader-select');
@@ -175,6 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
         buildLoaderAdd.addEventListener('click', () => {
             if (!window.SRSIM?.buildToEntity) {
                 alert('ビルドシステムが未初期化です');
+                return;
+            }
+            if (entities.filter(e => !e.isEnemy).length >= 4) {
+                alert('パーティメンバーは最大4名までです');
                 return;
             }
             const id = buildLoaderSelect.value;
@@ -288,9 +267,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm('戦闘を終了して設定画面に戻りますか？')) return;
         
         // 敵を削除し、味方のステータスをリセット
-        entities = entities.filter(e => !e.isEnemy);
+        entities = entities.filter(e => !e.isEnemy && !e.isSummon);
         entities.forEach(e => {
             e.currentEP = 50;
+            e.currentHP = e.maxHP;
             e.buffs = [];
             e.calculateSpeed();
             e.resetActionValue();
@@ -301,6 +281,20 @@ document.addEventListener('DOMContentLoaded', () => {
         combatArea.style.display = 'none';
         combatSetupPanel.style.display = 'block';
     });
+
+    const btnTestDamage = document.getElementById('btn-test-damage');
+    if (btnTestDamage) {
+        btnTestDamage.addEventListener('click', () => {
+            window.consumeAlliesHP(0.3); // 30%のHPを消費
+        });
+    }
+
+    const btnTestHeal = document.getElementById('btn-test-heal');
+    if (btnTestHeal) {
+        btnTestHeal.addEventListener('click', () => {
+            window.healAllies(1000); // 1000回復
+        });
+    }
 
     // モーダルを閉じる
     closeStatusModal.addEventListener('click', () => {
@@ -325,7 +319,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const d = entity.finalStats.derived;
             statsHtml = `
                 <div class="status-item"><span>攻撃力</span><strong>${d.atk.toFixed(1)}</strong></div>
-                <div class="status-item"><span>HP (最大値)</span><strong>${d.hp.toFixed(1)}</strong></div>
+                <div class="status-item"><span>最大HP</span><strong>${d.hp.toFixed(1)}</strong></div>
+                <div class="status-item"><span>現在HP</span><strong>${entity.currentHP.toFixed(1)}</strong></div>
                 <div class="status-item"><span>防御力</span><strong>${d.def.toFixed(1)}</strong></div>
                 <div class="status-item"><span>会心率</span><strong>${(d.critRate*100).toFixed(2)}%</strong></div>
                 <div class="status-item"><span>会心ダメージ</span><strong>${(d.critDmg*100).toFixed(2)}%</strong></div>
@@ -466,9 +461,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const partyHud = document.getElementById('party-hud');
         if (partyHud) {
             partyHud.innerHTML = '';
-            entities.filter(e => !e.isEnemy).forEach((e, index) => {
-                const isReady = e.currentEP >= 100;
+            entities.filter(e => !e.isEnemy && !e.isSummon).forEach((e, index) => {
+                const isReady = e.currentEP >= e.maxEP;
                 const epPercent = (e.currentEP / e.maxEP) * 100;
+                const hpPercent = (e.currentHP / e.maxHP) * 100;
                 
                 const div = document.createElement('div');
                 div.className = 'char-hud-item';
@@ -479,7 +475,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="clickable-area" onclick="openStatus('${e.id}')" style="padding: 5px; border-radius: 4px; width: 100%; text-align: center;">
                         <div class="char-name-hud" style="color: ${e.id === actor.id ? 'var(--accent-gold)' : 'white'}; margin: 0 auto;">${e.name}</div>
                         <div class="char-bars" style="margin: 0 auto;">
-                            <div class="hp-bar"><div class="hp-fill"></div></div>
+                            <div class="hp-bar"><div class="hp-fill" style="width: ${hpPercent}%"></div></div>
                             <div class="ep-bar"><div class="ep-fill" style="width: ${epPercent}%"></div></div>
                         </div>
                     </div>
@@ -492,7 +488,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 必殺技の割り込み発動 (グローバルから呼べるようにする)
     window.triggerUlt = function(id) {
         const actor = entities.find(e => e.id === id);
-        if (!actor || actor.currentEP < 100) return;
+        if (!actor || actor.currentEP < actor.maxEP) return;
 
         // 必殺技消費
         actor.currentEP = 0;
@@ -528,6 +524,61 @@ document.addEventListener('DOMContentLoaded', () => {
         window.updateUI();
     };
 
+    // キャストリス用・味方のHP消費関数 (フックから呼べるようにする)
+    window.consumeAlliesHP = function(ratio) {
+        const allies = entities.filter(e => !e.isEnemy && !e.isSummon);
+        let totalConsumed = 0;
+        
+        allies.forEach(ally => {
+            const consumed = ally.currentHP * ratio;
+            ally.currentHP = Math.max(1, ally.currentHP - consumed);
+            totalConsumed += consumed;
+        });
+
+        // キャストリスがいる場合、新蕾を増やす
+        const castorice = allies.find(e => e.build && e.build.characterId === 'castorice');
+        if (castorice) {
+            const hasNetherwing = entities.some(e => e.isSummon && e.name === '死竜');
+            if (!hasNetherwing) {
+                castorice.currentEP = Math.min(castorice.maxEP, castorice.currentEP + totalConsumed);
+            }
+        }
+        window.updateUI();
+    };
+
+    // キャストリス用・味方の回復（治癒）関数
+    window.healAllies = function(amount) {
+        const allies = entities.filter(e => !e.isEnemy && !e.isSummon);
+        let totalHealed = 0;
+        
+        allies.forEach(ally => {
+            const before = ally.currentHP;
+            ally.currentHP = Math.min(ally.maxHP, ally.currentHP + amount);
+            const actualHealed = ally.currentHP - before;
+            totalHealed += actualHealed;
+        });
+
+        // キャストリスがいる場合、新蕾を増やす
+        const castorice = allies.find(e => e.build && e.build.characterId === 'castorice');
+        if (castorice) {
+            const hasNetherwing = entities.some(e => e.isSummon && e.name === '死竜');
+            if (!hasNetherwing) {
+                // 治癒量の100%を新蕾に変換 (簡易化のため上限処理は省略)
+                castorice.currentEP = Math.min(castorice.maxEP, castorice.currentEP + totalHealed);
+            }
+        }
+        window.updateUI();
+    };
+
+    // 特殊召喚関数 (フックから呼べるようにする)
+    window.summonEntity = function(name, speed) {
+        const summon = new Entity(`summon_${nextId++}`, name, false, speed, 0, 0, 0, 'none');
+        summon.isSummon = true;
+        summon.actionValue = 0; // 行動順を100%早める（即時行動）
+        entities.push(summon);
+        window.updateUI();
+    };
+
     // ターン消費アクション (通常攻撃・戦闘スキル)
     btnAttack.addEventListener('click', () => {
         executeTurnAction('attack');
@@ -552,8 +603,26 @@ document.addEventListener('DOMContentLoaded', () => {
     function executeTurnAction(type) {
         const actor = state.activeEntity;
         
-        if (type === 'attack') actor.gainEP(20);
-        else if (type === 'skill') actor.gainEP(30);
+        const allies = entities.filter(e => !e.isEnemy);
+        const enemies = entities.filter(e => e.isEnemy);
+        const ctx = { self: actor, allies, enemies };
+
+        if (type === 'attack') {
+            actor.gainEP(20);
+            if (actor.hooks?.onAttackUse) {
+                for (const h of actor.hooks.onAttackUse) {
+                    try { h.fn(ctx); } catch (err) { console.error(`[attack hook ${h.source}]`, err); }
+                }
+            }
+        }
+        else if (type === 'skill') {
+            actor.gainEP(30);
+            if (actor.hooks?.onSkillUse) {
+                for (const h of actor.hooks.onSkillUse) {
+                    try { h.fn(ctx); } catch (err) { console.error(`[skill hook ${h.source}]`, err); }
+                }
+            }
+        }
         
         // ターン終了処理
         actor.tickBuffs();

@@ -102,56 +102,6 @@
         <section id="tab-combat" class="tab-pane">
             <div class="panel setup-panel" id="combat-setup-panel">
                 <h2>キャラクター設定</h2>
-                <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
-                    <div class="input-group">
-                        <label>名前:</label>
-                        <input type="text" id="char-name" value="テストキャラ" style="width: 100px;">
-                    </div>
-                    <div class="input-group">
-                        <label>基礎速度:</label>
-                        <input type="number" id="char-base-spd" value="100" style="width: 60px;">
-                    </div>
-                    <div class="input-group">
-                        <label>速度加算:</label>
-                        <input type="number" id="char-bonus-spd" value="0" style="width: 60px;" step="0.1">
-                    </div>
-                    <div class="input-group">
-                        <label>EP効率(%):</label>
-                        <input type="number" id="char-err" value="100" style="width: 70px;" step="0.1">
-                    </div>
-                </div>
-                <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
-                    <div class="input-group">
-                        <label>光円錐:</label>
-                        <select id="char-lc" style="padding: 0.3rem;">
-                            <option value="none">なし</option>
-                            <option value="ddd">ダンス・ダンス・ダンス (必殺後24%短縮)</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>トンネル遺物 (2枠):</label>
-                        <div style="display: flex; gap: 5px;">
-                            <select id="char-relic1" style="padding: 0.3rem;">
-                                <option value="none">なし</option>
-                                <option value="eagle">昼夜の狭間を翔ける鷹</option>
-                                <option value="messenger">メッセンジャー</option>
-                            </select>
-                            <select id="char-relic2" style="padding: 0.3rem;">
-                                <option value="none">なし</option>
-                                <option value="eagle">昼夜の狭間を翔ける鷹</option>
-                                <option value="messenger">メッセンジャー</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="input-group">
-                        <label>次元界オーナメント:</label>
-                        <select id="char-ornament" style="padding: 0.3rem;">
-                            <option value="none">なし</option>
-                            <option value="vonwacq">生命のウェンワーク</option>
-                        </select>
-                    </div>
-                    <button id="add-char-btn" class="primary-btn" style="margin-bottom: 2px;">追加</button>
-                </div>
 
                 <div class="build-loader-section">
                     <h3>保存ビルドから追加</h3>
@@ -174,6 +124,8 @@
             <div class="combat-area-ui" id="combat-area" style="display:none;">
                 <!-- End Combat Button -->
                 <button id="btn-end-combat" class="btn-end-combat">戦闘終了</button>
+                <button id="btn-test-damage" class="btn-end-combat" style="background-color: #aa3333; margin-left: 10px;">テスト被弾 (-30%HP)</button>
+                <button id="btn-test-heal" class="btn-end-combat" style="background-color: #33aa33; margin-left: 10px;">テスト回復 (+1000HP)</button>
                 
                 <!-- Status Modal -->
                 <div id="status-modal" class="status-modal" style="display: none;">

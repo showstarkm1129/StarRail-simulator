@@ -250,10 +250,30 @@ Registry.character.add({
     ],
 
     hooks: {
-        // onTurnStart(ctx)   {},
-        // onTurnEnd(ctx)     {},
-        // onAttack(ctx)      {},
-        // onHit(ctx)         {},
-        // onSkillUse(ctx)    {},
+        onUltUse: [
+            {
+                source: 'castorice_ult',
+                fn: (ctx) => {
+                    if (typeof window !== 'undefined' && window.summonEntity) {
+                        const hasNetherwing = ctx.allies.some(e => e.isSummon && e.name === '死竜');
+                        if (!hasNetherwing) {
+                            window.summonEntity('死竜', 90); // 基礎速度は仮に90
+                        }
+                    }
+                }
+            }
+        ],
+        onSkillUse: [
+            {
+                source: 'castorice_skill',
+                fn: (ctx) => {
+                    if (typeof window !== 'undefined' && window.consumeAlliesHP) {
+                        const hasNetherwing = ctx.allies.some(e => e.isSummon && e.name === '死竜');
+                        const ratio = hasNetherwing ? 0.40 : 0.30;
+                        window.consumeAlliesHP(ratio);
+                    }
+                }
+            }
+        ]
     },
 });

@@ -72,6 +72,8 @@ export function buildToEntity(build, opts = {}) {
     // 拡張プロパティ(既存ロジックには無い情報を後付け)
     entity.build = build;
     entity.finalStats = final;
+    entity.maxHP = final.derived.hp || 1000;
+    entity.currentHP = entity.maxHP;
     entity.hooks = StatComputer.collectHooks(build);
     entity.setCounts = countAllSets(build.relics);
 
