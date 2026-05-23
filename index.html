@@ -22,8 +22,64 @@
     <main class="app-content">
         <!-- 速度・行動回数タブ -->
         <section id="tab-speed" class="tab-pane active">
+            <style>
+                .sub-tab-btn.active {
+                    background-color: var(--primary-color) !important;
+                    border-color: var(--primary-color) !important;
+                }
+                .sub-tab-pane { display: none; }
+                .sub-tab-pane.active { display: block; }
+                .compact-table th, .compact-table td {
+                    padding: 4px 8px;
+                    font-size: 0.9em;
+                }
+                .btn-spinner {
+                    background: rgba(255, 255, 255, 0.1);
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    color: white;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: bold;
+                    transition: all 0.2s;
+                }
+                .btn-spinner:hover:not(:disabled) {
+                    background: rgba(255, 255, 255, 0.2);
+                }
+                .btn-spinner:disabled {
+                    opacity: 0.3;
+                    cursor: not-allowed;
+                }
+                input[type=number]::-webkit-inner-spin-button, 
+                input[type=number]::-webkit-outer-spin-button { 
+                    -webkit-appearance: none; 
+                    margin: 0; 
+                }
+                input.spinner-input {
+                    -moz-appearance: textfield;
+                    width: 40px; 
+                    text-align: center; 
+                    background: rgba(0,0,0,0.2); 
+                    border: 1px solid var(--border-color); 
+                    color: white; 
+                    border-radius: 4px;
+                    padding: 2px;
+                }
+            </style>
             <div class="panel">
-                <h2>速度と行動値</h2>
+                <div class="sub-tabs" style="display: flex; gap: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                    <button class="sub-tab-btn active" data-sub-target="sub-speed-basic" style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-color); cursor: pointer; border-radius: 4px; transition: all 0.2s;">基本計算</button>
+                    <button class="sub-tab-btn" data-sub-target="sub-speed-threshold" style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-color); cursor: pointer; border-radius: 4px; transition: all 0.2s;">速度閾値表</button>
+                    <button class="sub-tab-btn" data-sub-target="sub-speed-advanced" style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-color); cursor: pointer; border-radius: 4px; transition: all 0.2s;">行動順シミュ</button>
+                </div>
+
+                <!-- Sub Tab 1: Basic -->
+                <div id="sub-speed-basic" class="sub-tab-pane active">
+                    <h2>速度と行動値</h2>
                 
                 <div class="mode-group">
                     <label for="mode-select">コンテンツ:</label>
@@ -95,6 +151,117 @@
                         </tbody>
                     </table>
                 </div>
+                </div>
+
+                <!-- Sub Tab 2: Thresholds -->
+                <div id="sub-speed-threshold" class="sub-tab-pane">
+                    <h2>速度閾値表</h2>
+                    <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1.5rem;">
+                        <label for="threshold-speed-input">キャラクター速度:</label>
+                        <input type="number" id="threshold-speed-input" value="180" min="1" step="0.1" style="width: 150px;">
+                    </div>
+                    <div class="cycle-box">
+                        <table class="cycle-table compact-table">
+                            <thead>
+                                <tr>
+                                    <th>代表的なコンテンツ</th>
+                                    <th>行動値 (AV)</th>
+                                    <th>行動回数</th>
+                                    <th>行動回数が増える速度</th>
+                                    <th>おすすめ速度</th>
+                                </tr>
+                            </thead>
+                            <tbody id="threshold-tbody">
+                                <!-- JS Generated -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Sub Tab 3: Advanced Simulator -->
+                <div id="sub-speed-advanced" class="sub-tab-pane">
+                    <h2>行動順シミュレーター</h2>
+                    <p class="help-text" style="margin-bottom: 1rem;">ターンごとに加速や行動短縮を適用し、実行動値の推移を確認できます。</p>
+                    <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                        <div class="input-group" style="margin-bottom: 0;">
+                            <label for="adv-base-speed">基礎速度:</label>
+                            <input type="number" id="adv-base-speed" value="100" min="1" step="1" style="width: 120px;">
+                        </div>
+                        <div class="input-group" style="margin-bottom: 0;">
+                            <label for="adv-pre-speed">戦闘開始前速度:</label>
+                            <input type="number" id="adv-pre-speed" value="148" min="1" step="0.1" style="width: 120px;">
+                        </div>
+                        <div class="input-group" style="margin-bottom: 0;">
+                            <label for="adv-threshold">目標閾値 (AV):</label>
+                            <input type="number" id="adv-threshold" value="150" min="1" step="1" style="width: 120px;">
+                        </div>
+                    </div>
+                    
+                    <!-- Buff Modal for Advanced Simulator -->
+                    <div id="adv-buff-modal" class="status-modal-content" style="display: none; position: absolute; z-index: 1000; max-width: 380px; margin: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+                        <span class="close-modal" id="close-adv-buff-modal">&times;</span>
+                        <h2 style="color: var(--accent-gold); margin-bottom: 15px; font-size: 1.2rem;">ターン <span id="adv-buff-modal-turn"></span> のバフ設定</h2>
+                        <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <label style="font-size: 0.9em; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                    <input type="checkbox" id="enable-eagle"> 鷹4 (25%行動順短縮)
+                                </label>
+                                <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <button class="btn-spinner" id="btn-eagle-minus" disabled>-</button>
+                                    <input type="number" id="adv-buff-eagle" class="spinner-input" value="1" min="1" max="10" disabled>
+                                    <button class="btn-spinner" id="btn-eagle-plus" disabled>+</button>
+                                    <span style="font-size: 0.8em; color: var(--text-muted); margin-left: 2px;">重</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <label style="font-size: 0.9em; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                    <input type="checkbox" id="enable-ddd"> DDD (24%行動順短縮)
+                                </label>
+                                <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <button class="btn-spinner" id="btn-ddd-minus" disabled>-</button>
+                                    <input type="number" id="adv-buff-ddd" class="spinner-input" value="1" min="1" max="10" disabled>
+                                    <button class="btn-spinner" id="btn-ddd-plus" disabled>+</button>
+                                    <span style="font-size: 0.8em; color: var(--text-muted); margin-left: 2px;">重</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">
+                                <label style="font-size: 0.9em; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                    <input type="checkbox" id="adv-buff-immediate"> 即時行動
+                                </label>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <label style="font-size: 0.9em; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                    <input type="checkbox" id="enable-messenger"> メッセ4 (基礎速度+12%)
+                                </label>
+                                <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <button class="btn-spinner" id="btn-messenger-minus" disabled>-</button>
+                                    <input type="number" id="adv-buff-messenger" class="spinner-input" value="1" min="1" max="10" disabled>
+                                    <button class="btn-spinner" id="btn-messenger-plus" disabled>+</button>
+                                    <span style="font-size: 0.8em; color: var(--text-muted); margin-left: 2px;">重</span>
+                                </div>
+                            </div>
+                            <button id="adv-buff-modal-apply" class="primary-btn" style="margin-top: 0.8rem; padding: 8px;">適用 (Enter)</button>
+                        </div>
+                    </div>
+                    
+                    <div class="cycle-box">
+                        <table class="cycle-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 60px;">ターン</th>
+                                    <th>効果適用 (チェックしたターンに適用)</th>
+                                    <th>適用速度</th>
+                                    <th>実行動値</th>
+                                    <th>累計行動値</th>
+                                </tr>
+                            </thead>
+                            <tbody id="advanced-tbody">
+                                <!-- JS Generated -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
             </div>
         </section>
 
