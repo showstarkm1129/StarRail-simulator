@@ -45,7 +45,12 @@ function makeStatsAccumulator() {
             // 未知の枠キーが来た場合も受け入れる(ただし警告)。
             // 例: hooks 内で動的に新枠を足す等を許容するため。
             if (!(key in raw)) raw[key] = 0;
-            raw[key] += value;
+            
+            if (key === STAT.SEP_MULT) {
+                raw[key] = (1 + raw[key]) * (1 + value) - 1;
+            } else {
+                raw[key] += value;
+            }
             (contributions[key] ||= []).push({ source: source ?? 'unknown', value });
         },
         addAll(statsObj, source) {
@@ -238,9 +243,24 @@ function collectHooks(build) {
         if (typeof fn !== 'function') return;
         (hooks[key] ||= []).push({ fn, source: sourceLabel });
     };
+    // 1 個のフック定義値を受け取り hooks[key] に正規化して積む。
+    //   許容形式:
+    //     - function                        … テンプレ例の素朴な書き方 (onTurnStart(ctx) {})
+    //     - { fn, source }                  … 単発オブジェクト
+    //     - 上記の配列                       … Castorice/黄泉 等の複数 hook 宣言
+    const pushItem = (key, item, defaultLabel) => {
+        if (item == null) return;
+        if (typeof item === 'function') {
+            push(key, item, defaultLabel);
+        } else if (Array.isArray(item)) {
+            for (const sub of item) pushItem(key, sub, defaultLabel);
+        } else if (typeof item.fn === 'function') {
+            push(key, item.fn, item.source || defaultLabel);
+        }
+    };
     const collectFrom = (obj, sourceLabel) => {
         if (!obj) return;
-        for (const [k, v] of Object.entries(obj)) push(k, v, sourceLabel);
+        for (const [k, v] of Object.entries(obj)) pushItem(k, v, sourceLabel);
     };
 
     const ch = Registry.character.get(build.characterId);

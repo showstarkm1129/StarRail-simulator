@@ -46,6 +46,10 @@ export const STAT = Object.freeze({
     RES_PEN: 'resPen',
     // 被ダメ係数枠
     DMG_TAKEN: 'dmgTaken',
+    // 確定ダメージ
+    FIXED_DMG: 'fixedDmg',
+    // 別枠乗算
+    SEP_MULT: 'sepMult',
     // 撃破特効
     BREAK_EFFECT: 'breakEffect',
     // EP回復効率 (ゲーム既定 100% に対する加算分。derived で 1 + energyRegen を返す)

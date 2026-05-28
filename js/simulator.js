@@ -16,6 +16,15 @@ class Entity {
         this.maxHP = 1000;
         this.currentHP = 1000;
         this.isSummon = false;
+
+        // per-entity マーク (集真赤などの per-enemy stack 状態)
+        //   key = mark type id, value = { count, max, displayName }
+        //   simulator は数値のみ管理。倍率/効果はキャラ側のフックで処理する。
+        this.marks = {};
+
+        // リソース表示メタ (キャラ側 resource をそのまま参照)
+        //   buildToEntity で entity.resource に設定される。未設定なら 'EP'。
+        this.resource = null;
         
         // セット効果フラグ (setCounts が後から付与された場合にも対応するフォールバック)
         this.hasEagle4     = (this.setCounts?.eagle     >= 4) || (this.equipment.relic1 === 'eagle'     && this.equipment.relic2 === 'eagle');
@@ -76,6 +85,10 @@ class Entity {
 
     gainEP(baseAmount) {
         if (this.isEnemy) return;
+        // 非標準リソース (例: 黄泉の残夢 resource.kind='nihility_charge') を持つキャラは
+        // 通常攻撃/戦闘スキルの energyGain では加算しない。
+        // リソースの蓄積は各キャラ側 hook (onSkillUse/onAllySkillUse 等) で行う。
+        if (this.resource?.kind && this.resource.kind !== 'energy') return;
         this.currentEP = Math.min(this.maxEP, this.currentEP + baseAmount * this.err);
     }
 }
@@ -248,17 +261,28 @@ document.addEventListener('DOMContentLoaded', () => {
     // 戦闘開始
     startBtn.addEventListener('click', () => {
         if (entities.length === 0) return alert('キャラクターを追加してください');
-        
+
         // ダミー敵の追加
         entities.push(new Entity('e1', 'ダミーエネミーA', true, 120, 0, 0, 0, 'none'));
         entities.push(new Entity('e2', 'ダミーエネミーB', true, 100, 0, 0, 0, 'none'));
-        
+
         state.phase = 'WAITING_ACTION';
         state.currentAV = 0;
-        
+
+        // 戦闘開始フック (onCombatStart) を全味方に対して発火
+        const allies = entities.filter(e => !e.isEnemy);
+        const enemies = entities.filter(e => e.isEnemy);
+        for (const ally of allies) {
+            if (!Array.isArray(ally.hooks?.onCombatStart)) continue;
+            const ctx = { self: ally, allies, enemies };
+            for (const h of ally.hooks.onCombatStart) {
+                try { h.fn(ctx); } catch (err) { console.error(`[combatStart hook ${h.source}]`, err); }
+            }
+        }
+
         combatSetupPanel.style.display = 'none';
         combatArea.style.display = 'block';
-        
+
         nextTurn();
     });
 
@@ -356,12 +380,33 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }
 
+        // リソース表示ラベル (黄泉=残夢, Castorice=新蕾, それ以外=EP)
+        const resourceLabel = entity.resource?.displayName || 'EP';
+
+        // marks (集真赤など per-entity stack) の HTML
+        let marksHtml = '';
+        if (entity.marks && Object.keys(entity.marks).length > 0) {
+            const marksList = Object.entries(entity.marks)
+                .filter(([, m]) => m.count > 0)
+                .map(([, m]) => `<span class="buff-badge" style="margin-right:5px;">${m.displayName} ${m.count}/${m.max}</span>`)
+                .join('');
+            if (marksList) {
+                marksHtml = `
+                    <div class="status-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                        <span>マーク</span>
+                        <div>${marksList}</div>
+                    </div>
+                `;
+            }
+        }
+
         statusModalBody.innerHTML = `
             ${statsHtml}
             <div class="status-item">
-                <span>EP</span>
+                <span>${resourceLabel}</span>
                 <strong>${Math.floor(entity.currentEP)} / ${entity.maxEP}</strong>
             </div>
+            ${marksHtml}
             <div class="status-item">
                 <span>速度</span>
                 <strong>${entity.speed.toFixed(1)} <span style="font-size:0.8rem; color:var(--text-muted);">(基礎${entity.baseSpd} + 加算${entity.bonusSpd.toFixed(1)})</span></strong>
@@ -385,7 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
         entities.sort((a, b) => a.actionValue - b.actionValue);
         const nextActor = entities[0];
         const elapsed = nextActor.actionValue;
-        
+
         // 時間（AV）を進める
         if (elapsed > 0) {
             state.currentAV += elapsed;
@@ -393,10 +438,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.actionValue = Math.max(0, e.actionValue - elapsed);
             });
         }
-        
+
         state.activeEntity = nextActor;
         state.phase = 'WAITING_ACTION';
-        
+
+        // ターン開始フック (onTurnStart) を発火
+        if (Array.isArray(nextActor.hooks?.onTurnStart)) {
+            const allies = entities.filter(e => !e.isEnemy);
+            const enemies = entities.filter(e => e.isEnemy);
+            const ctx = { self: nextActor, allies, enemies };
+            for (const h of nextActor.hooks.onTurnStart) {
+                try { h.fn(ctx); } catch (err) { console.error(`[turnStart hook ${h.source}]`, err); }
+            }
+        }
+
         updateUI();
     }
 
@@ -465,7 +520,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isReady = e.currentEP >= e.maxEP;
                 const epPercent = (e.currentEP / e.maxEP) * 100;
                 const hpPercent = (e.currentHP / e.maxHP) * 100;
-                
+                const resourceText = e.resource?.displayName
+                    ? `${e.resource.displayName} ${Math.floor(e.currentEP)}/${e.maxEP}`
+                    : `EP ${Math.floor(e.currentEP)}/${e.maxEP}`;
+
                 const div = document.createElement('div');
                 div.className = 'char-hud-item';
                 div.innerHTML = `
@@ -474,6 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </button>
                     <div class="clickable-area" onclick="openStatus('${e.id}')" style="padding: 5px; border-radius: 4px; width: 100%; text-align: center;">
                         <div class="char-name-hud" style="color: ${e.id === actor.id ? 'var(--accent-gold)' : 'white'}; margin: 0 auto;">${e.name}</div>
+                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">${resourceText}</div>
                         <div class="char-bars" style="margin: 0 auto;">
                             <div class="hp-bar"><div class="hp-fill" style="width: ${hpPercent}%"></div></div>
                             <div class="ep-bar"><div class="ep-fill" style="width: ${epPercent}%"></div></div>
@@ -508,6 +567,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     catch (err) { console.error(`[ult hook ${h.source}]`, err); }
                 }
             }
+            // 必殺もアクションとして onAllySkillUse を発火 (簡易版)
+            dispatchAllySkillUse(actor, allies, enemies);
         } else {
             // 旧形態: 旧UIで直接生成された Entity 向けハードコード経路
             // 鷹4セット
@@ -579,6 +640,62 @@ document.addEventListener('DOMContentLoaded', () => {
         window.updateUI();
     };
 
+    // ---- マーク管理 (集真赤 / 持続デバフスタック) -----------------------
+    // entity.marks[markType] = { count, max, displayName }
+    //   黄泉用に追加。汎用 per-entity スタックなので他キャラからも使える。
+    function ensureMark(entity, markType, max, displayName) {
+        if (!entity.marks[markType]) {
+            entity.marks[markType] = { count: 0, max: max ?? 99, displayName: displayName ?? markType };
+        }
+        if (typeof max === 'number')         entity.marks[markType].max = max;
+        if (typeof displayName === 'string') entity.marks[markType].displayName = displayName;
+        return entity.marks[markType];
+    }
+
+    window.applyMark = function(entityId, markType, amount = 1, opts = {}) {
+        const target = entities.find(e => e.id === entityId);
+        if (!target) return 0;
+        const m = ensureMark(target, markType, opts.max, opts.displayName);
+        const before = m.count;
+        m.count = Math.min(m.max, m.count + amount);
+        window.updateUI?.();
+        return m.count - before;
+    };
+
+    window.consumeMarks = function(entityId, markType, maxConsume) {
+        const target = entities.find(e => e.id === entityId);
+        if (!target) return 0;
+        const m = target.marks?.[markType];
+        if (!m || m.count <= 0) return 0;
+        const consumed = Math.min(m.count, maxConsume ?? m.count);
+        m.count -= consumed;
+        window.updateUI?.();
+        return consumed;
+    };
+
+    window.getMarkCount = function(entityId, markType) {
+        const target = entities.find(e => e.id === entityId);
+        return target?.marks?.[markType]?.count ?? 0;
+    };
+
+    // 集真赤の引き継ぎ用: 退場した敵の mark を、同 mark の最多保持敵に移す。
+    // 現状 simulator では敵撃破が起きないため呼び出し側用ヘルパとしてだけ提供。
+    window.transferMarksOnExit = function(exitingId, markType) {
+        const exiting = entities.find(e => e.id === exitingId);
+        if (!exiting) return;
+        const stash = exiting.marks?.[markType]?.count ?? 0;
+        if (stash <= 0) return;
+        // 同じマークの最多保持敵を探す (退場本人は除外)
+        const candidates = entities.filter(e => e.isEnemy && e.id !== exitingId && (e.marks?.[markType]?.count ?? 0) > 0);
+        candidates.sort((a, b) => (b.marks[markType].count) - (a.marks[markType].count));
+        const heir = candidates[0] || entities.find(e => e.isEnemy && e.id !== exitingId);
+        if (!heir) return;
+        const m = ensureMark(heir, markType, exiting.marks[markType].max, exiting.marks[markType].displayName);
+        m.count = Math.min(m.max, m.count + stash);
+        delete exiting.marks[markType];
+        window.updateUI?.();
+    };
+
     // ターン消費アクション (通常攻撃・戦闘スキル)
     btnAttack.addEventListener('click', () => {
         executeTurnAction('attack');
@@ -600,9 +717,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // 任意の味方が行動した時、他味方の onAllySkillUse フックを発火させる。
+    // 簡易版: per-turn ガードなし / デバフ判定なし。
+    // 厳密には HSR 仕様で「攻撃時にデバフ付与された場合のみ +1, 1行動1回まで」だが、
+    // 工数判断で雑表現として実装。actor 自身の onSkillUse とは別経路。
+    function dispatchAllySkillUse(actor, allies, enemies) {
+        for (const ally of allies) {
+            if (ally === actor) continue;
+            if (!Array.isArray(ally.hooks?.onAllySkillUse)) continue;
+            const ctx = { self: ally, actor, allies, enemies };
+            for (const h of ally.hooks.onAllySkillUse) {
+                try { h.fn(ctx); } catch (err) { console.error(`[onAllySkillUse hook ${h.source}]`, err); }
+            }
+        }
+    }
+
     function executeTurnAction(type) {
         const actor = state.activeEntity;
-        
+
         const allies = entities.filter(e => !e.isEnemy);
         const enemies = entities.filter(e => e.isEnemy);
         const ctx = { self: actor, allies, enemies };
@@ -614,6 +746,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     try { h.fn(ctx); } catch (err) { console.error(`[attack hook ${h.source}]`, err); }
                 }
             }
+            dispatchAllySkillUse(actor, allies, enemies);
         }
         else if (type === 'skill') {
             actor.gainEP(30);
@@ -622,6 +755,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     try { h.fn(ctx); } catch (err) { console.error(`[skill hook ${h.source}]`, err); }
                 }
             }
+            dispatchAllySkillUse(actor, allies, enemies);
         }
         
         // ターン終了処理

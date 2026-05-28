@@ -6,5 +6,6 @@ import './bronya.js';
 import './hyacine.js';
 import './Castorice.js';
 import './Evernight.js';
+import './Acheron.js';
 import './testAll.js';
 import './testAllS1.js';

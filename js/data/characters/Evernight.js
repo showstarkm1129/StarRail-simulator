@@ -331,12 +331,16 @@ Registry.character.add({
             duration: 2, tickRule: 'target_turn_end', dispellable: true,
         },
         // ===== 星魂条件付き =====
+        // E1: 敵数による精霊与ダメ階段 — 「本来の N% になる」表現は別枠乗算 (SEP_MULT)
+        //     4体以上 ×1.20 / 3体 ×1.25 / 2体 ×1.30 / 1体 ×1.50。排他で1つだけONにする。
+        //     SEP_MULT は statComputer 側で乗算結合 ((1+a)*(1+b)-1) されるので、
+        //     通常の与ダメUP枠 (DMG_ALL=加算) とは独立に掛かる。
         {
             id: 'e1_spirit_dmg_4plus',
             source: 'eidolon',
-            name: '敵4体以上 精霊ダメ+20% (眠って、長い夜にはいい夢を)',
-            description: 'フィールド上の敵が4体以上の場合、味方の記憶の精霊によるダメージは本来の120%分になる。',
-            stats: { [STAT.DMG_ALL]: 0.20 },
+            name: '敵4体以上 精霊ダメ ×1.20 (眠って、長い夜にはいい夢を・別枠乗算)',
+            description: 'フィールド上の敵が4体以上の場合、味方の記憶の精霊によるダメージは本来の120%分になる (別枠乗算)。',
+            stats: { [STAT.SEP_MULT]: 0.20 },
             minEidolon: 1,
             defaultActive: false,
             target: 'all',
@@ -345,9 +349,9 @@ Registry.character.add({
         {
             id: 'e1_spirit_dmg_3',
             source: 'eidolon',
-            name: '敵3体 精霊ダメ+25% (眠って、長い夜にはいい夢を)',
-            description: 'フィールド上の敵が3体の場合、味方の記憶の精霊によるダメージは本来の125%分になる。',
-            stats: { [STAT.DMG_ALL]: 0.25 },
+            name: '敵3体 精霊ダメ ×1.25 (眠って、長い夜にはいい夢を・別枠乗算)',
+            description: 'フィールド上の敵が3体の場合、味方の記憶の精霊によるダメージは本来の125%分になる (別枠乗算)。',
+            stats: { [STAT.SEP_MULT]: 0.25 },
             minEidolon: 1,
             defaultActive: false,
             target: 'all',
@@ -356,9 +360,9 @@ Registry.character.add({
         {
             id: 'e1_spirit_dmg_2',
             source: 'eidolon',
-            name: '敵2体 精霊ダメ+30% (眠って、長い夜にはいい夢を)',
-            description: 'フィールド上の敵が2体の場合、味方の記憶の精霊によるダメージは本来の130%分になる。',
-            stats: { [STAT.DMG_ALL]: 0.30 },
+            name: '敵2体 精霊ダメ ×1.30 (眠って、長い夜にはいい夢を・別枠乗算)',
+            description: 'フィールド上の敵が2体の場合、味方の記憶の精霊によるダメージは本来の130%分になる (別枠乗算)。',
+            stats: { [STAT.SEP_MULT]: 0.30 },
             minEidolon: 1,
             defaultActive: false,
             target: 'all',
@@ -367,9 +371,9 @@ Registry.character.add({
         {
             id: 'e1_spirit_dmg_1',
             source: 'eidolon',
-            name: '敵1体 精霊ダメ+50% (眠って、長い夜にはいい夢を)',
-            description: 'フィールド上の敵が1体の場合、味方の記憶の精霊によるダメージは本来の150%分になる。',
-            stats: { [STAT.DMG_ALL]: 0.50 },
+            name: '敵1体 精霊ダメ ×1.50 (眠って、長い夜にはいい夢を・別枠乗算)',
+            description: 'フィールド上の敵が1体の場合、味方の記憶の精霊によるダメージは本来の150%分になる (別枠乗算)。',
+            stats: { [STAT.SEP_MULT]: 0.50 },
             minEidolon: 1,
             defaultActive: false,
             target: 'all',

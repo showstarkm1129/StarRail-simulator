@@ -90,7 +90,7 @@ function compareBuilds(buildBefore, buildAfter, opts = {}) {
 
     const factors = {};
     let totalRatio = 1;
-    for (const key of ['atk', 'crit', 'dmgBonus', 'def', 'res', 'taken', 'break']) {
+    for (const key of ['atk', 'crit', 'dmgBonus', 'def', 'res', 'taken', 'break', 'fixedDmg', 'sepMult']) {
         const b = beforeFactors[key];
         const a = afterFactors[key];
         const ratio = b > 0 ? (a / b) : 0;
@@ -117,12 +117,13 @@ function compareBuilds(buildBefore, buildAfter, opts = {}) {
         };
     }
 
-    // 火力総合 (種別別) = atk × crit × dmgBonusByType[t] × def × res × taken × break
+    // 火力総合 (種別別) = atk × crit × dmgBonusByType[t] × def × res × taken × break × fixedDmg × sepMult
     //   factors.total は factors.totals.base のエイリアスとして残す (後方互換)
     factors.totals = {};
     const nonDmgRatio = factors.atk.ratio * factors.crit.ratio
                        * factors.def.ratio * factors.res.ratio
-                       * factors.taken.ratio * factors.break.ratio;
+                       * factors.taken.ratio * factors.break.ratio
+                       * factors.fixedDmg.ratio * factors.sepMult.ratio;
     for (const t of DMG_TYPE_KEYS) {
         const r = nonDmgRatio * factors.dmgBonusByType[t].ratio;
         factors.totals[t] = {
@@ -156,7 +157,7 @@ function compareWithModification(buildBefore, modifyFn, opts = {}) {
 // ---- ダメージ係数の算出 -------------------------------------------------
 
 // 1ビルドの FinalStats から、ダメージ式の各乗算枠の数値を求める。
-//   返り値: { atk, crit, dmgBonus, def, res, taken, break }
+//   返り値: { atk, crit, dmgBonus, def, res, taken, break, fixedDmg, sepMult }
 function computeDamageFactors(finalStats, opts = DEFAULT_OPTIONS) {
     const r = finalStats.raw;
     const d = finalStats.derived;
@@ -206,6 +207,12 @@ function computeDamageFactors(finalStats, opts = DEFAULT_OPTIONS) {
     //   注: STAT.DMG_TAKEN は敵の受けるダメージ係数として envBuffs 等で正の値で加算される
     const takenFactor = 1 + (r[STAT.DMG_TAKEN] || 0);
 
+    // 確定ダメージ
+    const fixedDmgFactor = 1 + (r[STAT.FIXED_DMG] || 0);
+
+    // 別枠乗算
+    const sepMultFactor = 1 + (r[STAT.SEP_MULT] || 0);
+
     // 撃破係数 (靭性が残ってるなら 0.9、撃破中なら 1.0)
     const breakFactor = opts.breakState === 'broken' ? 1.0 : 0.9;
 
@@ -218,6 +225,8 @@ function computeDamageFactors(finalStats, opts = DEFAULT_OPTIONS) {
         res: resFactor,
         taken: takenFactor,
         break: breakFactor,
+        fixedDmg: fixedDmgFactor,
+        sepMult: sepMultFactor,
     };
 }
 

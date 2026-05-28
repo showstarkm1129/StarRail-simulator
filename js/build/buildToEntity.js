@@ -76,6 +76,8 @@ export function buildToEntity(build, opts = {}) {
     entity.currentHP = entity.maxHP;
     entity.hooks = StatComputer.collectHooks(build);
     entity.setCounts = countAllSets(build.relics);
+    // リソース表示メタ (キャラ側 resource: { displayName, max, ... })
+    entity.resource = ch.resource || null;
 
     // hasEagle4 等のフラグは Entity constructor で計算済みだが、
     // setCounts 由来の判定で上書きする(simulator.js 側のフォールバックと同等の動作)。

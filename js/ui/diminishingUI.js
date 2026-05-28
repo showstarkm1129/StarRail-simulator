@@ -1669,10 +1669,11 @@ function renderSelfBuffs() {
                     const stacks = ef.stackable
                         ? (build.selfStacksByEffectId[ekey] ?? ef.stackable.default ?? ef.stackable.max ?? 1)
                         : 1;
+                    const min = ef.stackable?.min ?? (ef.stackable?.default === 0 ? 0 : 1);
                     const stackInputHtml = ef.stackable
-                        ? `<span class="dim-party-effect-stack-wrap" title="累積層数 (1〜${ef.stackable.max})">
+                        ? `<span class="dim-party-effect-stack-wrap" title="累積層数 (${min}〜${ef.stackable.max})">
                               × <input type="number" class="dim-party-effect-stacks dim-self-effect-stacks"
-                                       min="1" max="${ef.stackable.max}" value="${stacks}"
+                                       min="${min}" max="${ef.stackable.max}" value="${stacks}"
                                        data-effect-key="${ekey}">
                               <span class="dim-party-effect-stack-unit">層</span>
                            </span>`
@@ -1728,7 +1729,11 @@ function renderSelfBuffs() {
         inp.addEventListener('input', () => {
             const ekey = inp.dataset.effectKey;
             const max = parseInt(inp.max, 10) || 99;
-            const v = Math.max(1, Math.min(max, parseInt(inp.value, 10) || 1));
+            let min = parseInt(inp.min, 10);
+            if (isNaN(min)) min = 1;
+            let v = parseInt(inp.value, 10);
+            if (isNaN(v)) v = min;
+            v = Math.max(min, Math.min(max, v));
             if (v !== parseInt(inp.value, 10)) inp.value = v;
             build.selfStacksByEffectId[ekey] = v;
             
@@ -1856,7 +1861,11 @@ function renderParty() {
             const idx = parseInt(inp.dataset.idx, 10);
             const ekey = inp.dataset.effectKey;
             const max = parseInt(inp.max, 10) || 99;
-            const v = Math.max(1, Math.min(max, parseInt(inp.value, 10) || 1));
+            let min = parseInt(inp.min, 10);
+            if (isNaN(min)) min = 1;
+            let v = parseInt(inp.value, 10);
+            if (isNaN(v)) v = min;
+            v = Math.max(min, Math.min(max, v));
             if (v !== parseInt(inp.value, 10)) inp.value = v;
             if (!state.party[idx].stacksByEffectId) state.party[idx].stacksByEffectId = {};
             state.party[idx].stacksByEffectId[ekey] = v;
@@ -1964,10 +1973,11 @@ function renderPartySlot(slot, idx) {
                     const stacks = ef.stackable
                         ? (slot.stacksByEffectId?.[ekey] ?? ef.stackable.default ?? ef.stackable.max ?? 1)
                         : 1;
+                    const min = ef.stackable?.min ?? (ef.stackable?.default === 0 ? 0 : 1);
                     const stackInputHtml = ef.stackable
-                        ? `<span class="dim-party-effect-stack-wrap" title="累積層数 (1〜${ef.stackable.max})">
+                        ? `<span class="dim-party-effect-stack-wrap" title="累積層数 (${min}〜${ef.stackable.max})">
                               × <input type="number" class="dim-party-effect-stacks"
-                                       min="1" max="${ef.stackable.max}" value="${stacks}"
+                                       min="${min}" max="${ef.stackable.max}" value="${stacks}"
                                        data-idx="${idx}" data-effect-key="${ekey}">
                               <span class="dim-party-effect-stack-unit">層</span>
                            </span>`
@@ -2294,6 +2304,8 @@ const STATS_ROWS = [
     { key: 'dmgSkill',      label: '戦闘スキルダメ枠', fmt: 'pct',   num: (s) => s.raw.dmgSkill    || 0, category: 'dmg_individual' },
     { key: 'dmgUlt',        label: '必殺ダメ枠',       fmt: 'pct',   num: (s) => s.raw.dmgUlt      || 0, category: 'dmg_individual' },
     { key: 'dmgFollowup',   label: '追加攻撃ダメ枠',   fmt: 'pct',   num: (s) => s.raw.dmgFollowup || 0, category: 'dmg_individual' },
+    { key: 'fixedDmg',      label: '確定ダメージ',     fmt: 'pct',   num: (s) => s.raw.fixedDmg    || 0, category: 'dmg_individual' },
+    { key: 'sepMult',       label: '別枠乗算',         fmt: 'pct',   num: (s) => s.raw.sepMult     || 0, category: 'dmg_individual' },
 
     // ===== 与ダメ合計 (共通+元素+種別) — 加算済み数値 =====
     { key: 'dmgTotalBasic',    label: '通常与ダメ合計 (通常 = 共通+属性+通常)',
@@ -2493,6 +2505,8 @@ const COMPARISON_ROWS = [
     { key: 'res',           label: () => '耐性係数',                                  get: (f) => f.res, category: 'debuff' },
     { key: 'taken',         label: () => '被ダメ係数',                                get: (f) => f.taken, category: 'debuff' },
     { key: 'break',         label: () => '撃破係数',                                  get: (f) => f.break, category: 'break' },
+    { key: 'fixedDmg',      label: () => '確定ダメージ係数',                          get: (f) => f.fixedDmg, category: 'dmg' },
+    { key: 'sepMult',       label: () => '別枠乗算係数',                              get: (f) => f.sepMult, category: 'dmg' },
 ];
 const TOTAL_ROWS = [
     { key: 'total.base',     label: () => '火力総合 (共通)',     get: (f) => f.totals.base, category: 'total' },
