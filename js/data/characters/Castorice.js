@@ -11,7 +11,7 @@
 //   eidolonsDetail: 星魂の説明
 
 import { ELEMENT, PATH } from '../../build/constants.js';
-import { STAT } from '../../build/statKeys.js';
+import { STAT, ELEMENT_DMG_KEYS } from '../../build/statKeys.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.character.add({
@@ -30,12 +30,12 @@ Registry.character.add({
         stats: {
             [STAT.CRIT_RATE]:  0.187,
             [STAT.CRIT_DMG]:   0.133,
-            dmgQuantum:        0.144, // 量子属性ダメージ+14.4%
+            [ELEMENT_DMG_KEYS.quantum]: 0.144, // 量子属性ダメージ+14.4%
         },
         breakdown: [
-            { node: '会心率強化',         stat: STAT.CRIT_RATE,  value: 0.187 },
-            { node: '会心ダメージ強化',   stat: STAT.CRIT_DMG,   value: 0.133 },
-            { node: 'ダメージ強化・量子', stat: 'dmgQuantum',    value: 0.144 },
+            { node: '会心率強化',         stat: STAT.CRIT_RATE,         value: 0.187 },
+            { node: '会心ダメージ強化',   stat: STAT.CRIT_DMG,          value: 0.133 },
+            { node: 'ダメージ強化・量子', stat: ELEMENT_DMG_KEYS.quantum, value: 0.144 },
         ],
     },
 
@@ -119,7 +119,7 @@ Registry.character.add({
             name: '亡者の怒咆、蘇生の鐘',
             type: 'support', target: 'all_ally',
             energyCost: 34000, energyGain: 5, spCost: 0, toughness: 0, hitSplit: [],
-            description: '記憶の精霊「死竜」を召喚し、その行動順を100%早める。同時に、境界「遺世 of 冥域」を展開し、敵全体の全属性耐性をX%ダウンさせる。',
+            description: '記憶の精霊「死竜」を召喚し、その行動順を100%早める。同時に、境界「冥域」を展開し、敵全体の全属性耐性をX%ダウンさせる。',
             maxLevel: { default: 10, withEidolon: 12 }, // E3 で +2
             levels: [
                 { resDown: 0.10 }, { resDown: 0.11 }, { resDown: 0.12 },
@@ -180,7 +180,7 @@ Registry.character.add({
         technique: {
             name: '慟哭、死の兆しを贈る',
             type: 'support',
-            description: '20秒間の「冥茫」状態に入る。戦闘突入時、死竜を召喚しその行動順を100%早め、境界を展開。死竜以外の味方HPを40%消費する。召喚しなかった場合新蕾上限30%を獲得する。',
+            description: '「冥茫」状態に入る。戦闘突入時、死竜を召喚しその行動順を100%早め、境界を展開。死竜以外の味方HPを40%消費する。召喚しなかった場合新蕾上限30%を獲得する。',
         },
     },
 

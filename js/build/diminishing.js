@@ -27,6 +27,18 @@ import { STAT, STAT_DEFAULTS, makeElementDmgKey } from './statKeys.js';
 
 // ---- デフォルト前提 -----------------------------------------------------
 
+/**
+ * ダメージ係数算出オプション。
+ * @typedef {Object} DamageOptions
+ * @property {'atk'|'hp'|'def'|'spd'} refStat   スキル倍率の参照ステータス
+ * @property {number} enemyLevel                防御係数算出用の敵レベル
+ * @property {number} enemyBaseRes              属性耐性係数算出用の敵基礎耐性
+ * @property {'expected'|'crit'} critMode       期待値 or 確定会心
+ * @property {'normal'|'broken'} breakState     靭性残 (0.9) or 撃破中 (1.0)
+ * @property {string|null} elementOverride      null なら character.element を使用
+ */
+
+/** @type {DamageOptions} */
 const DEFAULT_OPTIONS = Object.freeze({
     refStat: 'atk',         // 'atk' | 'hp' | 'def' | 'spd' (どれをスキル倍率の参照に使うか)
     enemyLevel: 80,         // 防御係数算出用

@@ -15,6 +15,9 @@ import { PATH } from '../../build/constants.js';
 import { STAT } from '../../build/statKeys.js';
 import { Registry } from '../../build/registry.js';
 
+// 精霊スキル発動時 敵全体 被ダメ+% (S1~S5)。線形 +4.5%/重畳 → 18.0, 22.5, 27.0, 31.5, 36.0
+const TAKEN_BY_SI = [0.180, 0.225, 0.270, 0.315, 0.360];
+
 Registry.lightcone.add({
     id: 'hyaSky',
     name: '空の虹が消えぬように',
@@ -41,11 +44,30 @@ Registry.lightcone.add({
         // onSkillUse(ctx) {}
     }),
 
-    // パーティ枠経由で focus キャラに与える効果
+    // 火力計算用ミラー: 限界効用逓減の火力計算は enemyEffects を読まないため、
+    // 火力に効く被ダメUP分を partyEffects (DMG_TAKEN, target='all') にも載せる。
+    // enemyEffects 側はシミュ用データ (命中率・継続等) として保持する。
+    partyEffects: (superimpose) => {
+        const taken = TAKEN_BY_SI[Math.max(0, Math.min(4, superimpose - 1))];
+        return [
+            {
+                id: 'hyaSky_spirit_taken_party',
+                source: 'lc',
+                name: `精霊スキル発動時 敵被ダメ+${(taken*100).toFixed(1)}% (2T、同系統非累積)`,
+                description: `記憶の精霊が精霊スキルを発動した時、敵全体の受けるダメージ+${(taken*100).toFixed(1)}%、2T継続。同系統スキルは重ねがけ不可。`,
+                stats: { [STAT.DMG_TAKEN]: taken },
+                defaultActive: false,
+                target: 'all',
+                duration: 2,
+                tickRule: 'target_turn_start',
+                dispellable: false,
+            },
+        ];
+    },
+
+    // パーティ枠経由で focus キャラに与える効果 (シミュ用データ保管庫)
     //   精霊スキル発動時、敵全体の受けるダメージ+18%~36% (2T、同系統と非累積)
-    //   S1=18% / S5=36% / 線形 +4.5%/重畳 → 18.0, 22.5, 27.0, 31.5, 36.0
     enemyEffects: (superimpose) => {
-        const TAKEN_BY_SI = [0.180, 0.225, 0.270, 0.315, 0.360];
         const taken = TAKEN_BY_SI[Math.max(0, Math.min(4, superimpose - 1))];
         return [
             {

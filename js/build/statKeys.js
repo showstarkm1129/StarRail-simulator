@@ -72,7 +72,7 @@ export const ELEMENT_DMG_KEYS = Object.freeze(
     ELEMENT_LIST.reduce((acc, el) => {
         acc[el] = makeElementDmgKey(el);
         return acc;
-    }, {})
+    }, /** @type {Record<string, string>} */ ({}))
 );
 
 // FinalStats.raw の初期 0 セット用の全キー一覧

@@ -1,0 +1,42 @@
+{
+  // 型チェック専用 (出力なし)。Vanilla JS のまま JSDoc/推論で型を検証する。
+  //   npm run check  →  tsc -p tsconfig.json
+  // 「ビルドツール不要」原則は維持: ここでは .js を 1 つもコンパイル出力しない。
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+
+    // 段階的に厳格化できるよう、初期は緩め。
+    // 実在しない変数参照・存在しないプロパティ・import 解決失敗など
+    // 「明確なバグ」だけを検出し、any 由来のノイズは抑える。
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "skipLibCheck": true,
+
+    // バグ検出に有効な追加ルール
+    "noUnusedLocals": false,
+    "noFallthroughCasesInSwitch": true
+  },
+  // 型チェック対象は「計算ロジック層」に絞る。
+  //   js/build (計算/スキーマ) と js/data (データ定義) は型でデグレを防ぐ価値が高い。
+  //   DOM グルー層 (js/ui, js/bootstrap, 非モジュール js/*.js) は Element narrowing 由来の
+  //   ノイズが大きいため対象外とし、構文は ESLint で担保する。
+  "include": [
+    "js/build/**/*.js",
+    "js/data/**/*.js",
+    "server.js",
+    "test/**/*.js",
+    "types/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "coverage"
+  ]
+}

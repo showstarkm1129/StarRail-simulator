@@ -96,8 +96,8 @@ const DEFAULT_VISIBLE_STATS = new Set([
 const STATS_CATEGORIES = {
     basic: '① 基礎ステータス',
     crit: '② 会心関連',
-    dmg_individual: '③ 与ダメバフ (種類別)',
-    dmg_total: '④ 与ダメ合計 (実効値)',
+    dmg_individual: '③ ダメージアップ系',
+    dmg_total: '④ 与ダメージバフ合計',
     debuff: '⑤ デバフ・防御・耐性',
     other: '⑥ その他・特殊',
 };

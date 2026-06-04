@@ -39,7 +39,7 @@ Registry.relicSet.add({
                 defaultActive: false,
                 target: 'all',
                 duration: 1,
-                tickRule: 'turnStart',
+                tickRule: 'target_turn_start',
                 dispellable: false,
             },
         ],

@@ -37,6 +37,26 @@ Registry.lightcone.add({
         // onSkillUse(ctx) {}
     }),
 
+    // 火力計算用ミラー: 火力計算は enemyEffects を読まないため、被ダメUP分を
+    // partyEffects (DMG_TAKEN, target='all') にも載せる。enemyEffects 側はシミュ用に保持。
+    partyEffects: (superimpose) => {
+        const taken = TAKEN_BY_SI[Math.max(0, Math.min(4, superimpose - 1))];
+        return [
+            {
+                id: 'fukoUnmei_taken_party',
+                source: 'lc',
+                name: `追加攻撃命中時 敵被ダメ+${(taken*100).toFixed(1)}% (2T)`,
+                description: `装備キャラの追加攻撃が敵に命中する時、攻撃を受ける敵の被ダメージ+${(taken*100).toFixed(1)}%、2T継続。`,
+                stats: { [STAT.DMG_TAKEN]: taken },
+                defaultActive: false,
+                target: 'all',
+                duration: 2,
+                tickRule: 'target_turn_start',
+                dispellable: false,
+            },
+        ];
+    },
+
     enemyEffects: (superimpose) => {
         const idx = Math.max(0, Math.min(4, superimpose - 1));
         const taken = TAKEN_BY_SI[idx];

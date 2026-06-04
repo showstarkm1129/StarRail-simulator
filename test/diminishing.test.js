@@ -1,0 +1,109 @@
+import { test, before } from 'node:test';
+import assert from 'node:assert/strict';
+import { StatComputer } from '../js/build/statComputer.js';
+import { Diminishing } from '../js/build/diminishing.js';
+import { STAT } from '../js/build/statKeys.js';
+import { registerFixtures, makeFixtureBuild } from './fixtures.js';
+
+const approx = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≈ ${b}`);
+
+before(registerFixtures);
+
+test('computeDamageFactors: 各乗算枠が式どおり', () => {
+    const stats = StatComputer.compute(makeFixtureBuild());
+    const f = Diminishing.computeDamageFactors(stats);
+    approx(f.atk, 1741.2, 1e-3);              // ref_stat = atk
+    approx(f.crit, 1.494);                    // 1 + min(0.494,1)×1.00
+    approx(f.dmgBonus, 1.4888);               // 1 + (dmgAll 0.10 + dmgFire 0.3888)
+    approx(f.def, 0.5);                        // 100/((20+80)+100)
+    approx(f.res, 1.0);
+    approx(f.taken, 1.0);
+    approx(f.break, 0.9);                      // 靭性残
+    approx(f.fixedDmg, 1.0);
+    approx(f.sepMult, 1.0);
+});
+
+test('computeDamageFactors: critMode=crit は確定会心係数', () => {
+    const stats = StatComputer.compute(makeFixtureBuild());
+    const f = Diminishing.computeDamageFactors(stats, { ...Diminishing.DEFAULT_OPTIONS, critMode: 'crit' });
+    approx(f.crit, 2.0); // 1 + critDmg(1.00)
+});
+
+test('computeDamageFactors: breakState=broken は撃破係数1.0', () => {
+    const stats = StatComputer.compute(makeFixtureBuild());
+    const f = Diminishing.computeDamageFactors(stats, { ...Diminishing.DEFAULT_OPTIONS, breakState: 'broken' });
+    approx(f.break, 1.0);
+});
+
+test('computeDamageFactors: スキル種別 breakdown が共通枠 + 種別枠', () => {
+    const build = makeFixtureBuild({
+        envBuffs: [{ stat: STAT.DMG_ULT, value: 0.30, label: 'ult+' }],
+    });
+    const stats = StatComputer.compute(build);
+    const f = Diminishing.computeDamageFactors(stats);
+    approx(f.dmgBonusByType.base, 1.4888);
+    approx(f.dmgBonusByType.ult, 1.4888 + 0.30);
+    approx(f.dmgBonusByType.basic, 1.4888); // basic 枠は無いので base と同じ
+});
+
+test('compareBuilds: 会心ダメ追加で crit 枠だけ比率>1、atk 枠は不変', () => {
+    const before = makeFixtureBuild();
+    const after = Diminishing.addEnvBuff(before, STAT.CRIT_DMG, 0.20, 'CD+');
+    const res = Diminishing.compareBuilds(before, after);
+    assert.equal(res.factors.atk.ratio, 1);
+    assert.ok(res.factors.crit.ratio > 1);
+    // total は各枠の積 → crit 比率と一致 (他枠不変)
+    approx(res.factors.crit.ratio, res.factors.total.ratio, 1e-9);
+});
+
+test('compareWithModification: ヘルパは元ビルドを破壊しない (immutable)', () => {
+    const before = makeFixtureBuild();
+    const snapshot = JSON.stringify(before);
+    const res = Diminishing.compareWithModification(
+        before,
+        b => Diminishing.addEnvBuff(b, STAT.ATK_PERCENT, 0.10, 'ATK+'),
+    );
+    assert.equal(JSON.stringify(before), snapshot); // before は不変
+    assert.ok(res.factors.atk.ratio > 1);           // atk は増えている
+});
+
+test('compareBuilds: info に火力換算しない SPD デルタを情報表示', () => {
+    const before = makeFixtureBuild();
+    const after = Diminishing.addEnvBuff(before, STAT.SPD_FLAT, 12, 'SPD+');
+    const res = Diminishing.compareBuilds(before, after);
+    approx(res.info.spdDelta, 12);
+    // SPD は火力係数に影響しない
+    assert.equal(res.factors.total.ratio, 1);
+});
+
+test('swapRelicMain / setEidolon は存在しないスロット/範囲を安全に扱う', () => {
+    const build = makeFixtureBuild();
+    assert.throws(() => Diminishing.swapRelicMain(build, 'no_slot', 'atk_percent'), /slot/);
+    const e = Diminishing.setEidolon(build, 99);
+    assert.equal(e.eidolon, 6); // [0,6] にクランプ
+});
+
+test('ビルド操作ヘルパは immutable に新ビルドを返す', () => {
+    const build = makeFixtureBuild();
+    const snap = JSON.stringify(build);
+
+    const a = Diminishing.swapRelicMain(build, 'feet', 'atk_percent');
+    a.relics.feet.mainStat = 'def_percent'; // 戻り値の改変は元に影響しない
+    const b = Diminishing.setRelicSet(build, 'head', '__other_set__');
+    const c = Diminishing.setSubs(build, 'body', { CRIT_DMG: 0.1 });
+    const d = Diminishing.addSub(build, 'body', 'CRIT_RATE', 0.05);
+    const e = Diminishing.setLightcone(build, '__lc__', 3);
+
+    assert.equal(JSON.stringify(build), snap, '元ビルドは不変であるべき');
+    assert.equal(b.relics.head.setId, '__other_set__');
+    assert.equal(c.relics.body.subs.CRIT_DMG, 0.1);
+    assert.equal(d.relics.body.subs.CRIT_RATE, 0.05);
+    assert.deepEqual(e.lightcone, { id: '__lc__', superimpose: 3 });
+});
+
+test('存在しないスロットへの helper は明示エラー', () => {
+    const build = makeFixtureBuild();
+    assert.throws(() => Diminishing.setRelicSet(build, 'no_slot', 'x'), /slot/);
+    assert.throws(() => Diminishing.setSubs(build, 'no_slot', {}), /slot/);
+    assert.throws(() => Diminishing.addSub(build, 'no_slot', 'CRIT_RATE', 0.1), /slot/);
+});

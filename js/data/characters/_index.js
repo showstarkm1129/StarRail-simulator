@@ -2,10 +2,12 @@
 // 新キャラを追加したらここに import 1行を加える。
 
 import './template.js';
-import './bronya.js';
-import './hyacine.js';
+import './Bronya.js';
+import './Hyacine.js';
 import './Castorice.js';
 import './Evernight.js';
 import './Acheron.js';
+import './Aventurine.js';
 import './testAll.js';
 import './testAllS1.js';
+import './Cipher.js';
