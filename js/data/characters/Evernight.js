@@ -16,7 +16,7 @@ import { STAT } from '../../build/statKeys.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.character.add({
-    id: 'nagayotsuki',
+    id: 'evernight',
     name: '長夜月',
     element: ELEMENT.ICE,
     path: PATH.REMEMBRANCE,
@@ -42,17 +42,14 @@ Registry.character.add({
     },
 
     // 星魂の常時ステ加算
-    //   E2: 長夜月と「長夜」の会心ダメージ+40%
-    //   E6: 味方全体の全属性耐性貫通+20% (partyEffects で管理、ここにも登録)
+    //   E2: 長夜月と「長夜」の会心ダメージ+40% → 本人(と精霊)だけに乗る常時ステ → eidolons に置く
+    //   E6: 「味方全体」の全属性耐性貫通+20% → チーム全体オーラ → partyEffects (e6_res_pen) のみで管理。
+    //       eidolons には書かない (二重計上防止 & サポート役時に主役へオーラを届けるため)。
+    //       ※ 判断基準: 自分(と召喚物)だけ=eidolons / 味方全体に配る=partyEffects
     eidolons: {
         2: {
             stats: {
                 [STAT.CRIT_DMG]: 0.40,
-            },
-        },
-        6: {
-            stats: {
-                [STAT.RES_PEN]: 0.20,
             },
         },
     },

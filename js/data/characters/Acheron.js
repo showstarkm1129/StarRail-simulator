@@ -258,6 +258,20 @@ Registry.character.add({
             target: 'all',
             duration: 1, tickRule: 'target_turn_end', dispellable: false,
         },
+        {
+            // enemyEffects.e4_ult_taken_up の火力計算用ミラー。
+            // 火力計算は enemyEffects を読まないため partyEffects に DMG_TAKEN で併載する。
+            // 必殺被ダメ限定の枠を全スキル共通の DMG_TAKEN で代用するため、必殺ダメ計算時のみON。
+            id: 'e4_ult_taken_up_party',
+            source: 'eidolon',
+            name: 'E4 必殺被ダメ+8% (戦闘突入時)',
+            description: '戦闘に入った敵は、受ける必殺技のダメージ+8%。**必殺ダメ計算時のみ ON** にしてください (DMG_TAKEN 枠は全スキル種別共通のため誤適用注意)。',
+            stats: { [STAT.DMG_TAKEN]: 0.08 },
+            minEidolon: 4,
+            defaultActive: false,
+            target: 'all',
+            duration: 'permanent', tickRule: 'none', dispellable: false,
+        },
     ],
 
     selfEffects: [

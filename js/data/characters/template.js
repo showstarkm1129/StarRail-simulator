@@ -37,6 +37,13 @@ Registry.character.add({
     },
 
     // 星魂段階別の常時加算ステ。hooks も書ける。
+    //
+    // 【置き場所の判断基準 — 重要】常時加算の星魂効果は1か所だけに書くこと。
+    //   ・「自分(と自分の召喚物)だけ」に乗る常時ステ      → ここ eidolons.<n>.stats
+    //   ・「味方全体に配る」常時ステ(オーラ系)            → partyEffects 側に書く (eidolons には書かない)
+    //   両方に書くと statComputer と partyEffects 収集で二重計上される。
+    //   また味方全体オーラを eidolons に書くと、このキャラをサポート役にした時に
+    //   主役へ効果が届かなくなる (eidolons は本人にしか乗らないため)。
     eidolons: {
         // 1: { stats: {} },
         // 2: { stats: { [STAT.SPD_PERCENT]: 0.10 } },
@@ -68,7 +75,8 @@ Registry.character.add({
     //   defaultActive : 初期 ON / OFF
     //   target        : 'all' (味方全体) / 'single' (メイン火力キャラが対象になった想定でのみ適用)
     //   duration      : 表示用、およびシミュレータ上での生存ターン数
-    //   tickRule      : ターン減少基準 ('caster_turn_end', 'target_turn_end', 'target_turn_start' 等)
+    //   tickRule      : ターン減少基準。許可値は次の4種のみ (表記ゆれ禁止 — 'turnStart' 等は使わない):
+    //                    'target_turn_start' / 'target_turn_end' / 'caster_turn_end' / 'none'
     //   dispellable   : 解除可能か (true/false)
     //   minEidolon?   : 星魂条件 (E1〜E6)。指定時は teammate.eidolon >= minEidolon の場合のみ
     //                    パーティ枠UIに表示される。UI 上では E<n>+ バッジが表示される。
@@ -146,6 +154,15 @@ Registry.character.add({
     selfEffects: [
         // 自身へのバフなどをここに記述
     ],
+    // enemyEffects: 敵へのデバフ・状態異常を記述する棚。
+    //
+    // 【位置づけ — 重要】これは将来の戦闘シミュ用のデータ保管庫。
+    //   ・現状、限界効用逓減タブの火力計算も戦闘シミュも enemyEffects は読まない (未配線)。
+    //   ・命中率(baseChance)・デバフ種別(debuffType)・継続(duration/tickRule)などの
+    //     詳細フィールドは「シミュを実装する時に確定させる暫定スキーマ」。今は厳密でなくてよい。
+    //   ・★火力計算(限界効用逓減)に効かせたい敵デバフ(被ダメUP=DMG_TAKEN / 耐性ダウン=RES_PEN /
+    //     防御ダウン=DEF_DOWN 等)は、当面 partyEffects 側に target:'all' で書くこと。
+    //     enemyEffects にしか書いていないと火力に反映されない (例: 旧 Cipher の被ダメ+40%)。
     enemyEffects: [
         // 例) 敵へのデバフや状態異常
         // {

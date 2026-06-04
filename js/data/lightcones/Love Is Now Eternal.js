@@ -57,7 +57,35 @@ Registry.lightcone.add({
         const verseCD     = VERSE_BY_SI[si];
         const boostMult   = BOOST_BY_SI[si];
         const verseBoost  = verseCD   * boostMult;
+        // 火力計算用ミラー: 「空白」(敵被ダメUP) は enemyEffects にも登録しているが
+        // 火力計算は enemyEffects を読まないため、ここ partyEffects に DMG_TAKEN で併載する。
+        const voidTaken   = VOID_BY_SI[si];
+        const voidBoost   = voidTaken * boostMult;
         return [
+            {
+                id: 'aiWaIma_void_party',
+                source: 'lc',
+                name: `「空白」 敵全体 被ダメ+${(voidTaken*100).toFixed(1)}%`,
+                description: `装備キャラの記憶の精霊が味方単体に精霊スキル発動時、「空白」獲得 → 敵全体の受けるダメージ +${(voidTaken*100).toFixed(1)}%。`,
+                stats: { [STAT.DMG_TAKEN]: voidTaken },
+                defaultActive: false,
+                target: 'all',
+                duration: 'conditional',
+                tickRule: 'none',
+                dispellable: false,
+            },
+            {
+                id: 'aiWaIma_void_boost_party',
+                source: 'lc',
+                name: `「空白」同時所持ブースト 敵被ダメ+${(voidBoost*100).toFixed(2)}%`,
+                description: `「空白」と「詩句」を同時所持時、空白の効果が ${(boostMult*100).toFixed(1)}% 分アップ。`,
+                stats: { [STAT.DMG_TAKEN]: voidBoost },
+                defaultActive: false,
+                target: 'all',
+                duration: 'conditional',
+                tickRule: 'none',
+                dispellable: false,
+            },
             {
                 id: 'aiWaIma_verse',
                 source: 'lc',

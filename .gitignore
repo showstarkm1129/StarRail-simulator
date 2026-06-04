@@ -1,6 +1,11 @@
 # Claude Code / 開発ツール用ローカル設定
 .claude/
 
+# 検証スタック (開発時のみ。アプリ実行時はゼロ依存を維持)
+node_modules/
+coverage/
+*.tsbuildinfo
+
 # OS / エディタ系
 .DS_Store
 Thumbs.db
