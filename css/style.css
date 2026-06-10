@@ -648,6 +648,161 @@ body {
     margin: 0 auto;
 }
 
+/* ===== 2カラム化 + 結果の画面追従 (sticky) =====
+   限界効用逓減タブがアクティブな時だけ app-content を広げる。
+   他タブ(速度・戦闘シミュ)は従来どおり 1000px のまま。 */
+.app-content:has(#tab-diminishing.active) {
+    max-width: 1500px;
+}
+
+/* 入力(左) と 結果(右) の2カラム。右カラムはスクロール追従。
+   右は 340〜440px の細めレールに固定し、左の入力エリアを広く保つ
+   (左が狭すぎると内部の遺物グリッド等があふれるため)。 */
+.dim-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(360px, 33%, 480px);
+    gap: 1.5rem;
+    align-items: start;
+}
+.dim-col-left { min-width: 0; }
+.dim-col-right {
+    min-width: 0;
+    position: sticky;
+    top: 1rem;
+    align-self: start;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+}
+
+/* 画面が狭い時は素直に1カラムへ戻し、追従も解除する。 */
+@media (max-width: 1180px) {
+    .app-content:has(#tab-diminishing.active) { max-width: 1000px; }
+    .dim-main { grid-template-columns: 1fr; }
+    .dim-col-right {
+        position: static;
+        max-height: none;
+        overflow-y: visible;
+    }
+}
+
+/* ===== ステータスアイコン ===== */
+.stat-icon {
+    display: inline-block;
+    vertical-align: -0.18em;
+    flex: 0 0 auto;
+}
+/* アイコン + テキスト の横並び */
+.stat-iconed {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+}
+/* 線画アイコンは少し明るめにして視認性を上げる (属性ジェムは自前の色) */
+.stat-icon:not(.stat-icon-el) {
+    color: var(--accent-gold);
+}
+
+/* 確認用ギャラリー (承認後に削除) */
+.dim-icon-gallery {
+    margin-bottom: 1.2rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background-color: var(--bg-panel);
+}
+.dim-icon-gallery > summary {
+    cursor: pointer;
+    padding: 0.6rem 0.9rem;
+    color: var(--accent-gold);
+    font-size: 0.9rem;
+}
+.dim-icon-gallery-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.6rem 1rem;
+    padding: 1rem;
+}
+.dim-icon-gallery-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-main);
+}
+
+/* ===== 参照ステ・表示項目プリセットのバー ===== */
+.dim-presets {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.8rem;
+    padding: 0.6rem 0.7rem;
+    background-color: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+}
+.dim-presets-label {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-right: 0.2rem;
+}
+.dim-presets-sep {
+    width: 1px;
+    align-self: stretch;
+    background-color: var(--border-color);
+    margin: 0 0.2rem;
+}
+/* チップ = [適用ボタン] (+ カスタムは削除×) を一体表示 */
+.dim-preset-chip {
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.dim-preset-apply {
+    background-color: rgba(255, 255, 255, 0.04);
+    color: var(--text-main);
+    border: none;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.dim-preset-apply:hover {
+    background-color: rgba(212, 175, 55, 0.18);
+    color: var(--accent-gold);
+}
+.dim-preset-del {
+    background-color: rgba(255, 255, 255, 0.02);
+    color: var(--text-muted);
+    border: none;
+    border-left: 1px solid var(--border-color);
+    padding: 0 0.45rem;
+    font-size: 0.9rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.dim-preset-del:hover {
+    background-color: rgba(220, 80, 80, 0.25);
+    color: #ff9a9a;
+}
+.dim-preset-save {
+    background-color: transparent;
+    color: var(--text-muted);
+    border: 1px dashed var(--border-color);
+    border-radius: 4px;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.dim-preset-save:hover {
+    color: var(--accent-gold);
+    border-color: var(--accent-gold);
+}
+
 .dim-title {
     color: var(--accent-gold);
     margin-bottom: 0.5rem;
@@ -761,7 +916,9 @@ body {
 
 .dim-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    /* 実際に使える幅を基準に自動で 2列⇔1列 を切替 (ビューポート幅ではなく
+       カラム幅で折り返すため、2カラム化しても遺物パネルがはみ出さない)。 */
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
     gap: 1rem;
     margin-bottom: 1.5rem;
 }
@@ -835,7 +992,8 @@ body {
 }
 
 .dim-sub-input {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;       /* グリッド列が狭くなっても溢れず縮むようにする */
     background-color: var(--bg-dark);
     color: var(--text-main);
     border: 1px solid var(--border-color);
@@ -855,13 +1013,13 @@ body {
     background-color: var(--bg-panel);
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    padding: 1.2rem;
+    padding: 0.85rem;
 }
 
 .dim-result h3 {
     color: var(--accent-gold);
-    font-size: 1.05rem;
-    margin: 0.8rem 0 0.6rem 0;
+    font-size: 0.95rem;
+    margin: 0.55rem 0 0.3rem 0;
 }
 .dim-result h3:first-child { margin-top: 0; }
 
@@ -927,29 +1085,46 @@ body {
     padding: 0.2rem 0 0.3rem 0;
 }
 
+/* 表計算ソフト風の詰めた結果テーブル。
+   ・CJK が1文字ずつ縦折れしないよう word-break: keep-all
+   ・1列目=項目ラベル(左) / 2列目以降=数値(右寄せ・等幅・折返しなし)
+   ・縦罫線でセルの区切りを出す */
 .dim-result-table {
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 0.8rem;
-    font-size: 0.9rem;
+    margin-bottom: 0.6rem;
+    font-size: 0.8rem;
+    word-break: keep-all;
 }
 
 .dim-result-table th,
 .dim-result-table td {
-    padding: 0.5rem 0.7rem;
+    padding: 0.14rem 0.4rem;
     border-bottom: 1px solid var(--border-color);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
     text-align: left;
+    line-height: 1.3;
+}
+.dim-result-table th:last-child,
+.dim-result-table td:last-child { border-right: none; }
+
+/* 2列目以降 = 数値列: 右寄せ。
+   数値は改行位置が無いので折り返さない。長い説明文(軌跡の合計など)だけ
+   素直に折り返させたいので nowrap は付けない (付けると列幅が膨張し溢れる)。 */
+.dim-result-table th:not(:first-child),
+.dim-result-table td:not(:first-child) {
+    text-align: right;
 }
 
 .dim-result-table th {
     color: var(--text-muted);
     font-weight: normal;
-    font-size: 0.85rem;
 }
 
 .dim-result-table thead th {
     color: var(--accent-gold);
     border-bottom: 2px solid var(--border-color);
+    white-space: nowrap;
 }
 
 .dim-result-table td {
@@ -1121,7 +1296,7 @@ body {
 /* 遺物メインステの2列レイアウト (頭+手/胴+足/球+縄) */
 .dim-relic-main-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
     gap: 0.5rem 1rem;
     margin-bottom: 0.6rem;
 }
@@ -1156,7 +1331,10 @@ body {
     grid-column: 1 / -1;
 }
 .dim-subs-panel .dim-subs-grid {
-    grid-template-columns: repeat(4, 1fr);
+    /* 各行は ラベル(90px)+入力+単位 で最低 ~180px 必要。
+       列をそれ未満に細らせると重なるので floor を 180px に。
+       フル幅で約4列、狭い画面では自動で 3→2→1 列に減る。 */
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
 }
 
 /* ----- サブステ: モード切替タブ ----- */
@@ -1970,10 +2148,11 @@ textarea {
 }
 .dim-table-category-header td {
     color: var(--accent-gold);
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     font-weight: bold;
-    padding: 0.35rem 0.7rem !important;
+    padding: 0.22rem 0.4rem !important;
     border-bottom: 1px solid var(--border-color);
+    text-align: left !important;
 }
 
 /* ===== 自身バフ・デバフ設定 ===== */
