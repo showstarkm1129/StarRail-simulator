@@ -154,9 +154,10 @@ Registry.character.add({
                 let rate = 0.12;
                 if (caster.derived.spd >= 170) rate += 0.12;
                 else if (caster.derived.spd >= 140) rate += 0.06;
-                
-                if ((caster.eidolon || 0) >= 1) rate *= 1.5;
-                if ((caster.eidolon || 0) >= 6) rate *= 1.25;
+
+                const eidolon = caster.meta?.eidolon || 0;
+                if (eidolon >= 1) rate *= 1.5;
+                if (eidolon >= 6) rate *= 1.25;
                 return { [STAT.SEP_MULT]: rate };
             },
             defaultActive: true, target: 'all', duration: 'permanent', dispellable: false,
@@ -170,9 +171,10 @@ Registry.character.add({
                 let rate = 0.08;
                 if (caster.derived.spd >= 170) rate += 0.08;
                 else if (caster.derived.spd >= 140) rate += 0.04;
-                
-                if ((caster.eidolon || 0) >= 1) rate *= 1.5;
-                if ((caster.eidolon || 0) >= 6) rate *= 1.25;
+
+                const eidolon = caster.meta?.eidolon || 0;
+                if (eidolon >= 1) rate *= 1.5;
+                if (eidolon >= 6) rate *= 1.25;
                 return { [STAT.SEP_MULT]: rate };
             },
             defaultActive: false, target: 'all', duration: 'permanent', dispellable: false,

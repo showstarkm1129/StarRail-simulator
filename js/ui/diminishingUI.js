@@ -30,6 +30,7 @@ import {
 import {
     calcManualAllocation, rollsToStatDict, excludeMainStatFromCandidates,
 } from '../build/substatRoller.js';
+import { statIcon, statLabel, ICON_GALLERY_ITEMS } from './statIcons.js';
 
 // ---- UI で扱う「サブステ合計」入力フィールド定義 -----------------------
 
@@ -92,6 +93,47 @@ const DEFAULT_VISIBLE_STATS = new Set([
     'critRate', 'critDmg', 'critExpected',
     'energyRegen', 'dmgOwnElement', 'breakEffect',
 ]);
+
+// ===== 参照ステ・表示項目のショートカット (プリセット) =====
+//   1クリックで「参照ステ + 最終ステ表示項目 + 火力貢献率の表示行」を一括設定する。
+//   ・アタッカー: 撃破特効を除く、ダメージ式に効く全項目を表示 (参照ステ atk/hp のみ差替)
+//   ・サポーター: 速度/EP/効果命中などのサポート指標 + デバフ型の貢献枠
+//   ・カスタム: 現在の表示状態を名前付きで保存 (localStorage、いくつでも追加可)
+const REF_PRESET_STORAGE_KEY = 'srsim.dim.refPresets';
+
+// アタッカー共通の最終ステ表示 (撃破特効は除外)。参照ステ(atk/hp)だけ先頭で差し替える。
+const ATTACKER_DMG_STATS = [
+    'critRate', 'critDmg', 'critExpected',
+    'dmgOwnElement', 'dmgBasic', 'dmgSkill', 'dmgUlt', 'dmgFollowup',
+    'dmgTotalBasic', 'dmgTotalSkill', 'dmgTotalUlt', 'dmgTotalFollowup',
+    'fixedDmg', 'sepMult',
+    'defDown', 'defIgnore', 'defReductionTotal', 'resPen', 'dmgTaken',
+];
+// アタッカー共通の火力貢献率の表示行 (撃破係数は除外)。
+const ATTACKER_DMG_ROWS = [
+    'atk', 'crit',
+    'dmg.base', 'dmg.basic', 'dmg.skill', 'dmg.ult', 'dmg.followup',
+    'def', 'res', 'taken', 'fixedDmg', 'sepMult',
+    'total.base', 'total.basic', 'total.skill', 'total.ult', 'total.followup',
+];
+
+const REF_PRESETS_BUILTIN = [
+    {
+        id: 'atkDealer', name: '攻撃アタッカー', refStat: 'atk',
+        visibleStats: ['atk', ...ATTACKER_DMG_STATS],
+        visibleRows: ATTACKER_DMG_ROWS,
+    },
+    {
+        id: 'hpDealer', name: 'HPアタッカー', refStat: 'hp',
+        visibleStats: ['hp', ...ATTACKER_DMG_STATS],
+        visibleRows: ATTACKER_DMG_ROWS,
+    },
+    {
+        id: 'support', name: 'サポーター', refStat: 'atk',
+        visibleStats: ['spd', 'energyRegen', 'ehr', 'eres', 'hp', 'def', 'critRate', 'critDmg', 'defDown', 'defIgnore', 'resPen', 'dmgTaken'],
+        visibleRows: ['def', 'res', 'taken', 'total.base'],
+    },
+];
 
 const STATS_CATEGORIES = {
     basic: '① 基礎ステータス',
@@ -192,8 +234,20 @@ export function initDiminishingUI() {
 
     root.innerHTML = renderShell();
     bindAll();
+    renderRefPresets();
+    bindRefPresets();
+    renderIconGallery();
     refreshAllForms();
     recompute();
+}
+
+// 確認用: 全ステータスアイコンを名前付きで一覧表示する (承認後に呼び出しごと削除)。
+function renderIconGallery() {
+    const body = document.getElementById('dim-icon-gallery-body');
+    if (!body) return;
+    body.innerHTML = ICON_GALLERY_ITEMS.map(([key, name]) =>
+        `<div class="dim-icon-gallery-item">${statLabel(key, name, { size: 22 })}</div>`
+    ).join('');
 }
 
 // ---- HTML 骨組み -------------------------------------------------------
@@ -207,6 +261,11 @@ function renderShell() {
                 ビルドの一部を変更 → 火力貢献率が自動表示されます。
                 <br><span style="color: var(--text-muted)">※ SPD変化は情報表示のみ。行動回数の影響は「速度・行動回数」タブで別途確認してください。</span>
             </p>
+
+            <details class="dim-icon-gallery" open>
+                <summary>🔍 ステータスアイコン一覧（確認用 / 承認後にこの欄は削除します）</summary>
+                <div id="dim-icon-gallery-body" class="dim-icon-gallery-body"></div>
+            </details>
 
             <div class="dim-build-mgr">
                 <h3 class="dim-build-mgr-title">ビルド管理</h3>
@@ -241,6 +300,8 @@ function renderShell() {
                 <span id="dim-snapshot-status" class="dim-snapshot-status">スナップショット: なし</span>
             </div>
 
+            <div class="dim-main">
+              <div class="dim-col-left">
             <div class="dim-grid">
                 <div class="dim-panel">
                     <h3>キャラ・光円錐</h3>
@@ -389,10 +450,15 @@ function renderShell() {
                     </div>
                 </div>
             </div>
+              </div><!-- /dim-col-left -->
 
+              <div class="dim-col-right">
+            <div id="dim-presets" class="dim-presets"></div>
             <div id="dim-result" class="dim-result"></div>
 
             <div id="dim-char-detail" class="dim-char-detail"></div>
+              </div><!-- /dim-col-right -->
+            </div><!-- /dim-main -->
         </div>
     `;
 }
@@ -1432,16 +1498,22 @@ function gatherTeammateEffects(teammateBuild) {
 
 // 効果1つに対する実際の stats を解決
 //   ef.stats が定義 → そのまま
-//   ef.fromLevel + ef.computeStats が定義 → teammate の Lv と FinalStats を使って動的計算
+//   ef.computeStats が定義 → FinalStats(caster) を使って動的計算
+//     ・ef.fromLevel あり: 該当スキルの Lv と倍率テーブル mult を渡す (Lv 連動効果)
+//     ・ef.fromLevel なし: lv=1, mult=null を渡す (速度/星魂など Lv 非依存の効果。例: サフェル)
 function resolveEffectStats(ef, teammateBuild, teammateStats) {
     if (ef.stats) return ef.stats;
     if (typeof ef.computeStats === 'function') {
-        const ch = Registry.character.get(teammateBuild.characterId);
-        const skill = ch?.skills?.[ef.fromLevel];
-        if (!skill?.levels) return null;
-        const lv = (teammateBuild.traceLevel?.[ef.fromLevel]) || 1;
-        const idx = Math.max(0, Math.min(skill.levels.length - 1, lv - 1));
-        const mult = skill.levels[idx];
+        let lv = 1;
+        let mult = null;
+        if (ef.fromLevel) {
+            const ch = Registry.character.get(teammateBuild.characterId);
+            const skill = ch?.skills?.[ef.fromLevel];
+            if (!skill?.levels) return null;
+            lv = (teammateBuild.traceLevel?.[ef.fromLevel]) || 1;
+            const idx = Math.max(0, Math.min(skill.levels.length - 1, lv - 1));
+            mult = skill.levels[idx];
+        }
         try {
             return ef.computeStats(lv, mult, teammateStats);
         } catch (err) {
@@ -2200,6 +2272,94 @@ function recompute() {
     bindComparisonFilter();
 }
 
+// ===== 参照ステ・表示項目プリセット =====
+
+function loadCustomRefPresets() {
+    try {
+        const arr = JSON.parse(localStorage.getItem(REF_PRESET_STORAGE_KEY) || '[]');
+        return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+}
+function saveCustomRefPresets(arr) {
+    try { localStorage.setItem(REF_PRESET_STORAGE_KEY, JSON.stringify(arr)); }
+    catch (err) { console.warn('[refPresets] 保存に失敗', err); }
+}
+function getAllRefPresets() {
+    return [...REF_PRESETS_BUILTIN, ...loadCustomRefPresets()];
+}
+
+// プリセットを現在の状態へ適用 (参照ステ + 両表示フィルタを一括反映)。
+function applyRefPreset(preset) {
+    if (!preset) return;
+    if (preset.refStat) {
+        state.options.refStat = preset.refStat;
+        const sel = document.getElementById('dim-opt-ref');
+        if (sel) sel.value = preset.refStat;
+    }
+    if (Array.isArray(preset.visibleStats)) state.visibleStats = new Set(preset.visibleStats);
+    if (Array.isArray(preset.visibleRows))  state.visibleRows  = new Set(preset.visibleRows);
+    recompute();
+}
+
+// 現在の設定を名前付きカスタムプリセットとして保存。
+function saveCurrentAsRefPreset() {
+    const name = (prompt('プリセット名を入力してください') || '').trim();
+    if (!name) return;
+    const custom = loadCustomRefPresets();
+    custom.push({
+        id: 'c' + Date.now().toString(36),
+        name,
+        refStat: state.options.refStat,
+        visibleStats: [...state.visibleStats],
+        visibleRows: [...state.visibleRows],
+    });
+    saveCustomRefPresets(custom);
+    renderRefPresets();
+}
+
+function deleteCustomRefPreset(id) {
+    saveCustomRefPresets(loadCustomRefPresets().filter(p => p.id !== id));
+    renderRefPresets();
+}
+
+// プリセットバーを #dim-presets に描画 (built-in 3 種 + カスタム + 保存ボタン)。
+function renderRefPresets() {
+    const wrap = document.getElementById('dim-presets');
+    if (!wrap) return;
+    const custom = loadCustomRefPresets();
+    const chip = (p, isCustom) => `
+        <span class="dim-preset-chip${isCustom ? ' is-custom' : ''}">
+            <button type="button" class="dim-preset-apply" data-preset-id="${p.id}">${escapeHtml(p.name)}</button>
+            ${isCustom ? `<button type="button" class="dim-preset-del" data-preset-id="${p.id}" title="削除">×</button>` : ''}
+        </span>`;
+    wrap.innerHTML = `
+        <span class="dim-presets-label">表示プリセット</span>
+        ${REF_PRESETS_BUILTIN.map(p => chip(p, false)).join('')}
+        ${custom.length ? '<span class="dim-presets-sep"></span>' : ''}
+        ${custom.map(p => chip(p, true)).join('')}
+        <button type="button" id="dim-preset-save" class="dim-preset-save" title="現在の参照ステ・表示項目を保存">＋現在の設定を保存</button>
+    `;
+}
+
+// プリセットバーのクリックを委譲で処理 (内部は再描画されるため bind は1回だけ)。
+function bindRefPresets() {
+    const wrap = document.getElementById('dim-presets');
+    if (!wrap) return;
+    wrap.addEventListener('click', e => {
+        const applyBtn = e.target.closest('.dim-preset-apply');
+        if (applyBtn) {
+            applyRefPreset(getAllRefPresets().find(p => p.id === applyBtn.dataset.presetId));
+            return;
+        }
+        const delBtn = e.target.closest('.dim-preset-del');
+        if (delBtn) {
+            if (confirm('このプリセットを削除しますか?')) deleteCustomRefPreset(delBtn.dataset.presetId);
+            return;
+        }
+        if (e.target.closest('#dim-preset-save')) saveCurrentAsRefPreset();
+    });
+}
+
 // 比較表上部のフィルタチェックボックスの change イベントを bind (renderComparison 毎に再 bind)
 function bindComparisonFilter() {
     const details = document.querySelector('.dim-result-filter');
@@ -2497,10 +2657,10 @@ const COMPARISON_ROWS = [
     { key: 'atk',           label: (opts) => `参照ステ (${factorLabel(opts.refStat)})`, get: (f) => f.atk, category: 'basic_crit' },
     { key: 'crit',          label: () => '会心係数',                                  get: (f) => f.crit, category: 'basic_crit' },
     { key: 'dmg.base',      label: () => '与ダメ枠 (共通)',                            get: (f) => f.dmgBonusByType.base, category: 'dmg' },
-    { key: 'dmg.basic',     label: () => '与ダメ枠 (通常攻撃)',                        get: (f) => f.dmgBonusByType.basic, category: 'dmg' },
-    { key: 'dmg.skill',     label: () => '与ダメ枠 (戦闘スキル)',                      get: (f) => f.dmgBonusByType.skill, category: 'dmg' },
-    { key: 'dmg.ult',       label: () => '与ダメ枠 (必殺技)',                          get: (f) => f.dmgBonusByType.ult, category: 'dmg' },
-    { key: 'dmg.followup',  label: () => '与ダメ枠 (追加攻撃)',                        get: (f) => f.dmgBonusByType.followup, category: 'dmg' },
+    { key: 'dmg.basic',     label: () => '与ダメ枠 (通常)',                            get: (f) => f.dmgBonusByType.basic, category: 'dmg' },
+    { key: 'dmg.skill',     label: () => '与ダメ枠 (スキル)',                          get: (f) => f.dmgBonusByType.skill, category: 'dmg' },
+    { key: 'dmg.ult',       label: () => '与ダメ枠 (必殺)',                            get: (f) => f.dmgBonusByType.ult, category: 'dmg' },
+    { key: 'dmg.followup',  label: () => '与ダメ枠 (追撃)',                            get: (f) => f.dmgBonusByType.followup, category: 'dmg' },
     { key: 'def',           label: () => '防御係数',                                  get: (f) => f.def, category: 'debuff' },
     { key: 'res',           label: () => '耐性係数',                                  get: (f) => f.res, category: 'debuff' },
     { key: 'taken',         label: () => '被ダメ係数',                                get: (f) => f.taken, category: 'debuff' },
@@ -2509,11 +2669,11 @@ const COMPARISON_ROWS = [
     { key: 'sepMult',       label: () => '別枠乗算係数',                              get: (f) => f.sepMult, category: 'dmg' },
 ];
 const TOTAL_ROWS = [
-    { key: 'total.base',     label: () => '火力総合 (共通)',     get: (f) => f.totals.base, category: 'total' },
-    { key: 'total.basic',    label: () => '火力総合 (通常攻撃)',  get: (f) => f.totals.basic, category: 'total' },
-    { key: 'total.skill',    label: () => '火力総合 (戦闘スキル)', get: (f) => f.totals.skill, category: 'total' },
-    { key: 'total.ult',      label: () => '火力総合 (必殺技)',    get: (f) => f.totals.ult, category: 'total' },
-    { key: 'total.followup', label: () => '火力総合 (追加攻撃)',  get: (f) => f.totals.followup, category: 'total' },
+    { key: 'total.base',     label: () => '火力総合 (共通)',   get: (f) => f.totals.base, category: 'total' },
+    { key: 'total.basic',    label: () => '火力総合 (通常)',   get: (f) => f.totals.basic, category: 'total' },
+    { key: 'total.skill',    label: () => '火力総合 (スキル)', get: (f) => f.totals.skill, category: 'total' },
+    { key: 'total.ult',      label: () => '火力総合 (必殺)',   get: (f) => f.totals.ult, category: 'total' },
+    { key: 'total.followup', label: () => '火力総合 (追撃)',   get: (f) => f.totals.followup, category: 'total' },
 ];
 
 function renderComparison(cmp) {
@@ -2556,7 +2716,7 @@ function renderComparison(cmp) {
         ${renderComparisonFilter()}
         <h3>火力貢献率</h3>
         <table class="dim-result-table">
-            <thead><tr><th>項目</th><th>スナップショット</th><th>現在</th><th>比率</th><th>貢献率</th></tr></thead>
+            <thead><tr><th>項目</th><th title="スナップショット(比較基準)">基準</th><th>現在</th><th>比率</th><th>貢献率</th></tr></thead>
             <tbody>
                 ${tbodyHtml}
             </tbody>
@@ -2564,7 +2724,7 @@ function renderComparison(cmp) {
 
         <h3>最終ステータス</h3>
         <table class="dim-result-table">
-            <thead><tr><th>項目</th><th>スナップショット</th><th>現在</th><th>差分</th></tr></thead>
+            <thead><tr><th>項目</th><th title="スナップショット(比較基準)">基準</th><th>現在</th><th>差分</th></tr></thead>
             <tbody>
                 ${renderComparisonStatsRows(cmp.beforeStats, cmp.afterStats)}
             </tbody>

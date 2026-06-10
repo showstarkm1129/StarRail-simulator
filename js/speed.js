@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (targetId === 'sub-speed-threshold') {
                 renderThresholdTable();
             } else if (targetId === 'sub-speed-advanced') {
-                renderAdvancedTable();
+                renderAllAdvPanels();
             }
         });
     });
@@ -260,96 +260,462 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Sub Tab 3: 行動順シミュ ---
-    const advBaseSpeedInput = document.getElementById('adv-base-speed');
-    const advPreSpeedInput = document.getElementById('adv-pre-speed');
-    const advThresholdInput = document.getElementById('adv-threshold');
-    const advancedTbody = document.getElementById('advanced-tbody');
-    
-    // Modal elements
+    // --- Sub Tab 3: 行動順シミュ (複数パネル比較) ---
+    // 各パネルは独立したタイムライン。バフは「ターン開始からの行動値オフセット(発動AV)」で
+    // 発動タイミングを指定でき、ターン内ゲージ計算で正確に反映する。
+    const advPanelsContainer = document.getElementById('adv-panels');
+    const advAddPanelBtn = document.getElementById('adv-add-panel');
+
+    // 共有モーダル要素
     const buffModal = document.getElementById('adv-buff-modal');
     const closeBuffModal = document.getElementById('close-adv-buff-modal');
+    const buffModalPanelLabel = document.getElementById('adv-buff-modal-panel');
     const buffModalTurn = document.getElementById('adv-buff-modal-turn');
     const buffModalApply = document.getElementById('adv-buff-modal-apply');
-    
-    const enableEagle = document.getElementById('enable-eagle');
-    const inputEagle = document.getElementById('adv-buff-eagle');
-    const btnEagleMinus = document.getElementById('btn-eagle-minus');
-    const btnEaglePlus = document.getElementById('btn-eagle-plus');
+    const buffEventList = document.getElementById('adv-buff-event-list');
+    const buffAddEventBtn = document.getElementById('adv-buff-add-event');
 
-    const enableDdd = document.getElementById('enable-ddd');
-    const inputDdd = document.getElementById('adv-buff-ddd');
-    const btnDddMinus = document.getElementById('btn-ddd-minus');
-    const btnDddPlus = document.getElementById('btn-ddd-plus');
+    // バフイベントの種類定義 (使いまわし用にここで一元管理)
+    const EVENT_TYPES = {
+        advance:   { label: '行動値短縮 (%)',   def: 25 },
+        speedFlat: { label: '速度増加 (固定)',  def: 20 },
+        speedPct:  { label: '速度増加 (%基礎)', def: 12 },
+    };
 
-    const inputImmediate = document.getElementById('adv-buff-immediate');
+    const advPanels = [];   // パネル状態の配列
+    let advPanelSeq = 0;  // パネル連番 (名前デフォルト用)
 
-    const enableMessenger = document.getElementById('enable-messenger');
-    const inputMessenger = document.getElementById('adv-buff-messenger');
-    const btnMessengerMinus = document.getElementById('btn-messenger-minus');
-    const btnMessengerPlus = document.getElementById('btn-messenger-plus');
+    // モーダルの編集対象
+    let modalPanelId = null;
+    let modalTurnIndex = -1;
+    let modalEvents = []; // 編集中イベントの作業コピー (適用するまで反映しない)
 
-    let currentEditingTurn = -1;
-    let advancedState = [];
-
-    function setupSpinner(enableCb, inputEl, btnMinus, btnPlus) {
-        if (!enableCb) return;
-        enableCb.addEventListener('change', () => {
-            const isChecked = enableCb.checked;
-            inputEl.disabled = !isChecked;
-            btnMinus.disabled = !isChecked;
-            btnPlus.disabled = !isChecked;
-            if (isChecked) {
-                if (parseInt(inputEl.value) < 1 || isNaN(parseInt(inputEl.value))) {
-                    inputEl.value = 1;
-                }
-            }
-        });
-
-        btnMinus.addEventListener('click', () => {
-            if (!btnMinus.disabled) {
-                let val = parseInt(inputEl.value) || 1;
-                if (val > 1) inputEl.value = val - 1;
-            }
-        });
-
-        btnPlus.addEventListener('click', () => {
-            if (!btnPlus.disabled) {
-                let val = parseInt(inputEl.value) || 1;
-                if (val < 10) inputEl.value = val + 1;
-            }
-        });
+    function escapeAttr(s) {
+        return String(s)
+            .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    setupSpinner(enableEagle, inputEagle, btnEagleMinus, btnEaglePlus);
-    setupSpinner(enableDdd, inputDdd, btnDddMinus, btnDddPlus);
-    setupSpinner(enableMessenger, inputMessenger, btnMessengerMinus, btnMessengerPlus);
-
-    [advBaseSpeedInput, advPreSpeedInput, advThresholdInput].forEach(el => {
-        if(el) el.addEventListener('input', renderAdvancedTable);
-    });
-
-    // Make sure the modal is attached to body for absolute positioning
+    // モーダルを body 直下へ (絶対配置のため)
     if (buffModal && buffModal.parentElement !== document.body) {
         document.body.appendChild(buffModal);
     }
 
-    if (closeBuffModal) {
-        closeBuffModal.addEventListener('click', () => {
-            buffModal.style.display = 'none';
+    // ---- シミュレーション本体 ----
+    // 1ターン分の行動を「ゲージ充填」で計算する。
+    //   ゲージ 0→10000 を speed (AV毎の充填量) で満たす。
+    //   行動値短縮 = ゲージへ即時加算 (value% × 10000)。
+    //   速度増加   = それ以降の充填速度を上げる。
+    //   各イベントは offset(発動AV: ターン開始からの経過AV) の時点で適用。
+    //   ※ offset=0 なら従来の「ターン最初に全適用」と一致する。
+    //   返り値: { actualAV(実消費AV), endSpeed, startSpeed, fired[](各イベントが発動したか) }
+    //   effective: [{ ev, offset }] (各効果を「このターン開始からの発動AV(offset)」へ正規化済み)
+    function simulateTurn(panel, effective) {
+        const base = panel.baseSpeed > 0 ? panel.baseSpeed : 1;
+        const startSpeed = panel.preSpeed > 0 ? panel.preSpeed : 1;
+        const EPS = 1e-9;
+
+        // offset昇順に処理。元のindexを保持して発動有無を返す。
+        const indexed = effective.map((e, i) => ({ e, i }));
+        indexed.sort((a, b) => a.e.offset - b.e.offset);
+        const fired = new Array(effective.length).fill(false);
+
+        let speed = startSpeed;
+        let gauge = 0;
+        let elapsed = 0;
+        let k = 0;
+        let guard = 0;
+
+        while (guard++ < 2000) {
+            const remaining = 10000 - gauge;
+            if (remaining <= EPS) break; // 行動値短縮でゲージが満タンに達した
+
+            const avToComplete = remaining / speed;
+            const completionElapsed = elapsed + avToComplete;
+            const nextOffset = k < indexed.length ? indexed[k].e.offset : Infinity;
+
+            if (completionElapsed <= nextOffset + EPS) {
+                // 次イベントより先に行動が完了
+                elapsed = completionElapsed;
+                break;
+            }
+
+            // 次イベントの発動AVまでゲージを進める
+            gauge += speed * (nextOffset - elapsed);
+            elapsed = nextOffset;
+
+            // 同じ offset のイベントをまとめて適用
+            while (k < indexed.length && indexed[k].e.offset <= nextOffset + EPS) {
+                const { e, i } = indexed[k];
+                const ev = e.ev;
+                fired[i] = true;
+                if (ev.type === 'advance')        gauge += (ev.value / 100) * 10000;
+                else if (ev.type === 'speedFlat') speed += ev.value;
+                else if (ev.type === 'speedPct')  speed += base * (ev.value / 100);
+                k++;
+            }
+        }
+
+        return { actualAV: elapsed, endSpeed: speed, startSpeed, fired };
+    }
+
+    // ---- イベント参照ヘルパ (旧データへの後方互換デフォルト込み) ----
+    function evTiming(ev) { return ev.timing === 'cum' ? 'cum' : 'turn'; }
+    function evOffset(ev) { return Number.isFinite(ev.offset) ? ev.offset : 0; }
+    function evAtAV(ev)   { return Number.isFinite(ev.atAV) ? ev.atAV : 0; }
+    function evAutoLabel(ev) {
+        if (ev.type === 'advance') return `短縮${ev.value}%`;
+        if (ev.type === 'speedFlat') return `速度+${ev.value}`;
+        return `速度+${ev.value}%`;
+    }
+    // 表示名: カスタム名があればそれ、無ければ自動ラベル
+    function evLabel(ev) {
+        return (ev.name && ev.name.trim()) ? ev.name.trim() : evAutoLabel(ev);
+    }
+
+    // テーブルセル用の効果チップ1個分
+    function renderSummaryChip(ev, kind, notFired) {
+        const suffix = kind === 'cum' ? `@累計${evAtAV(ev)}` : `@${evOffset(ev)}AV`;
+        let style;
+        if (notFired) style = 'color:#ff6b6b; text-decoration:line-through; opacity:0.85;';
+        else if (kind === 'cum') style = 'color:#ffd479;'; // 累計AV発動は金色で区別
+        else style = 'color:#a8d5ff;';
+        const title = notFired ? ' title="行動が発動AVより先に完了したため不発"' : '';
+        return `<span style="font-size:0.82em; font-weight:bold; ${style}"${title}>${escapeAttr(evLabel(ev))}${suffix}${notFired ? '(不発)' : ''}</span>`;
+    }
+
+    function renderPanelTable(panel) {
+        const tbody = panel.el && panel.el.tbody;
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        const threshold = panel.threshold > 0 ? panel.threshold : 150;
+        const EPS = 1e-9;
+
+        // パネル全体の「累計AV発動」バフを収集 (どのターンで発動するかは順次判定)
+        const cumPool = [];
+        panel.turns.forEach((td) => {
+            (td.events || []).forEach((ev) => {
+                if (evTiming(ev) === 'cum') cumPool.push({ ev, fired: false });
+            });
+        });
+
+        let cumulativeAV = 0;
+        let turn = 0;
+        let turnsPastThreshold = 0;
+        let hasDrawnWall = false;
+
+        while (turnsPastThreshold < 3) {
+            if (turn >= panel.turns.length) panel.turns.push({ events: [] });
+            const turnData = panel.turns[turn];
+            const cumStart = cumulativeAV;
+
+            // このターンに効く効果を effective list へ正規化
+            //   turn効果: offset そのまま / cum効果: offset = atAV - cumStart (未発動かつ atAV>=cumStart のもの)
+            const effective = [];
+            (turnData.events || []).forEach((ev) => {
+                if (evTiming(ev) === 'turn') effective.push({ ev, offset: evOffset(ev), kind: 'turn' });
+            });
+            cumPool.forEach((c) => {
+                if (!c.fired && evAtAV(c.ev) >= cumStart - EPS) {
+                    effective.push({ ev: c.ev, offset: Math.max(0, evAtAV(c.ev) - cumStart), kind: 'cum', cumRef: c });
+                }
+            });
+
+            const sim = simulateTurn(panel, effective);
+            const actualAV = sim.actualAV;
+
+            // 発動した cum 効果をプール側に記録 (以降のターンで再適用しない)
+            effective.forEach((e, idx) => { if (e.kind === 'cum' && sim.fired[idx]) e.cumRef.fired = true; });
+
+            // サマリ: turn効果(不発含む) + このターンで発動した cum効果のみ
+            const chips = [];
+            effective.forEach((e, idx) => {
+                if (e.kind === 'turn') chips.push(renderSummaryChip(e.ev, 'turn', !sim.fired[idx]));
+                else if (e.kind === 'cum' && sim.fired[idx]) chips.push(renderSummaryChip(e.ev, 'cum', false));
+            });
+            const summary = chips.length ? chips.join(' ') : '<span style="color:var(--text-muted)">-</span>';
+
+            let drawWallHere = false;
+            if (!hasDrawnWall && (cumulativeAV + actualAV) > threshold) {
+                drawWallHere = true;
+                hasDrawnWall = true;
+            }
+            cumulativeAV += actualAV;
+            if (cumulativeAV > threshold) turnsPastThreshold++;
+
+            const speedChanged = Math.abs(sim.endSpeed - sim.startSpeed) > 1e-6;
+            const speedText = speedChanged
+                ? `${sim.startSpeed.toFixed(1)}→${sim.endSpeed.toFixed(1)}`
+                : sim.startSpeed.toFixed(1);
+
+            if (drawWallHere) {
+                const wallTr = document.createElement('tr');
+                wallTr.innerHTML = `
+                    <td colspan="5" style="padding:0;">
+                        <div style="height:6px; background: repeating-linear-gradient(45deg, #ff4757, #ff4757 10px, transparent 10px, transparent 20px); margin:5px 0; opacity:0.8;"></div>
+                        <div style="text-align:center; color:#ff4757; font-size:0.8em; font-weight:bold; margin-bottom:5px; opacity:0.9;">↑ 目標閾値 (${threshold}) 到達 ↓</div>
+                    </td>
+                `;
+                tbody.appendChild(wallTr);
+            }
+
+            const tr = document.createElement('tr');
+            if (cumulativeAV > threshold) tr.style.opacity = '0.4';
+            tr.innerHTML = `
+                <td>${turn + 1}</td>
+                <td>
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <button class="secondary-btn-small adv-buff-setup" data-turn="${turn}" style="padding:2px 8px; font-size:0.8em;">バフ設定</button>
+                        <span style="display:flex; gap:6px; flex-wrap:wrap;">${summary}</span>
+                    </div>
+                </td>
+                <td style="${speedChanged ? 'color:#a8d5ff; font-weight:bold;' : ''}">${speedText}</td>
+                <td>${actualAV.toFixed(2)}</td>
+                <td style="font-weight:bold; color: var(--accent-gold);">${cumulativeAV.toFixed(2)}</td>
+            `;
+            tbody.appendChild(tr);
+
+            turn++;
+            if (turn > 200) break; // 無限ループ防止
+        }
+
+        tbody.querySelectorAll('.adv-buff-setup').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                openBuffModal(panel.id, parseInt(e.currentTarget.getAttribute('data-turn'), 10), e.currentTarget);
+            });
         });
     }
 
-    // Click outside to close
+    function renderAllAdvPanels() {
+        advPanels.forEach(renderPanelTable);
+    }
+
+    function buildPanelDOM(panel) {
+        const card = document.createElement('div');
+        card.className = 'panel';
+        card.style.cssText = 'min-width: 470px; flex: 0 0 auto; padding: 1rem; margin: 0;';
+        card.innerHTML = `
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.8rem;">
+                <input type="text" class="adv-panel-name" value="${escapeAttr(panel.name)}" style="font-weight:bold; font-size:1.05rem; flex:1; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:4px; padding:4px 8px; color:var(--text-color);">
+                <button class="secondary-btn-small adv-panel-remove" title="このパネルを削除" style="padding:2px 10px;">✕</button>
+            </div>
+            <div style="display:flex; gap:0.8rem; flex-wrap:wrap; margin-bottom:1rem;">
+                <div class="input-group" style="margin-bottom:0;">
+                    <label>基礎速度:</label>
+                    <input type="number" class="adv-base-speed" value="${panel.baseSpeed}" min="1" step="1" style="width:90px;">
+                </div>
+                <div class="input-group" style="margin-bottom:0;">
+                    <label>開始前速度:</label>
+                    <input type="number" class="adv-pre-speed" value="${panel.preSpeed}" min="1" step="0.1" style="width:90px;">
+                </div>
+                <div class="input-group" style="margin-bottom:0;">
+                    <label>目標閾値:</label>
+                    <input type="number" class="adv-threshold" value="${panel.threshold}" min="1" step="1" style="width:90px;">
+                </div>
+            </div>
+            <div class="cycle-box" style="margin:0;">
+                <table class="cycle-table">
+                    <thead>
+                        <tr>
+                            <th style="width:46px;">ターン</th>
+                            <th>効果 (発動AV指定可)</th>
+                            <th style="width:96px;">適用速度</th>
+                            <th style="width:70px;">実行動値</th>
+                            <th style="width:78px;">累計</th>
+                        </tr>
+                    </thead>
+                    <tbody class="adv-tbody"></tbody>
+                </table>
+            </div>
+        `;
+
+        panel.el = {
+            card,
+            nameInput: card.querySelector('.adv-panel-name'),
+            baseInput: card.querySelector('.adv-base-speed'),
+            preInput: card.querySelector('.adv-pre-speed'),
+            thrInput: card.querySelector('.adv-threshold'),
+            tbody: card.querySelector('.adv-tbody'),
+        };
+
+        panel.el.nameInput.addEventListener('input', () => {
+            panel.name = panel.el.nameInput.value;
+            if (modalPanelId === panel.id) buffModalPanelLabel.textContent = panel.name;
+        });
+        panel.el.baseInput.addEventListener('input', () => {
+            panel.baseSpeed = parseFloat(panel.el.baseInput.value) || 1;
+            renderPanelTable(panel);
+        });
+        panel.el.preInput.addEventListener('input', () => {
+            panel.preSpeed = parseFloat(panel.el.preInput.value) || 1;
+            renderPanelTable(panel);
+        });
+        panel.el.thrInput.addEventListener('input', () => {
+            panel.threshold = parseFloat(panel.el.thrInput.value) || 1;
+            renderPanelTable(panel);
+        });
+        card.querySelector('.adv-panel-remove').addEventListener('click', () => removeAdvPanel(panel.id));
+
+        return card;
+    }
+
+    function createAdvPanel(initial) {
+        advPanelSeq++;
+        const panel = {
+            id: 'adv-panel-' + advPanelSeq,
+            name: (initial && initial.name) || `キャラ${advPanelSeq}`,
+            baseSpeed: (initial && initial.baseSpeed) || 100,
+            preSpeed: (initial && initial.preSpeed) || 134,
+            threshold: (initial && initial.threshold) || 150,
+            turns: [],
+            el: null,
+        };
+        advPanels.push(panel);
+        advPanelsContainer.appendChild(buildPanelDOM(panel));
+        renderPanelTable(panel);
+        return panel;
+    }
+
+    function removeAdvPanel(id) {
+        const idx = advPanels.findIndex(p => p.id === id);
+        if (idx === -1) return;
+        const [removed] = advPanels.splice(idx, 1);
+        if (removed.el && removed.el.card) removed.el.card.remove();
+        if (modalPanelId === id) buffModal.style.display = 'none';
+        if (advPanels.length === 0) createAdvPanel(); // 最低1枚は残す
+    }
+
+    // ---- バフ設定モーダル (イベントリスト編集) ----
+    function openBuffModal(panelId, turnIndex, anchorEl) {
+        const panel = advPanels.find(p => p.id === panelId);
+        if (!panel) return;
+        while (panel.turns.length <= turnIndex) panel.turns.push({ events: [] });
+
+        modalPanelId = panelId;
+        modalTurnIndex = turnIndex;
+        modalEvents = panel.turns[turnIndex].events.map(ev => ({ ...ev }));
+
+        buffModalPanelLabel.textContent = panel.name;
+        buffModalTurn.textContent = turnIndex + 1;
+        renderModalEvents();
+
+        const rect = anchorEl.getBoundingClientRect();
+        const maxLeft = window.scrollX + window.innerWidth - 480;
+        buffModal.style.top = (window.scrollY + rect.bottom + 5) + 'px';
+        buffModal.style.left = Math.max(10, Math.min(window.scrollX + rect.left, maxLeft)) + 'px';
+        buffModal.style.display = 'block';
+    }
+
+    function renderModalEvents() {
+        buffEventList.innerHTML = '';
+        if (modalEvents.length === 0) {
+            buffEventList.innerHTML = '<p class="help-text" style="margin:0; font-size:0.82em;">効果がありません。「クイック追加」か「＋ 効果を追加」で追加してください。</p>';
+            return;
+        }
+        modalEvents.forEach((ev, idx) => {
+            const row = document.createElement('div');
+            row.style.cssText = 'border:1px solid rgba(255,255,255,0.12); border-radius:6px; padding:6px; display:flex; flex-direction:column; gap:5px;';
+            const typeOpts = Object.entries(EVENT_TYPES).map(([k, v]) =>
+                `<option value="${k}" ${k === ev.type ? 'selected' : ''}>${v.label}</option>`).join('');
+            const isCum = evTiming(ev) === 'cum';
+            const timeVal = isCum ? evAtAV(ev) : evOffset(ev);
+            row.innerHTML = `
+                <div style="display:flex; gap:0.4rem; align-items:center;">
+                    <select class="adv-ev-type" data-idx="${idx}" style="flex:1; font-size:0.82em; padding:3px;">${typeOpts}</select>
+                    <input type="number" class="adv-ev-value" data-idx="${idx}" value="${ev.value}" step="0.1" style="width:64px;" title="効果量">
+                    <button class="secondary-btn-small adv-ev-del" data-idx="${idx}" title="削除" style="padding:2px 8px;">✕</button>
+                </div>
+                <input type="text" class="adv-ev-name" data-idx="${idx}" value="${escapeAttr(ev.name || '')}" placeholder="表示名(任意 例: 鷹25%)" style="font-size:0.8em; padding:3px 5px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:var(--text-color);">
+                <div style="display:flex; gap:0.4rem; align-items:center;">
+                    <select class="adv-ev-timing" data-idx="${idx}" style="font-size:0.8em; padding:3px;">
+                        <option value="turn" ${!isCum ? 'selected' : ''}>発動AV(ターン基準)</option>
+                        <option value="cum" ${isCum ? 'selected' : ''}>累計AVで発動</option>
+                    </select>
+                    <input type="number" class="adv-ev-time" data-idx="${idx}" value="${timeVal}" min="0" step="1" style="width:74px;" title="${isCum ? 'タイムライン全体の累計行動値' : 'ターン開始からの行動値オフセット'}">
+                    <span style="font-size:0.76em; color:var(--text-muted);">${isCum ? '累計AV' : 'AV後'}</span>
+                </div>
+            `;
+            buffEventList.appendChild(row);
+        });
+
+        buffEventList.querySelectorAll('.adv-ev-type').forEach(sel => sel.addEventListener('change', e => {
+            modalEvents[+e.target.dataset.idx].type = e.target.value;
+        }));
+        buffEventList.querySelectorAll('.adv-ev-value').forEach(inp => inp.addEventListener('input', e => {
+            modalEvents[+e.target.dataset.idx].value = parseFloat(e.target.value) || 0;
+        }));
+        buffEventList.querySelectorAll('.adv-ev-name').forEach(inp => inp.addEventListener('input', e => {
+            modalEvents[+e.target.dataset.idx].name = e.target.value;
+        }));
+        buffEventList.querySelectorAll('.adv-ev-timing').forEach(sel => sel.addEventListener('change', e => {
+            modalEvents[+e.target.dataset.idx].timing = e.target.value;
+            renderModalEvents(); // 数値欄の意味(発動AV↔累計AV)を切り替えるため再描画
+        }));
+        buffEventList.querySelectorAll('.adv-ev-time').forEach(inp => inp.addEventListener('input', e => {
+            const ev = modalEvents[+e.target.dataset.idx];
+            const v = Math.max(0, parseFloat(e.target.value) || 0);
+            if (evTiming(ev) === 'cum') ev.atAV = v; else ev.offset = v;
+        }));
+        buffEventList.querySelectorAll('.adv-ev-del').forEach(btn => btn.addEventListener('click', e => {
+            modalEvents.splice(+e.currentTarget.dataset.idx, 1);
+            renderModalEvents();
+        }));
+    }
+
+    function makeEvent(opts) {
+        return {
+            type: (opts && opts.type) || 'advance',
+            value: (opts && opts.value !== undefined) ? opts.value : EVENT_TYPES.advance.def,
+            name: (opts && opts.name) || '',
+            timing: 'turn',
+            offset: 0,
+            atAV: 100,
+        };
+    }
+
+    if (buffAddEventBtn) {
+        buffAddEventBtn.addEventListener('click', () => {
+            modalEvents.push(makeEvent());
+            renderModalEvents();
+        });
+    }
+
+    buffModal.querySelectorAll('.adv-quick-add').forEach(btn => {
+        btn.addEventListener('click', () => {
+            modalEvents.push(makeEvent({
+                type: btn.dataset.type,
+                value: parseFloat(btn.dataset.value) || 0,
+                name: btn.dataset.name || '',
+            }));
+            renderModalEvents();
+        });
+    });
+
+    if (buffModalApply) {
+        buffModalApply.addEventListener('click', () => {
+            const panel = advPanels.find(p => p.id === modalPanelId);
+            if (!panel || modalTurnIndex < 0) { buffModal.style.display = 'none'; return; }
+            while (panel.turns.length <= modalTurnIndex) panel.turns.push({ events: [] });
+            panel.turns[modalTurnIndex].events = modalEvents.map(ev => ({ ...ev }));
+            buffModal.style.display = 'none';
+            renderPanelTable(panel);
+        });
+    }
+
+    if (closeBuffModal) {
+        closeBuffModal.addEventListener('click', () => { buffModal.style.display = 'none'; });
+    }
+
+    // モーダル外クリックで閉じる (削除ボタンで要素がDOMから外れた場合は isConnected で除外)
     document.addEventListener('click', (e) => {
         if (buffModal && buffModal.style.display === 'block') {
-            if (!buffModal.contains(e.target) && !e.target.closest('.btn-buff-setup')) {
+            if (e.target.isConnected && !buffModal.contains(e.target) && !e.target.closest('.adv-buff-setup')) {
                 buffModal.style.display = 'none';
             }
         }
     });
 
-    // Keyboard events
     document.addEventListener('keydown', (e) => {
         if (buffModal && buffModal.style.display === 'block') {
             if (e.key === 'Escape') {
@@ -362,162 +728,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    if (buffModalApply) {
-        buffModalApply.addEventListener('click', () => {
-            if (currentEditingTurn >= 0) {
-                while (advancedState.length <= currentEditingTurn) {
-                    advancedState.push({ eagle: 0, ddd: 0, immediate: 0, messenger: 0 });
-                }
-                advancedState[currentEditingTurn].eagle = enableEagle.checked ? (parseInt(inputEagle.value) || 1) : 0;
-                advancedState[currentEditingTurn].ddd = enableDdd.checked ? (parseInt(inputDdd.value) || 1) : 0;
-                advancedState[currentEditingTurn].immediate = inputImmediate.checked ? 1 : 0;
-                advancedState[currentEditingTurn].messenger = enableMessenger.checked ? (parseInt(inputMessenger.value) || 1) : 0;
-                buffModal.style.display = 'none';
-                renderAdvancedTable();
-            }
-        });
-    }
-
-    function getBuffText(state) {
-        let texts = [];
-        if (state.eagle > 0) texts.push(`鷹4x${state.eagle}`);
-        if (state.ddd > 0) texts.push(`DDDx${state.ddd}`);
-        if (state.immediate > 0) texts.push(`即時x${state.immediate}`);
-        if (state.messenger > 0) texts.push(`メッセ4x${state.messenger}`);
-        return texts.length > 0 ? texts.join(', ') : '<span style="color:var(--text-muted)">-</span>';
-    }
-
-    function renderAdvancedTable() {
-        if (!advancedTbody) return;
-        advancedTbody.innerHTML = '';
-        
-        const baseSpeed = parseFloat(advBaseSpeedInput.value) || 100;
-        const preSpeed = parseFloat(advPreSpeedInput.value) || 100;
-        const threshold = parseFloat(advThresholdInput.value) || 150;
-        
-        let cumulativeAV = 0;
-        let turn = 0;
-        let turnsPastThreshold = 0;
-        let hasDrawnWall = false;
-
-        while (turnsPastThreshold < 3) {
-            if (turn >= advancedState.length) {
-                advancedState.push({ eagle: 0, ddd: 0, immediate: 0, messenger: 0 });
-            }
-            const state = advancedState[turn];
-            
-            // 速度計算
-            let currentSpeed = preSpeed;
-            if (state.messenger > 0) {
-                currentSpeed += (baseSpeed * 0.12) * state.messenger;
-            }
-            
-            // 行動値計算
-            const baseAV = 10000 / currentSpeed;
-            let advanceFraction = 0;
-            advanceFraction += 0.25 * state.eagle;
-            advanceFraction += 0.24 * state.ddd;
-            advanceFraction += 1.0 * state.immediate;
-            
-            // 行動値は0未満にはならない
-            const actualAV = baseAV * Math.max(0, 1 - advanceFraction);
-            
-            let drawWallHere = false;
-            // cumulativeAV + actualAV が閾値を超え、かつ今まで壁を書いていない場合
-            if (!hasDrawnWall && (cumulativeAV + actualAV) > threshold) {
-                drawWallHere = true;
-                hasDrawnWall = true;
-            }
-            
-            cumulativeAV += actualAV;
-            
-            if (cumulativeAV > threshold) {
-                turnsPastThreshold++;
-            }
-            
-            const tr = document.createElement('tr');
-            
-            if (cumulativeAV > threshold) {
-                tr.style.opacity = '0.4';
-            }
-            
-            const buffText = getBuffText(state);
-            
-            const effectsHTML = `
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <button class="secondary-btn-small btn-buff-setup" data-turn="${turn}" style="padding: 2px 8px; font-size: 0.85em;">バフ設定</button>
-                    <span style="font-size: 0.9em; font-weight: bold; color: #a8d5ff;">${buffText}</span>
-                </div>
-            `;
-            
-            tr.innerHTML = `
-                <td>${turn + 1}</td>
-                <td>${effectsHTML}</td>
-                <td style="${state.messenger > 0 ? 'color: #a8d5ff; font-weight: bold;' : ''}">${currentSpeed.toFixed(1)}</td>
-                <td>${actualAV.toFixed(2)}</td>
-                <td style="font-weight: bold; color: var(--accent-gold);">${cumulativeAV.toFixed(2)}</td>
-            `;
-            
-            if (drawWallHere) {
-                const wallTr = document.createElement('tr');
-                wallTr.innerHTML = `
-                    <td colspan="5" style="padding: 0;">
-                        <div style="height: 6px; background: repeating-linear-gradient(45deg, #ff4757, #ff4757 10px, transparent 10px, transparent 20px); margin: 5px 0; opacity: 0.8;"></div>
-                        <div style="text-align: center; color: #ff4757; font-size: 0.85em; font-weight: bold; margin-bottom: 5px; opacity: 0.9;">↑ 目標閾値 (${threshold}) 到達ライン ↓</div>
-                    </td>
-                `;
-                advancedTbody.appendChild(wallTr);
-            }
-            
-            advancedTbody.appendChild(tr);
-            turn++;
-            
-            if (turn > 200) break; // 無限ループ防止
-        }
-        
-        advancedTbody.querySelectorAll('.btn-buff-setup').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const t = parseInt(e.target.getAttribute('data-turn'));
-                currentEditingTurn = t;
-                buffModalTurn.textContent = t + 1;
-                
-                const state = advancedState[t];
-                
-                // Eagle
-                enableEagle.checked = state.eagle > 0;
-                inputEagle.value = state.eagle > 0 ? state.eagle : 1;
-                inputEagle.disabled = !enableEagle.checked;
-                btnEagleMinus.disabled = !enableEagle.checked;
-                btnEaglePlus.disabled = !enableEagle.checked;
-
-                // DDD
-                enableDdd.checked = state.ddd > 0;
-                inputDdd.value = state.ddd > 0 ? state.ddd : 1;
-                inputDdd.disabled = !enableDdd.checked;
-                btnDddMinus.disabled = !enableDdd.checked;
-                btnDddPlus.disabled = !enableDdd.checked;
-
-                // Immediate
-                inputImmediate.checked = state.immediate > 0;
-
-                // Messenger
-                enableMessenger.checked = state.messenger > 0;
-                inputMessenger.value = state.messenger > 0 ? state.messenger : 1;
-                inputMessenger.disabled = !enableMessenger.checked;
-                btnMessengerMinus.disabled = !enableMessenger.checked;
-                btnMessengerPlus.disabled = !enableMessenger.checked;
-                
-                const rect = e.target.getBoundingClientRect();
-                buffModal.style.top = (window.scrollY + rect.bottom + 5) + 'px';
-                buffModal.style.left = Math.max(10, (window.scrollX + rect.left)) + 'px';
-                
-                buffModal.style.display = 'block'; 
-            });
-        });
-    }
+    if (advAddPanelBtn) advAddPanelBtn.addEventListener('click', () => createAdvPanel());
 
     // 初期化処理
     updateUI();
     renderThresholdTable();
-    renderAdvancedTable();
+    if (advPanelsContainer) {
+        createAdvPanel({ name: 'キャラ1' });
+        createAdvPanel({ name: 'キャラ2' });
+    }
 });
