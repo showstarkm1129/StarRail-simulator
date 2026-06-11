@@ -697,36 +697,9 @@ body {
     align-items: center;
     gap: 0.35em;
 }
-/* 線画アイコンは少し明るめにして視認性を上げる (属性ジェムは自前の色) */
+/* 線画アイコンは少し明るめにして視認性を上げる (属性アイコンは自前の色) */
 .stat-icon:not(.stat-icon-el) {
     color: var(--accent-gold);
-}
-
-/* 確認用ギャラリー (承認後に削除) */
-.dim-icon-gallery {
-    margin-bottom: 1.2rem;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    background-color: var(--bg-panel);
-}
-.dim-icon-gallery > summary {
-    cursor: pointer;
-    padding: 0.6rem 0.9rem;
-    color: var(--accent-gold);
-    font-size: 0.9rem;
-}
-.dim-icon-gallery-body {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 0.6rem 1rem;
-    padding: 1rem;
-}
-.dim-icon-gallery-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.9rem;
-    color: var(--text-main);
 }
 
 /* ===== 参照ステ・表示項目プリセットのバー ===== */
@@ -986,7 +959,7 @@ body {
 }
 
 .dim-sub-row label {
-    flex: 0 0 90px;
+    flex: 0 0 104px;
     color: var(--text-muted);
     font-size: 0.82rem;
 }

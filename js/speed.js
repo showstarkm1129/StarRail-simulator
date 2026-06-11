@@ -600,11 +600,36 @@ document.addEventListener('DOMContentLoaded', () => {
         buffModalTurn.textContent = turnIndex + 1;
         renderModalEvents();
 
-        const rect = anchorEl.getBoundingClientRect();
-        const maxLeft = window.scrollX + window.innerWidth - 480;
-        buffModal.style.top = (window.scrollY + rect.bottom + 5) + 'px';
-        buffModal.style.left = Math.max(10, Math.min(window.scrollX + rect.left, maxLeft)) + 'px';
+        // 先に表示して実寸を測り、画面内に収まるよう位置をクランプ
+        buffModal.style.visibility = 'hidden';
         buffModal.style.display = 'block';
+        positionBuffModal(anchorEl.getBoundingClientRect());
+        buffModal.style.visibility = '';
+    }
+
+    // モーダルをアンカー(バフ設定ボタン)付近かつビューポート内に配置
+    function positionBuffModal(rect) {
+        const margin = 10;
+        const mw = buffModal.offsetWidth;
+        const mh = buffModal.offsetHeight;
+
+        // 横: ボタン左に合わせつつ右端からはみ出さない
+        let left = window.scrollX + rect.left;
+        const maxLeft = window.scrollX + window.innerWidth - mw - margin;
+        left = Math.max(window.scrollX + margin, Math.min(left, maxLeft));
+
+        // 縦: 基本はボタンの下。下に収まらなければ上に出す。
+        let top = window.scrollY + rect.bottom + 5;
+        const minTop = window.scrollY + margin;
+        const maxTop = window.scrollY + window.innerHeight - mh - margin;
+        if (top > maxTop) {
+            top = window.scrollY + rect.top - mh - 5; // ボタンの上に配置を試みる
+        }
+        // 最終的に必ずビューポート内へクランプ (アンカーが画面外でも見切れないように)
+        top = Math.max(minTop, Math.min(top, Math.max(minTop, maxTop)));
+
+        buffModal.style.left = left + 'px';
+        buffModal.style.top = top + 'px';
     }
 
     function renderModalEvents() {
@@ -615,25 +640,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         modalEvents.forEach((ev, idx) => {
             const row = document.createElement('div');
-            row.style.cssText = 'border:1px solid rgba(255,255,255,0.12); border-radius:6px; padding:6px; display:flex; flex-direction:column; gap:5px;';
+            row.style.cssText = 'border:1px solid rgba(255,255,255,0.12); border-radius:6px; padding:5px 6px; display:flex; flex-direction:column; gap:4px;';
             const typeOpts = Object.entries(EVENT_TYPES).map(([k, v]) =>
                 `<option value="${k}" ${k === ev.type ? 'selected' : ''}>${v.label}</option>`).join('');
             const isCum = evTiming(ev) === 'cum';
             const timeVal = isCum ? evAtAV(ev) : evOffset(ev);
             row.innerHTML = `
-                <div style="display:flex; gap:0.4rem; align-items:center;">
-                    <select class="adv-ev-type" data-idx="${idx}" style="flex:1; font-size:0.82em; padding:3px;">${typeOpts}</select>
-                    <input type="number" class="adv-ev-value" data-idx="${idx}" value="${ev.value}" step="0.1" style="width:64px;" title="効果量">
-                    <button class="secondary-btn-small adv-ev-del" data-idx="${idx}" title="削除" style="padding:2px 8px;">✕</button>
+                <div style="display:flex; gap:4px; align-items:center;">
+                    <select class="adv-ev-type" data-idx="${idx}" style="flex:1; min-width:0; font-size:0.78em; padding:2px;">${typeOpts}</select>
+                    <input type="number" class="adv-ev-value" data-idx="${idx}" value="${ev.value}" step="0.1" style="width:50px; flex:none;" title="効果量">
+                    <input type="text" class="adv-ev-name" data-idx="${idx}" value="${escapeAttr(ev.name || '')}" placeholder="表示名" title="表示名(任意 例: 鷹25%)" style="flex:1; min-width:0; font-size:0.76em; padding:2px 4px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:var(--text-color);">
+                    <button class="secondary-btn-small adv-ev-del" data-idx="${idx}" title="削除" style="padding:2px 6px; flex:none;">✕</button>
                 </div>
-                <input type="text" class="adv-ev-name" data-idx="${idx}" value="${escapeAttr(ev.name || '')}" placeholder="表示名(任意 例: 鷹25%)" style="font-size:0.8em; padding:3px 5px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:var(--text-color);">
-                <div style="display:flex; gap:0.4rem; align-items:center;">
-                    <select class="adv-ev-timing" data-idx="${idx}" style="font-size:0.8em; padding:3px;">
+                <div style="display:flex; gap:4px; align-items:center;">
+                    <select class="adv-ev-timing" data-idx="${idx}" style="flex:1; min-width:0; font-size:0.76em; padding:2px;">
                         <option value="turn" ${!isCum ? 'selected' : ''}>発動AV(ターン基準)</option>
                         <option value="cum" ${isCum ? 'selected' : ''}>累計AVで発動</option>
                     </select>
-                    <input type="number" class="adv-ev-time" data-idx="${idx}" value="${timeVal}" min="0" step="1" style="width:74px;" title="${isCum ? 'タイムライン全体の累計行動値' : 'ターン開始からの行動値オフセット'}">
-                    <span style="font-size:0.76em; color:var(--text-muted);">${isCum ? '累計AV' : 'AV後'}</span>
+                    <input type="number" class="adv-ev-time" data-idx="${idx}" value="${timeVal}" min="0" step="1" style="width:54px; flex:none;" title="${isCum ? 'タイムライン全体の累計行動値' : 'ターン開始からの行動値オフセット'}">
+                    <span style="font-size:0.72em; color:var(--text-muted); flex:none;">${isCum ? '累計' : 'AV後'}</span>
+                    <button class="secondary-btn-small adv-ev-register" data-idx="${idx}" title="この効果をクイック追加に登録" style="padding:2px 6px; flex:none; margin-left:auto; font-size:0.74em;">★登録</button>
                 </div>
             `;
             buffEventList.appendChild(row);
@@ -657,11 +683,59 @@ document.addEventListener('DOMContentLoaded', () => {
             const v = Math.max(0, parseFloat(e.target.value) || 0);
             if (evTiming(ev) === 'cum') ev.atAV = v; else ev.offset = v;
         }));
+        buffEventList.querySelectorAll('.adv-ev-register').forEach(btn => btn.addEventListener('click', e => {
+            registerQuickPreset(modalEvents[+e.currentTarget.dataset.idx]);
+        }));
         buffEventList.querySelectorAll('.adv-ev-del').forEach(btn => btn.addEventListener('click', e => {
             modalEvents.splice(+e.currentTarget.dataset.idx, 1);
             renderModalEvents();
         }));
     }
+
+    // ---- クイック追加プリセット (ユーザー定義 / localStorage 永続化) ----
+    const QUICK_PRESET_KEY = 'srsim_adv_quick_presets';
+    const quickCustomContainer = document.getElementById('adv-quick-custom');
+
+    function loadQuickPresets() {
+        try {
+            const a = JSON.parse(localStorage.getItem(QUICK_PRESET_KEY));
+            return Array.isArray(a) ? a : [];
+        } catch { return []; }
+    }
+    function saveQuickPresets() {
+        try { localStorage.setItem(QUICK_PRESET_KEY, JSON.stringify(customQuickPresets)); } catch { /* 容量超過等は無視 */ }
+    }
+    function registerQuickPreset(ev) {
+        const label = (ev.name && ev.name.trim()) ? ev.name.trim() : evAutoLabel(ev);
+        customQuickPresets.push({
+            id: 'qp' + Date.now() + Math.random().toString(36).slice(2, 6),
+            type: ev.type, value: ev.value, name: ev.name || '', label,
+        });
+        saveQuickPresets();
+        renderQuickPresets();
+    }
+    function deleteQuickPreset(id) {
+        const i = customQuickPresets.findIndex(p => p.id === id);
+        if (i !== -1) { customQuickPresets.splice(i, 1); saveQuickPresets(); renderQuickPresets(); }
+    }
+    function renderQuickPresets() {
+        if (!quickCustomContainer) return;
+        quickCustomContainer.innerHTML = customQuickPresets.map(p => `
+            <span style="display:inline-flex; align-items:center; border:1px solid rgba(255,255,255,0.2); border-radius:4px; overflow:hidden;">
+                <button class="secondary-btn-small adv-quick-add-custom" data-id="${p.id}" title="このプリセットを追加" style="border:none; border-radius:0;">${escapeAttr(p.label)}</button>
+                <button class="adv-quick-del" data-id="${p.id}" title="プリセット削除" style="border:none; background:transparent; color:#ff6b6b; cursor:pointer; padding:0 6px; font-size:0.95em;">×</button>
+            </span>
+        `).join('');
+        quickCustomContainer.querySelectorAll('.adv-quick-add-custom').forEach(b => b.addEventListener('click', () => {
+            const p = customQuickPresets.find(x => x.id === b.dataset.id);
+            if (!p) return;
+            modalEvents.push(makeEvent({ type: p.type, value: p.value, name: p.name }));
+            renderModalEvents();
+        }));
+        quickCustomContainer.querySelectorAll('.adv-quick-del').forEach(b => b.addEventListener('click', () => deleteQuickPreset(b.dataset.id)));
+    }
+
+    const customQuickPresets = loadQuickPresets();
 
     function makeEvent(opts) {
         return {
@@ -733,6 +807,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 初期化処理
     updateUI();
     renderThresholdTable();
+    renderQuickPresets();
     if (advPanelsContainer) {
         createAdvPanel({ name: 'キャラ1' });
         createAdvPanel({ name: 'キャラ2' });

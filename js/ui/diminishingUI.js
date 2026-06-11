@@ -30,7 +30,7 @@ import {
 import {
     calcManualAllocation, rollsToStatDict, excludeMainStatFromCandidates,
 } from '../build/substatRoller.js';
-import { statIcon, statLabel, ICON_GALLERY_ITEMS } from './statIcons.js';
+import { statLabel } from './statIcons.js';
 
 // ---- UI で扱う「サブステ合計」入力フィールド定義 -----------------------
 
@@ -236,18 +236,8 @@ export function initDiminishingUI() {
     bindAll();
     renderRefPresets();
     bindRefPresets();
-    renderIconGallery();
     refreshAllForms();
     recompute();
-}
-
-// 確認用: 全ステータスアイコンを名前付きで一覧表示する (承認後に呼び出しごと削除)。
-function renderIconGallery() {
-    const body = document.getElementById('dim-icon-gallery-body');
-    if (!body) return;
-    body.innerHTML = ICON_GALLERY_ITEMS.map(([key, name]) =>
-        `<div class="dim-icon-gallery-item">${statLabel(key, name, { size: 22 })}</div>`
-    ).join('');
 }
 
 // ---- HTML 骨組み -------------------------------------------------------
@@ -261,11 +251,6 @@ function renderShell() {
                 ビルドの一部を変更 → 火力貢献率が自動表示されます。
                 <br><span style="color: var(--text-muted)">※ SPD変化は情報表示のみ。行動回数の影響は「速度・行動回数」タブで別途確認してください。</span>
             </p>
-
-            <details class="dim-icon-gallery" open>
-                <summary>🔍 ステータスアイコン一覧（確認用 / 承認後にこの欄は削除します）</summary>
-                <div id="dim-icon-gallery-body" class="dim-icon-gallery-body"></div>
-            </details>
 
             <div class="dim-build-mgr">
                 <h3 class="dim-build-mgr-title">ビルド管理</h3>
@@ -581,7 +566,7 @@ function renderSubsTab_manual() {
                 const display = s.asPercent ? (v * 100).toFixed(2).replace(/\.?0+$/, '') : v;
                 return `
                     <div class="dim-sub-row">
-                        <label>${s.label}</label>
+                        <label>${statLabel(s.key, s.label)}</label>
                         <input type="number" min="0" step="0.1" class="dim-sub-input"
                                data-stat="${s.key}" data-unit="${s.asPercent ? 'pct' : 'flat'}"
                                value="${display}">
@@ -2535,7 +2520,7 @@ function renderStatsOnly(s) {
         const rows = grouped[catKey] || [];
         if (rows.length === 0) return '';
         const headerRow = `<tr class="dim-table-category-header"><td colspan="2">${catName}</td></tr>`;
-        const rowsHtml = rows.map(r => `<tr><th>${r.label}</th><td>${formatStatCell(r, s)}</td></tr>`).join('');
+        const rowsHtml = rows.map(r => `<tr><th>${statLabel(r.key, r.label)}</th><td>${formatStatCell(r, s)}</td></tr>`).join('');
         return headerRow + rowsHtml;
     }).join('');
 
@@ -2566,7 +2551,7 @@ function renderStatsFilter() {
         const checkboxes = rows.map(r => `
             <label class="dim-filter-item">
                 <input type="checkbox" data-stat-key="${r.key}" ${state.visibleStats.has(r.key) ? 'checked' : ''}>
-                <span>${r.label}</span>
+                <span>${statLabel(r.key, r.label)}</span>
             </label>
         `).join('');
         return `
@@ -2700,13 +2685,13 @@ function renderComparison(cmp) {
             if (r.category === 'total') {
                 const t = r.get(f);
                 return `<tr class="dim-total-row">
-                    <th>${r.label()}</th>
+                    <th>${statLabel(r.key, r.label())}</th>
                     <td>—</td><td>—</td>
                     <td>×${t.ratio.toFixed(4)}</td>
                     <td class="${contribClass(t.contribution)}">${formatContrib(t.contribution)}</td>
                 </tr>`;
             } else {
-                return renderFactorRow({ name: r.label(cmp.options), ...r.get(f) });
+                return renderFactorRow({ key: r.key, name: r.label(cmp.options), ...r.get(f) });
             }
         }).join('');
         return headerRow + rowsHtml;
@@ -2756,7 +2741,7 @@ function renderComparisonStatsRows(before, after) {
             const afterStr  = formatStatCell(r, after);
             const diffStr   = formatStatDiff(diff, r.fmt);
             return `<tr>
-                <th>${r.label}</th>
+                <th>${statLabel(r.key, r.label)}</th>
                 <td>${beforeStr}</td>
                 <td>${afterStr}</td>
                 <td class="${contribClass(diff)}">${diffStr}</td>
@@ -2785,7 +2770,7 @@ function renderComparisonFilter() {
         const checkboxes = rows.map(r => `
             <label class="dim-filter-item">
                 <input type="checkbox" data-row-key="${r.key}" ${state.visibleRows.has(r.key) ? 'checked' : ''}>
-                <span>${r.label({ refStat: state.options.refStat })}</span>
+                <span>${statLabel(r.key, r.label({ refStat: state.options.refStat }))}</span>
             </label>
         `).join('');
         return `
@@ -2817,7 +2802,7 @@ function renderComparisonFilter() {
         const checkboxes = rows.map(r => `
             <label class="dim-filter-item">
                 <input type="checkbox" data-stat-key="${r.key}" ${state.visibleStats.has(r.key) ? 'checked' : ''}>
-                <span>${r.label}</span>
+                <span>${statLabel(r.key, r.label)}</span>
             </label>
         `).join('');
         return `
@@ -2872,7 +2857,7 @@ function renderComparisonFilter() {
 
 const renderFactorRow = (row) => `
     <tr>
-        <th>${row.name}</th>
+        <th>${statLabel(row.key, row.name)}</th>
         <td>${formatFactorValue(row.before)}</td>
         <td>${formatFactorValue(row.after)}</td>
         <td>×${row.ratio.toFixed(4)}</td>
@@ -3066,7 +3051,7 @@ function renderTraceBreakdown(ch) {
         <table class="dim-result-table">
             <thead><tr><th>ノード</th><th>枠</th><th>値</th></tr></thead>
             <tbody>
-                ${bd.map(n => `<tr><th>${n.node}</th><td>${formatStatLabel(n.stat)}</td><td>+${formatStatValue(n.stat, n.value)}</td></tr>`).join('')}
+                ${bd.map(n => `<tr><th>${n.node}</th><td>${statLabel(n.stat, formatStatLabel(n.stat))}</td><td>+${formatStatValue(n.stat, n.value)}</td></tr>`).join('')}
                 <tr class="dim-total-row">
                     <th colspan="2">合計</th>
                     <td>${Object.entries(totals).map(([k,v])=>`${formatStatLabel(k)} +${formatStatValue(k,v)}`).join(' / ')}</td>

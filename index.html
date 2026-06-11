@@ -192,7 +192,7 @@
                     </div>
 
                     <!-- Shared Buff Modal for Advanced Simulator -->
-                    <div id="adv-buff-modal" class="status-modal-content" style="display: none; position: absolute; z-index: 1000; width: 460px; max-width: 92vw; margin: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+                    <div id="adv-buff-modal" class="status-modal-content" style="display: none; position: absolute; z-index: 1000; width: 380px; max-width: 92vw; margin: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
                         <span class="close-modal" id="close-adv-buff-modal">&times;</span>
                         <h2 style="color: var(--accent-gold); margin-bottom: 8px; font-size: 1.15rem;">「<span id="adv-buff-modal-panel"></span>」 ターン <span id="adv-buff-modal-turn"></span> のバフ設定</h2>
                         <p class="help-text" style="margin-bottom: 10px; font-size: 0.82em;">発動AV = ターン開始からの行動値オフセット (0 = ターン最初に発動)。</p>
@@ -202,6 +202,7 @@
                             <button class="secondary-btn-small adv-quick-add" data-type="advance" data-value="24" data-name="DDD24%">DDD (短縮24%)</button>
                             <button class="secondary-btn-small adv-quick-add" data-type="advance" data-value="100" data-name="即時">即時行動</button>
                             <button class="secondary-btn-small adv-quick-add" data-type="speedPct" data-value="12" data-name="メッセ速+12%">メッセ4 (速度+12%)</button>
+                            <span id="adv-quick-custom" style="display: contents;"></span>
                         </div>
                         <div id="adv-buff-event-list" style="display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.6rem;">
                             <!-- JS generated event rows -->
