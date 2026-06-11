@@ -491,13 +491,108 @@ document.addEventListener('DOMContentLoaded', () => {
         advPanels.forEach(renderPanelTable);
     }
 
+    async function copyPanelImage(panelEl) {
+        const clone = panelEl.cloneNode(true);
+        
+        clone.querySelectorAll('.adv-panel-remove, .adv-panel-share').forEach(el => el.remove());
+        
+        const origInputs = panelEl.querySelectorAll('input, select');
+        const cloneInputs = clone.querySelectorAll('input, select');
+        origInputs.forEach((orig, i) => {
+            if (orig.tagName === 'INPUT') {
+                cloneInputs[i].setAttribute('value', orig.value);
+            } else if (orig.tagName === 'SELECT') {
+                const selectedIdx = orig.selectedIndex;
+                if (selectedIdx >= 0) {
+                    const opts = cloneInputs[i].querySelectorAll('option');
+                    if (opts[selectedIdx]) opts[selectedIdx].setAttribute('selected', 'selected');
+                }
+            }
+        });
+
+        let styleText = '';
+        for (const sheet of document.styleSheets) {
+            try {
+                for (const rule of sheet.cssRules) {
+                    styleText += rule.cssText + '\n';
+                }
+            } catch (e) {
+                // cross-origin ignore
+            }
+        }
+        
+        const bodyStyles = window.getComputedStyle(document.body);
+        let inlineStyles = '';
+        for (let i = 0; i < bodyStyles.length; i++) {
+            const name = bodyStyles[i];
+            if (name.startsWith('--')) {
+                inlineStyles += `${name}: ${bodyStyles.getPropertyValue(name)};\n`;
+            }
+        }
+
+        const xmlSerializer = new XMLSerializer();
+        const cloneXml = xmlSerializer.serializeToString(clone);
+        
+        const svgString = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="${panelEl.offsetWidth}" height="${panelEl.offsetHeight}">
+                <foreignObject width="100%" height="100%">
+                    <div xmlns="http://www.w3.org/1999/xhtml" class="screenshot-wrapper" style="width: ${panelEl.offsetWidth}px; height: ${panelEl.offsetHeight}px;">
+                        <style>
+                        <![CDATA[
+                            ${styleText}
+                            .screenshot-wrapper {
+                                ${inlineStyles}
+                            }
+                        ]]>
+                        </style>
+                        <div style="background-color: #1e1e1e; padding: 1rem; box-sizing: border-box; width: 100%; height: 100%; border-radius: 8px;">
+                            ${cloneXml}
+                        </div>
+                    </div>
+                </foreignObject>
+            </svg>
+        `;
+
+        const img = new Image();
+        const svgBlob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
+        const url = URL.createObjectURL(svgBlob);
+        
+        return new Promise((resolve, reject) => {
+            img.onload = () => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = panelEl.offsetWidth;
+                    canvas.height = panelEl.offsetHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#1e1e1e'; 
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                    URL.revokeObjectURL(url);
+                    canvas.toBlob(blob => {
+                        if (blob) resolve(blob);
+                        else reject(new Error('Canvas to Blob failed'));
+                    }, 'image/png');
+                } catch (e) {
+                    URL.revokeObjectURL(url);
+                    reject(e);
+                }
+            };
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                reject(new Error('Image load failed'));
+            };
+            img.src = url;
+        });
+    }
+
     function buildPanelDOM(panel) {
         const card = document.createElement('div');
         card.className = 'panel';
-        card.style.cssText = 'min-width: 470px; flex: 0 0 auto; padding: 1rem; margin: 0;';
+        card.style.cssText = 'min-width: 470px; flex: 0 0 auto; padding: 1rem; margin: 0; position: relative;';
         card.innerHTML = `
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.8rem;">
                 <input type="text" class="adv-panel-name" value="${escapeAttr(panel.name)}" style="font-weight:bold; font-size:1.05rem; flex:1; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:4px; padding:4px 8px; color:var(--text-color);">
+                <button class="secondary-btn-small adv-panel-share" title="このパネルを画像としてコピー" style="padding:2px 10px;">共有</button>
                 <button class="secondary-btn-small adv-panel-remove" title="このパネルを削除" style="padding:2px 10px;">✕</button>
             </div>
             <div style="display:flex; gap:0.8rem; flex-wrap:wrap; margin-bottom:1rem;">
@@ -555,6 +650,40 @@ document.addEventListener('DOMContentLoaded', () => {
             panel.threshold = parseFloat(panel.el.thrInput.value) || 1;
             renderPanelTable(panel);
         });
+        
+        const shareBtn = card.querySelector('.adv-panel-share');
+        if (shareBtn) {
+            shareBtn.addEventListener('click', async () => {
+                const originalText = shareBtn.textContent;
+                shareBtn.textContent = '生成中...';
+                shareBtn.disabled = true;
+                try {
+                    const blob = await copyPanelImage(card);
+                    if (navigator.clipboard && navigator.clipboard.write) {
+                        await navigator.clipboard.write([
+                            new ClipboardItem({ 'image/png': blob })
+                        ]);
+                        shareBtn.textContent = 'コピー完了!';
+                    } else {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `timeline_${Date.now()}.png`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        shareBtn.textContent = '保存完了!';
+                    }
+                } catch (err) {
+                    console.error(err);
+                    shareBtn.textContent = '失敗';
+                }
+                setTimeout(() => {
+                    shareBtn.textContent = originalText;
+                    shareBtn.disabled = false;
+                }, 2000);
+            });
+        }
+        
         card.querySelector('.adv-panel-remove').addEventListener('click', () => removeAdvPanel(panel.id));
 
         return card;

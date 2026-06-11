@@ -120,12 +120,12 @@ const ATTACKER_DMG_ROWS = [
 const REF_PRESETS_BUILTIN = [
     {
         id: 'atkDealer', name: '攻撃アタッカー', refStat: 'atk',
-        visibleStats: ['atk', ...ATTACKER_DMG_STATS],
+        visibleStats: ['atk', 'spd', 'energyRegen', ...ATTACKER_DMG_STATS],
         visibleRows: ATTACKER_DMG_ROWS,
     },
     {
         id: 'hpDealer', name: 'HPアタッカー', refStat: 'hp',
-        visibleStats: ['hp', ...ATTACKER_DMG_STATS],
+        visibleStats: ['hp', 'spd', 'energyRegen', ...ATTACKER_DMG_STATS],
         visibleRows: ATTACKER_DMG_ROWS,
     },
     {

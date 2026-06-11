@@ -3,6 +3,8 @@
 崩壊スターレイル (Honkai: Star Rail) のキャラクタービルド、火力、および行動順（速度）を計算・検証するためのWebベースのシミュレーターです。
 HTML、CSS、Vanilla JavaScript (ES Modules) で構成されており、ビルドツールを必要とせずブラウザ上で直接動作します。
 
+> アプリ実行時はゼロ依存（ライブラリ不要）。`js/` 配下の `tsconfig.json` / `eslint.config.js` / `types/` / `test/` は開発時の検証スタック専用です。
+
 ## フォルダ・ファイル構成
 
 ### 全体ツリー図
@@ -11,24 +13,33 @@ HTML、CSS、Vanilla JavaScript (ES Modules) で構成されており、ビル�
 
 ```text
 StarRail-simulator/
-├── index.html           # アプリケーションのエントリーポイント
-├── Timer_plus_icon.png  # アプリ用アイコン画像
-├── CLAUDE.md            # 開発用ドキュメント
-├── README.md            # 本ファイル（プロジェクト構成）
-├── css/                 # スタイルシート
+├── index.html              # アプリケーションのエントリーポイント
+├── Timer_plus_icon.png     # アプリ用アイコン画像
+├── server.js               # 依存ゼロの静的ファイルサーバー (npm run dev)
+├── package.json            # スクリプト・開発依存定義
+├── tsconfig.json           # 型チェック設定 (検証スタック)
+├── eslint.config.js        # Lint 設定 (検証スタック)
+├── CLAUDE.md               # 開発用ドキュメント・コーディング規約
+├── コンセプト.md            # ツールのコンセプト・設計思想
+├── 検証スタック.md          # 検証スタック (型/Lint/テスト/カバレッジ) の説明
+├── README.md               # 本ファイル（プロジェクト構成）
+├── LICENSE                 # ライセンス
+├── types/                  # 型定義 (globals.d.ts)
+├── test/                   # ユニットテスト
+├── css/                    # スタイルシート
 │   └── style.css
-└── js/                  # アプリケーションロジック
-    ├── bootstrap.js     # ES Modulesエントリーポイント
-    ├── simulator.js     # 「戦闘シミュ」タブ用スクリプト
-    ├── speed.js         # 「速度・行動回数」タブ用スクリプト
-    ├── ui.js            # 共通UI処理スクリプト
-    ├── build/           # 計算・システム中核層 (ステータス計算など)
-    ├── data/            # データ定義層 (キャラ、装備データ)
+└── js/                     # アプリケーションロジック
+    ├── bootstrap.js        # ES Modulesエントリーポイント
+    ├── simulator.js        # 「戦闘シミュ」タブ用スクリプト
+    ├── speed.js            # 「速度・行動回数」タブ用スクリプト
+    ├── ui.js               # 共通UI処理スクリプト
+    ├── build/              # 計算・システム中核層 (ステータス計算など)
+    ├── data/               # データ定義層 (キャラ、装備データ)
     │   ├── characters/
     │   ├── lightcones/
     │   ├── Cavern Relics/
     │   └── Planar Ornaments/
-    └── ui/              # UIコンポーネント層 (複雑なUI処理)
+    └── ui/                 # UIコンポーネント層 (複雑なUI処理)
 ```
 
 ---
@@ -41,8 +52,21 @@ StarRail-simulator/
 | `css/` | スタイルシートを格納するフォルダです。 |
 | ├── `style.css` | アプリケーション全体のUIデザインを定義するCSSファイルです。 |
 | `Timer_plus_icon.png` | アプリ内で使用されるアイコン画像です。 |
+| `server.js` | `npm run dev` で起動する、依存ゼロの静的ファイルサーバーです。 |
+| `package.json` | 開発用スクリプト（`dev` / `verify` 等）と開発依存を定義しています。 |
 | `CLAUDE.md` | 開発者向けの内部ドキュメント・コーディング規約が記載されたファイルです。 |
+| `コンセプト.md` | このツールの正体・設計思想（数値の実験場）をまとめたファイルです。 |
+| `検証スタック.md` | 型チェック・Lint・テスト・カバレッジからなる検証スタックの説明です。実装後は `npm run verify` を緑にします。 |
 | `js/` | アプリケーションのロジックを担うJavaScriptファイルを格納するフォルダです。 |
+
+#### 検証スタック（開発時のみ）
+
+| ファイル・フォルダ名 | 解説 |
+| :--- | :--- |
+| `tsconfig.json` | JSDoc ベースの型チェック設定です。 |
+| `eslint.config.js` | コード品質を保つための Lint 設定です。 |
+| `types/globals.d.ts` | `window.SRSIM` などグローバルの型定義です。 |
+| `test/` | 各モジュールのユニットテスト（データ読込・スキーマ・計算など）を格納します。 |
 
 ---
 
@@ -81,12 +105,14 @@ StarRail-simulator/
 
 | フォルダ名 | 解説 |
 | :--- | :--- |
-| `characters/` | キャラクターの基本ステータスやスキルの定義ファイルが格納されています。 |
+| `characters/` | キャラクターの基本ステータスやスキルの定義ファイルが格納されています。`template.js`（新規キャラ用雛形）や `testAll.js` / `testAllS1.js`（全装備 partyEffect 検証用テストキャラ）も含みます。 |
 | `lightcones/` | 光円錐のステータスやパッシブ効果の定義ファイルが格納されています。 |
 | `Cavern Relics/` | トンネル遺物（4部位セット）のセット効果の定義ファイルが格納されています。 |
 | `Planar Ornaments/` | 次元界オーナメント（2部位セット）のセット効果の定義ファイルが格納されています。 |
 
-※ 各フォルダ内のデータは `_index.js` で集約され、自動的にシステム（Registry）に登録される仕組みになっています。
+※ 各フォルダ内のデータは `_index.js` で集約され、import 時の副作用で自動的にシステム（Registry）に登録される仕組みになっています。
+※ `characters/` と `lightcones/` には `IMPLEMENTATION_RULES.md`、`js/data/` 直下には `IMPLEMENTATION.md` があり、データ追加時の実装ルールが記載されています。
+※ フォルダ名・ファイル名は HSR 公式英名で統一しています。
 
 ---
 
@@ -96,3 +122,4 @@ StarRail-simulator/
 | ファイル名 | 解説 |
 | :--- | :--- |
 | `diminishingUI.js` | 「限界効用逓減」タブにおける、比較表の生成やパーティバフの管理など、複雑なUI処理を担当しています。 |
+| `statIcons.js` | ステータスアイコン（自作インラインSVG）の単一ソースです。ステータスキー → アイコンを正規化し、全画面から参照されます。 |
