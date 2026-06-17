@@ -46,7 +46,7 @@ Registry.lightcone.add({
                 description: `戦闘開始時、または装備キャラが追加攻撃を累計4回発動するたびに「影喰い」を付与(3T)。装備キャラが「影喰い」を持つ時、攻撃力+${(atk*100).toFixed(0)}%。`,
                 stats: { [STAT.ATK_PERCENT]: atk },
                 defaultActive: true,
-                target: 'self',
+                // selfEffects は装備キャラ自身が対象 (target 指定不要)。
                 duration: 3,
                 tickRule: 'caster_turn_end',
                 dispellable: false,

@@ -16,7 +16,7 @@ import { StatComputer, countSetsByType } from '../build/statComputer.js';
 import { Diminishing } from '../build/diminishing.js';
 import { Build as BuildStore } from '../build/buildStore.js';
 import {
-    ALL_SLOTS, RELIC_SLOTS, ORNAMENT_SLOTS, SLOT, SET_TYPE, SLOT_TO_SET_TYPE,
+    ALL_SLOTS, RELIC_SLOTS, ORNAMENT_SLOTS, SLOT, SET_TYPE,
 } from '../build/constants.js';
 import { RELIC_MAIN_OPTIONS } from '../build/relicMainTable.js';
 import { STAT } from '../build/statKeys.js';
@@ -53,6 +53,48 @@ const SUB_LABEL_PREFIX = 'サブステ.';
 const PARTY_LABEL_PREFIX = 'パーティ.';   // envBuffs のラベル識別子
 
 const PARTY_SLOTS = 3;   // focus 以外のチームメンバー枠数
+
+// ---- 直接ステ入力モード -----------------------------------------------
+//
+// ビルド(キャラ+光円錐+遺物+バフ)を組まず、最終ステータスを直接打ち込んで
+// 火力貢献率を見るモード。値は Diminishing.directStatsToFinalStats() にそのまま渡す。
+//   pct=true の項目は UI 上は「25」と入力 → 内部 0.25 で保持。
+const DIRECT_CATEGORIES = {
+    basic:  '① 基礎ステータス',
+    crit:   '② 会心',
+    dmg:    '③ 与ダメージ・乗算',
+    debuff: '④ デバフ (敵)',
+    other:  '⑤ その他',
+};
+
+const DIRECT_FIELDS = [
+    { key: 'atk',         label: '攻撃力',                 unit: '',  pct: false, cat: 'basic'  },
+    { key: 'hp',          label: 'HP',                     unit: '',  pct: false, cat: 'basic'  },
+    { key: 'def',         label: '防御力',                 unit: '',  pct: false, cat: 'basic'  },
+    { key: 'spd',         label: '速度',                   unit: '',  pct: false, cat: 'basic'  },
+    { key: 'critRate',    label: '会心率',                 unit: '%', pct: true,  cat: 'crit'   },
+    { key: 'critDmg',     label: '会心ダメ',               unit: '%', pct: true,  cat: 'crit'   },
+    { key: 'dmgAll',      label: '与ダメージ% (共通+属性)', unit: '%', pct: true,  cat: 'dmg'    },
+    { key: 'dmgBasic',    label: '通常攻撃ダメ枠',         unit: '%', pct: true,  cat: 'dmg'    },
+    { key: 'dmgSkill',    label: '戦闘スキルダメ枠',       unit: '%', pct: true,  cat: 'dmg'    },
+    { key: 'dmgUlt',      label: '必殺ダメ枠',             unit: '%', pct: true,  cat: 'dmg'    },
+    { key: 'dmgFollowup', label: '追加攻撃ダメ枠',         unit: '%', pct: true,  cat: 'dmg'    },
+    { key: 'fixedDmg',    label: '確定ダメージ',           unit: '%', pct: true,  cat: 'dmg'    },
+    { key: 'sepMult',     label: '別枠乗算',               unit: '%', pct: true,  cat: 'dmg'    },
+    { key: 'defDown',     label: '防御Down',               unit: '%', pct: true,  cat: 'debuff' },
+    { key: 'defIgnore',   label: '防御無視',               unit: '%', pct: true,  cat: 'debuff' },
+    { key: 'resPen',      label: '耐性貫通 / 耐性Down',    unit: '%', pct: true,  cat: 'debuff' },
+    { key: 'dmgTaken',    label: '被ダメ増',               unit: '%', pct: true,  cat: 'debuff' },
+    { key: 'breakEffect', label: '撃破特効',               unit: '%', pct: true,  cat: 'other'  },
+    { key: 'energyRegen', label: 'EP回復効率',             unit: '%', pct: true,  cat: 'other'  },
+    { key: 'ehr',         label: '効果命中',               unit: '%', pct: true,  cat: 'other'  },
+    { key: 'eres',        label: '効果抵抗',               unit: '%', pct: true,  cat: 'other'  },
+];
+
+// 直接入力モードの初期値 (会心・EP回復はゲーム既定の最終値を入れておく)。
+const DIRECT_DEFAULTS = {
+    critRate: 0.05, critDmg: 0.50, energyRegen: 1.00,
+};
 
 // スキルキーの表示順 / 表示名
 // memorySkill/memoryTalent は記憶の精霊持ち (ヒアンシー等) 専用。
@@ -155,6 +197,10 @@ const FACTOR_CATEGORIES = {
 const state = {
     build: null,
     snapshot: null,
+    // 入力モード: 'build' = キャラ/装備からビルドを組む / 'direct' = 最終ステ直接入力
+    inputMode: 'build',
+    // 直接入力モードの状態 (stats: 現在値の dict / snapshot: 比較基準の dict)
+    direct: { stats: { ...DIRECT_DEFAULTS }, snapshot: null },
     options: { ...Diminishing.DEFAULT_OPTIONS },
     // パーティ枠: focus 以外のメンバー × 3
     //   各要素: {
@@ -237,6 +283,7 @@ export function initDiminishingUI() {
     renderRefPresets();
     bindRefPresets();
     refreshAllForms();
+    applyInputModeVisibility();
     recompute();
 }
 
@@ -288,85 +335,80 @@ function renderShell() {
             <div class="dim-main">
               <div class="dim-col-left">
             <div class="dim-grid">
-                <div class="dim-panel">
-                    <h3>キャラ・光円錐</h3>
-                    <div class="dim-row">
-                        <label>キャラ</label>
-                        <select id="dim-char"></select>
-                    </div>
-                    <div class="dim-row">
-                        <label>星魂</label>
-                        <select id="dim-eidolon"></select>
-                    </div>
-                    <div class="dim-row">
-                        <label>光円錐</label>
-                        <select id="dim-lc"></select>
-                    </div>
-                    <div class="dim-row">
-                        <label>重畳</label>
-                        <select id="dim-lc-si"></select>
-                    </div>
+                <div class="dim-panel" id="dim-char-panel">
+                    <h3>キャラ・光円錐・セット効果</h3>
+                    <div class="dim-char-cols">
+                      <div class="dim-char-col">
+                        <div class="dim-row">
+                            <label>キャラ</label>
+                            <select id="dim-char"></select>
+                        </div>
+                        <div class="dim-row">
+                            <label>星魂</label>
+                            <select id="dim-eidolon"></select>
+                        </div>
+                        <div class="dim-row">
+                            <label>光円錐</label>
+                            <select id="dim-lc"></select>
+                        </div>
+                        <div class="dim-row">
+                            <label>重畳</label>
+                            <select id="dim-lc-si"></select>
+                        </div>
 
-                    <h4 class="dim-subheading">軌跡レベル</h4>
-                    <div class="dim-level-presets">
-                        <button class="btn-secondary btn-mini" data-preset="default">無凸MAX</button>
-                        <button class="btn-secondary btn-mini" data-preset="eidolon">凸後MAX</button>
-                    </div>
-                    <div id="dim-level-grid" class="dim-level-grid"></div>
-                </div>
+                        <h4 class="dim-subheading">軌跡レベル</h4>
+                        <div class="dim-level-presets">
+                            <button class="btn-secondary btn-mini" data-preset="default">無凸MAX</button>
+                            <button class="btn-secondary btn-mini" data-preset="eidolon">凸後MAX</button>
+                        </div>
+                        <div id="dim-level-grid" class="dim-level-grid"></div>
+                      </div>
 
-                <div class="dim-panel">
-                    <h3>遺物</h3>
-                    <h4 class="dim-subheading-inline">メインステ</h4>
-                    <div class="dim-relic-main-grid">
-                        ${ALL_SLOTS.map(slot => `
-                            <div class="dim-relic-slot">
-                                <label>${slotLabel(slot)}</label>
-                                <select class="dim-relic-main" data-slot="${slot}"></select>
+                      <div class="dim-char-col">
+                        <h4 class="dim-subheading dim-subheading-first">セット効果(一括選択)</h4>
+                        <p class="dim-panel-hint">セットを選ぶと自動で各部位に適用されます。</p>
+
+                        <div class="dim-preset-block">
+                            <div class="dim-preset-mode">
+                                <label class="dim-radio"><input type="radio" name="cav-mode" value="4set" checked> トンネル 4セット</label>
+                                <label class="dim-radio"><input type="radio" name="cav-mode" value="2+2"> トンネル 2+2</label>
+                                <label class="dim-radio"><input type="radio" name="cav-mode" value="none"> 装着なし</label>
                             </div>
-                        `).join('')}
-                    </div>
+                            <div id="dim-preset-cav4" class="dim-preset-row">
+                                <label>トンネルセット</label>
+                                <select id="dim-preset-cav-a"></select>
+                            </div>
+                            <div id="dim-preset-cav22" class="dim-preset-row" style="display:none">
+                                <label>A (頭・手)</label>
+                                <select id="dim-preset-cav-22a"></select>
+                                <label>B (胴・足)</label>
+                                <select id="dim-preset-cav-22b"></select>
+                            </div>
+                        </div>
 
-                    <h4 class="dim-subheading">セット効果(一括選択)</h4>
-                    <p class="dim-panel-hint">セットを選ぶと自動で各部位に適用されます。</p>
-
-                    <div class="dim-preset-block">
-                        <div class="dim-preset-mode">
-                            <label class="dim-radio"><input type="radio" name="cav-mode" value="4set" checked> トンネル 4セット</label>
-                            <label class="dim-radio"><input type="radio" name="cav-mode" value="2+2"> トンネル 2+2</label>
-                            <label class="dim-radio"><input type="radio" name="cav-mode" value="individual"> 個別</label>
-                            <label class="dim-radio"><input type="radio" name="cav-mode" value="none"> 装着なし</label>
+                        <div class="dim-preset-block">
+                            <div class="dim-preset-row">
+                                <label>次元界 (球・縄)</label>
+                                <select id="dim-preset-planar"></select>
+                            </div>
                         </div>
-                        <div id="dim-preset-cav4" class="dim-preset-row">
-                            <label>トンネルセット</label>
-                            <select id="dim-preset-cav-a"></select>
-                        </div>
-                        <div id="dim-preset-cav22" class="dim-preset-row" style="display:none">
-                            <label>A (頭・手)</label>
-                            <select id="dim-preset-cav-22a"></select>
-                            <label>B (胴・足)</label>
-                            <select id="dim-preset-cav-22b"></select>
-                        </div>
-                        <div id="dim-preset-cavInd" class="dim-preset-grid" style="display:none">
-                            ${RELIC_SLOTS.map(slot => `
-                                <div class="dim-preset-row">
-                                    <label>${slotLabel(slot)}</label>
-                                    <select class="dim-relic-set" data-slot="${slot}"></select>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-
-                    <div class="dim-preset-block">
-                        <div class="dim-preset-row">
-                            <label>次元界 (球・縄)</label>
-                            <select id="dim-preset-planar"></select>
-                        </div>
+                      </div>
                     </div>
                 </div>
 
                 <div class="dim-panel dim-subs-panel">
-                    <h3>サブステ合計</h3>
+                    <h3>ステータス入力</h3>
+                    <div id="dim-mainstat-section">
+                        <h4 class="dim-subheading-inline">遺物メインステ</h4>
+                        <div class="dim-relic-main-grid">
+                            ${ALL_SLOTS.map(slot => `
+                                <div class="dim-relic-slot">
+                                    <label>${slotLabel(slot)}</label>
+                                    <select class="dim-relic-main" data-slot="${slot}"></select>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
                     <p class="dim-panel-hint dim-subs-global-hint">
                         数値入力欄はクリックでフォーカスした後、マウスホイールでも増減できます (下限 0)。
                     </p>
@@ -374,6 +416,7 @@ function renderShell() {
                         <button type="button" class="dim-subs-tab" data-mode="manual">自由入力</button>
                         <button type="button" class="dim-subs-tab" data-mode="total">総合ロール</button>
                         <button type="button" class="dim-subs-tab" data-mode="perSlot">部位別ロール</button>
+                        <button type="button" class="dim-subs-tab dim-subs-tab-direct" data-mode="direct">ステータス直接入力</button>
                     </div>
                     <div class="dim-subs-tab-body" id="dim-subs-body"></div>
                 </div>
@@ -452,6 +495,41 @@ function slotLabel(slot) {
     return ({ head: '頭', hands: '手', body: '胴', feet: '足', sphere: '球', rope: '縄' })[slot] || slot;
 }
 
+// 直接ステ入力フィールドを描画 (renderSubsBody から「ステータス直接入力」タブ選択時に呼ばれる)。
+//   値は state.direct.stats から読むため、他モードへ切替→再選択しても入力値が維持される。
+function renderDirectFields() {
+    const groups = Object.entries(DIRECT_CATEGORIES).map(([cat, title]) => {
+        const fields = DIRECT_FIELDS.filter(f => f.cat === cat);
+        if (fields.length === 0) return '';
+        const rows = fields.map(f => {
+            const v = state.direct.stats[f.key] ?? 0;
+            const display = f.pct ? trimNumber(v * 100) : trimNumber(v);
+            return `
+                <div class="dim-sub-row">
+                    <label>${statLabel(f.key, f.label)}</label>
+                    <input type="number" step="${f.pct ? '0.1' : '1'}" class="dim-direct-input"
+                           data-key="${f.key}" data-pct="${f.pct ? '1' : '0'}" value="${display}">
+                    <span class="dim-sub-unit">${f.unit}</span>
+                </div>
+            `;
+        }).join('');
+        return `<h4 class="dim-subheading">${title}</h4><div class="dim-subs-grid">${rows}</div>`;
+    }).join('');
+
+    return `
+        <p class="dim-panel-hint">
+            遺物ビルドの最終ステータスを直接入力します。<b>軌跡・パーティバフ・セット効果は計算に含まれません</b> (入力値がそのまま最終値)。
+            % 欄は数値で「25」と入力すると 25% 扱いです。会心率・会心ダメは基礎値 (5% / 50%) 込みの最終値を入力してください。
+        </p>
+        ${groups}
+    `;
+}
+
+// 末尾の余計な 0 を落として表示する (例: 25.00 → 25, 25.50 → 25.5)。
+function trimNumber(n) {
+    return Number(n.toFixed(2)).toString();
+}
+
 // ---- フォーム初期化 ----------------------------------------------------
 
 function refreshAllForms() {
@@ -460,7 +538,6 @@ function refreshAllForms() {
     fillLightconeSelect();
     fillSuperimposeSelect();
     for (const slot of ALL_SLOTS) {
-        fillRelicSetSelect(slot);
         fillRelicMainSelect(slot);
     }
     initSubsFromEnvBuffs();
@@ -513,16 +590,6 @@ function fillSuperimposeSelect() {
         .map(n => `<option value="${n}" ${n === cur ? 'selected' : ''}>S${n}</option>`)
         .join('');
 }
-function fillRelicSetSelect(slot) {
-    const sel = document.querySelector(`.dim-relic-set[data-slot="${slot}"]`);
-    if (!sel) return;
-    const setType = SLOT_TO_SET_TYPE[slot];
-    const items = setType === SET_TYPE.CAVERN ? Registry.relicSet.list() : Registry.ornament.list();
-    const cur = state.build.relics[slot]?.setId ?? null;
-    sel.innerHTML = [`<option value="">(なし)</option>`].concat(
-        items.map(s => `<option value="${s.id}" ${s.id === cur ? 'selected' : ''}>${s.name}</option>`)
-    ).join('');
-}
 function fillRelicMainSelect(slot) {
     const sel = document.querySelector(`.dim-relic-main[data-slot="${slot}"]`);
     if (!sel) return;
@@ -544,13 +611,15 @@ function renderSubsBody() {
     const body = document.getElementById('dim-subs-body');
     if (!body) return;
 
-    // タブの active 表示
+    // タブの active 表示 (直接入力モード時は 'direct' タブをアクティブに)
+    const activeMode = state.inputMode === 'direct' ? 'direct' : state.subs.mode;
     document.querySelectorAll('#dim-subs-tabs .dim-subs-tab').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === state.subs.mode);
+        btn.classList.toggle('active', btn.dataset.mode === activeMode);
     });
 
-    if (state.subs.mode === 'manual')      body.innerHTML = renderSubsTab_manual();
-    else if (state.subs.mode === 'total')  body.innerHTML = renderSubsTab_total();
+    if (state.inputMode === 'direct')       body.innerHTML = renderDirectFields();
+    else if (state.subs.mode === 'manual')  body.innerHTML = renderSubsTab_manual();
+    else if (state.subs.mode === 'total')   body.innerHTML = renderSubsTab_total();
     else if (state.subs.mode === 'perSlot') body.innerHTML = renderSubsTab_perSlot();
 
     bindSubsTabBody();
@@ -882,6 +951,18 @@ function updatePerSlotAggregatePreview() {
 
 // 現在描画中のサブステタブ本文内のイベントバインド (renderSubsBody から都度呼ばれる)
 function bindSubsTabBody() {
+    // ── direct (ステータス直接入力) ──
+    document.querySelectorAll('.dim-direct-input').forEach(inp => {
+        inp.addEventListener('input', () => {
+            const key = inp.dataset.key;
+            const isPct = inp.dataset.pct === '1';
+            const raw = parseFloat(inp.value);
+            const val = Number.isFinite(raw) ? raw : 0;
+            state.direct.stats[key] = isPct ? val / 100 : val;
+            recompute();
+        });
+    });
+
     // ── manual ──
     document.querySelectorAll('.dim-sub-input').forEach(inp => {
         inp.addEventListener('input', () => {
@@ -1084,12 +1165,17 @@ function fillPresetSelects() {
 
 function bindAll() {
     document.getElementById('dim-snapshot-btn').addEventListener('click', () => {
-        state.snapshot = JSON.parse(JSON.stringify(state.build));
+        if (state.inputMode === 'direct') {
+            state.direct.snapshot = { ...state.direct.stats };
+        } else {
+            state.snapshot = JSON.parse(JSON.stringify(state.build));
+        }
         updateSnapshotStatus();
         recompute();
     });
     document.getElementById('dim-clear-btn').addEventListener('click', () => {
-        state.snapshot = null;
+        if (state.inputMode === 'direct') state.direct.snapshot = null;
+        else                              state.snapshot = null;
         updateSnapshotStatus();
         recompute();
     });
@@ -1136,14 +1222,6 @@ function bindAll() {
         recompute();
     });
 
-    // 遺物個別
-    document.querySelectorAll('.dim-relic-set').forEach(sel => {
-        sel.addEventListener('change', e => {
-            state.build.relics[sel.dataset.slot].setId = e.target.value || null;
-            onEquipmentChange(true);
-            recompute();
-        });
-    });
     document.querySelectorAll('.dim-relic-main').forEach(sel => {
         sel.addEventListener('change', e => {
             const slot = sel.dataset.slot;
@@ -1164,12 +1242,21 @@ function bindAll() {
         });
     });
 
-    // サブステタブ切替
+    // サブステ / 直接入力タブ切替
+    //   'direct' タブ = ステータス直接入力モード、その他 = ビルド計算モードのサブステ各方式
     document.querySelectorAll('#dim-subs-tabs .dim-subs-tab').forEach(btn => {
         btn.addEventListener('click', () => {
-            state.subs.mode = btn.dataset.mode;
+            const mode = btn.dataset.mode;
+            if (mode === 'direct') {
+                state.inputMode = 'direct';
+            } else {
+                state.inputMode = 'build';
+                state.subs.mode = mode;
+            }
+            applyInputModeVisibility();
             renderSubsBody();
-            applySubsToEnvBuffs();
+            if (state.inputMode === 'build') applySubsToEnvBuffs();
+            updateSnapshotStatus();
             recompute();
         });
     });
@@ -1234,9 +1321,8 @@ function bindAll() {
         r.addEventListener('change', () => {
             if (!r.checked) return;
             const mode = r.value;
-            document.getElementById('dim-preset-cav4').style.display   = (mode === '4set')       ? 'flex' : 'none';
-            document.getElementById('dim-preset-cav22').style.display  = (mode === '2+2')        ? 'flex' : 'none';
-            document.getElementById('dim-preset-cavInd').style.display = (mode === 'individual') ? 'grid' : 'none';
+            document.getElementById('dim-preset-cav4').style.display   = (mode === '4set') ? 'flex' : 'none';
+            document.getElementById('dim-preset-cav22').style.display  = (mode === '2+2')  ? 'flex' : 'none';
             if (mode === 'none') {
                 for (const slot of RELIC_SLOTS) state.build.relics[slot].setId = null;
                 onEquipmentChange(true);
@@ -1249,7 +1335,6 @@ function bindAll() {
     document.getElementById('dim-preset-cav-a').addEventListener('change', e => {
         const id = e.target.value || null;
         for (const slot of RELIC_SLOTS) state.build.relics[slot].setId = id;
-        for (const slot of RELIC_SLOTS) fillRelicSetSelect(slot);
         onEquipmentChange(true);
         recompute();
     });
@@ -1262,14 +1347,11 @@ function bindAll() {
         state.build.relics[SLOT.HANDS].setId = a;
         state.build.relics[SLOT.BODY].setId = b;
         state.build.relics[SLOT.FEET].setId = b;
-        for (const slot of RELIC_SLOTS) fillRelicSetSelect(slot);
         onEquipmentChange(true);
         recompute();
     };
     document.getElementById('dim-preset-cav-22a').addEventListener('change', apply22);
     document.getElementById('dim-preset-cav-22b').addEventListener('change', apply22);
-
-    // 個別 (.dim-relic-set) は既に上の per-slot 用バインドで処理済み
 
     // Planar — auto-apply
     document.getElementById('dim-preset-planar').addEventListener('change', e => {
@@ -2224,21 +2306,61 @@ function applySubsToEnvBuffs() {
 
 function updateSnapshotStatus() {
     const el = document.getElementById('dim-snapshot-status');
-    if (!state.snapshot) {
+    const snap = state.inputMode === 'direct' ? state.direct.snapshot : state.snapshot;
+    if (!snap) {
         el.textContent = 'スナップショット: なし';
         el.style.color = 'var(--text-muted)';
     } else {
-        el.textContent = `スナップショット: 保存済み (${state.snapshot.characterId} / 比較中)`;
+        const label = state.inputMode === 'direct' ? '直接入力' : snap.characterId;
+        el.textContent = `スナップショット: 保存済み (${label} / 比較中)`;
         el.style.color = 'var(--accent-gold)';
     }
 }
 
 // ---- 計算 + 結果描画 ---------------------------------------------------
 
+// 直接入力モードでもビルド系パネルは隠さない (ユーザー要望: タブ/パネルが消えないように)。
+//   モード差はサブステタブ本文 (renderSubsBody) と結果計算 (recompute) 側だけで吸収する。
+//   過去に display:none が付与されていた場合に備え、念のため全表示へ戻すだけのリセット処理。
+function applyInputModeVisibility() {
+    for (const sel of [
+        '.dim-build-mgr', '#dim-char-panel', '#dim-mainstat-section',
+        '#dim-self-buffs-panel', '.dim-party-panel', '#dim-char-detail',
+    ]) {
+        const el = document.querySelector(sel);
+        if (el) el.style.display = '';
+    }
+}
+
+// 直接ステ入力モードの計算 + 結果描画 (recompute から委譲)。
+function recomputeDirect(resultEl) {
+    let nowStats;
+    try { nowStats = Diminishing.directStatsToFinalStats(state.direct.stats); }
+    catch (err) { resultEl.innerHTML = `<div class="dim-error">計算エラー: ${err.message}</div>`; return; }
+
+    if (!state.direct.snapshot) {
+        resultEl.innerHTML = renderStatsOnly(nowStats);
+        bindStatsFilter();
+        return;
+    }
+    let cmp;
+    try {
+        const beforeStats = Diminishing.directStatsToFinalStats(state.direct.snapshot);
+        cmp = Diminishing.compareStats(beforeStats, nowStats, state.options);
+    } catch (err) { resultEl.innerHTML = `<div class="dim-error">比較エラー: ${err.message}</div>`; return; }
+    resultEl.innerHTML = renderComparison(cmp);
+    bindComparisonFilter();
+}
+
 function recompute() {
     const resultEl = document.getElementById('dim-result');
     if (!resultEl) return;
-    
+
+    if (state.inputMode === 'direct') {
+        recomputeDirect(resultEl);
+        return;
+    }
+
     applySelfBuffsToEnvBuffs();
 
     let nowStats;

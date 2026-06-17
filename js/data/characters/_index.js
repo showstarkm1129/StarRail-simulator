@@ -11,3 +11,6 @@ import './Aventurine.js';
 import './testAll.js';
 import './testAllS1.js';
 import './Cipher.js';
+import './Mortenax Blade.js';
+import './Ashveil.js';
+import './Tribbie.js';

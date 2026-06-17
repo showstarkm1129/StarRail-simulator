@@ -18,3 +18,5 @@ import './She Already Shut Her Eyes.js';         // 閉ざした瞳
 import './To the Star Glowing in the Long Night.js'; // 長き夜に輝く星へ
 import './Make Farewells More Beautiful.js';        // 永訣よ美しくあれ
 import './Love Is Now Eternal.js';                  // 愛はいま永遠に
+import './Lies Dance on the Breeze.js';           // 風に揺蕩う虚言
+import './The Finale of a Lie.js';                // 或る嘘の終幕

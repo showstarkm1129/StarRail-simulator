@@ -107,3 +107,41 @@ test('存在しないスロットへの helper は明示エラー', () => {
     assert.throws(() => Diminishing.setSubs(build, 'no_slot', {}), /slot/);
     assert.throws(() => Diminishing.addSub(build, 'no_slot', 'CRIT_RATE', 0.1), /slot/);
 });
+
+// ---- 直接ステ入力モード -------------------------------------------------
+
+test('directStatsToFinalStats: 入力値が最終ステ/各乗算枠にそのまま反映される', () => {
+    const stats = Diminishing.directStatsToFinalStats({
+        atk: 2000, critRate: 0.50, critDmg: 1.00, dmgAll: 0.50, resPen: 0.20,
+    });
+    // 会心・EP回復は基礎込みの最終値として derived に出る
+    approx(stats.derived.atk, 2000);
+    approx(stats.derived.critRate, 0.50);
+    approx(stats.derived.critDmg, 1.00);
+    approx(stats.derived.critExpected, 1.5);          // 1 + 0.50×1.00
+    approx(stats.derived.dmgOwnElement, 0.50);
+
+    const f = Diminishing.computeDamageFactors(stats);
+    approx(f.atk, 2000);
+    approx(f.crit, 1.5);                                // 基礎5%/50%の二重計上が無いこと
+    approx(f.dmgBonus, 1.5);                            // element=null なので dmgAll のみ
+    approx(f.res, 1.2);                                 // 1 - (0 - 0.20)
+});
+
+test('directStatsToFinalStats: 未指定キーは 0、EP回復は既定100%扱い', () => {
+    const stats = Diminishing.directStatsToFinalStats({});
+    approx(stats.derived.atk, 0);
+    approx(stats.derived.critRate, 0);                  // 入力 0 → そのまま (基礎は足さない)
+    approx(stats.derived.energyRegenPct, 0);
+    // raw 側は基礎分を引いた加算値 (CRIT_RATE_BASE=0.05)
+    approx(stats.raw[STAT.CRIT_RATE], -0.05);
+});
+
+test('compareStats: 直接入力の前後比較が乗算枠の積になる', () => {
+    const beforeStats = Diminishing.directStatsToFinalStats({ atk: 2000, dmgAll: 0.50 });
+    const afterStats = Diminishing.directStatsToFinalStats({ atk: 2200, dmgAll: 0.80 });
+    const res = Diminishing.compareStats(beforeStats, afterStats);
+    approx(res.factors.atk.ratio, 1.1);                 // 2200/2000
+    approx(res.factors.dmgBonus.ratio, 1.8 / 1.5);      // (1+0.8)/(1+0.5)
+    approx(res.factors.total.ratio, 1.1 * (1.8 / 1.5));
+});

@@ -911,6 +911,24 @@ body {
     padding-bottom: 0.4rem;
 }
 
+/* キャラ・光円錐・セット効果パネル: 全幅を使い、左(キャラ/軌跡)・右(セット効果)の2カラムに分割。
+   右半分の余白を活用して縦幅を詰める。狭い画面では1カラムに自動折返し。 */
+#dim-char-panel {
+    grid-column: 1 / -1;
+}
+.dim-char-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+    gap: 0.4rem 1.6rem;
+}
+.dim-char-col {
+    min-width: 0;
+}
+/* 右カラム先頭の見出しは上余白を詰める (カラム上端に揃える) */
+.dim-subheading-first {
+    margin-top: 0;
+}
+
 .dim-panel-hint {
     color: var(--text-muted);
     font-size: 0.78rem;
@@ -964,7 +982,8 @@ body {
     font-size: 0.82rem;
 }
 
-.dim-sub-input {
+.dim-sub-input,
+.dim-direct-input {
     flex: 1 1 0;
     min-width: 0;       /* グリッド列が狭くなっても溢れず縮むようにする */
     background-color: var(--bg-dark);
@@ -1258,13 +1277,6 @@ body {
     width: 70px;
 }
 
-/* 個別モード(2列グリッド) */
-.dim-preset-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.4rem 0.8rem;
-    margin-top: 0.4rem;
-}
 
 /* 遺物メインステの2列レイアウト (頭+手/胴+足/球+縄) */
 .dim-relic-main-grid {
@@ -1808,7 +1820,6 @@ body {
 
 @media (max-width: 900px) {
     .dim-level-grid { grid-template-columns: 1fr; }
-    .dim-preset-grid { grid-template-columns: 1fr; }
     .dim-relic-main-grid { grid-template-columns: 1fr; }
     .dim-subs-panel .dim-subs-grid { grid-template-columns: 1fr; }
 }

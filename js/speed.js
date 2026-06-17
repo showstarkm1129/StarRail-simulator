@@ -384,11 +384,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return `<span style="font-size:0.82em; font-weight:bold; ${style}"${title}>${escapeAttr(evLabel(ev))}${suffix}${notFired ? '(不発)' : ''}</span>`;
     }
 
-    function renderPanelTable(panel) {
-        const tbody = panel.el && panel.el.tbody;
-        if (!tbody) return;
-        tbody.innerHTML = '';
-
+    // ---- タイムライン計算 (テーブル描画とテキスト共有で共通利用) ----
+    // 各ターンの計算結果を行データの配列として返す。DOM/テキストは呼び出し側で組み立てる。
+    //   返り値: { threshold, rows: [{ turn, chips:[{ev,kind,notFired}], sim, actualAV,
+    //             cumulativeAV, speedChanged, pastThreshold, drawWallBefore }] }
+    function computePanelTimeline(panel) {
         const threshold = panel.threshold > 0 ? panel.threshold : 150;
         const EPS = 1e-9;
 
@@ -400,6 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
+        const rows = [];
         let cumulativeAV = 0;
         let turn = 0;
         let turnsPastThreshold = 0;
@@ -431,25 +432,52 @@ document.addEventListener('DOMContentLoaded', () => {
             // サマリ: turn効果(不発含む) + このターンで発動した cum効果のみ
             const chips = [];
             effective.forEach((e, idx) => {
-                if (e.kind === 'turn') chips.push(renderSummaryChip(e.ev, 'turn', !sim.fired[idx]));
-                else if (e.kind === 'cum' && sim.fired[idx]) chips.push(renderSummaryChip(e.ev, 'cum', false));
+                if (e.kind === 'turn') chips.push({ ev: e.ev, kind: 'turn', notFired: !sim.fired[idx] });
+                else if (e.kind === 'cum' && sim.fired[idx]) chips.push({ ev: e.ev, kind: 'cum', notFired: false });
             });
-            const summary = chips.length ? chips.join(' ') : '<span style="color:var(--text-muted)">-</span>';
 
-            let drawWallHere = false;
+            let drawWallBefore = false;
             if (!hasDrawnWall && (cumulativeAV + actualAV) > threshold) {
-                drawWallHere = true;
+                drawWallBefore = true;
                 hasDrawnWall = true;
             }
             cumulativeAV += actualAV;
             if (cumulativeAV > threshold) turnsPastThreshold++;
 
-            const speedChanged = Math.abs(sim.endSpeed - sim.startSpeed) > 1e-6;
-            const speedText = speedChanged
-                ? `${sim.startSpeed.toFixed(1)}→${sim.endSpeed.toFixed(1)}`
-                : sim.startSpeed.toFixed(1);
+            rows.push({
+                turn: turn + 1,
+                chips,
+                sim,
+                actualAV,
+                cumulativeAV,
+                speedChanged: Math.abs(sim.endSpeed - sim.startSpeed) > 1e-6,
+                pastThreshold: cumulativeAV > threshold,
+                drawWallBefore,
+            });
 
-            if (drawWallHere) {
+            turn++;
+            if (turn > 200) break; // 無限ループ防止
+        }
+
+        return { threshold, rows };
+    }
+
+    function renderPanelTable(panel) {
+        const tbody = panel.el && panel.el.tbody;
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        const { threshold, rows } = computePanelTimeline(panel);
+
+        rows.forEach((r) => {
+            const summary = r.chips.length
+                ? r.chips.map(c => renderSummaryChip(c.ev, c.kind, c.notFired)).join(' ')
+                : '<span style="color:var(--text-muted)">-</span>';
+            const speedText = r.speedChanged
+                ? `${r.sim.startSpeed.toFixed(1)}→${r.sim.endSpeed.toFixed(1)}`
+                : r.sim.startSpeed.toFixed(1);
+
+            if (r.drawWallBefore) {
                 const wallTr = document.createElement('tr');
                 wallTr.innerHTML = `
                     <td colspan="5" style="padding:0;">
@@ -460,129 +488,95 @@ document.addEventListener('DOMContentLoaded', () => {
                 tbody.appendChild(wallTr);
             }
 
+            // そのターン自身に設定されたバフがある場合のみ削除(✕)ボタンを表示
+            const hasOwnEvents = ((panel.turns[r.turn - 1] || {}).events || []).length > 0;
+            const delBtn = hasOwnEvents
+                ? `<button class="secondary-btn-small adv-turn-clear" data-turn="${r.turn - 1}" title="このターンのバフを削除" style="padding:2px 7px; font-size:0.8em; color:#ff8787; margin-left:auto;">✕</button>`
+                : '';
+
             const tr = document.createElement('tr');
-            if (cumulativeAV > threshold) tr.style.opacity = '0.4';
+            if (r.pastThreshold) tr.style.opacity = '0.4';
             tr.innerHTML = `
-                <td>${turn + 1}</td>
+                <td>${r.turn}</td>
                 <td>
                     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                        <button class="secondary-btn-small adv-buff-setup" data-turn="${turn}" style="padding:2px 8px; font-size:0.8em;">バフ設定</button>
-                        <span style="display:flex; gap:6px; flex-wrap:wrap;">${summary}</span>
+                        <button class="secondary-btn-small adv-buff-setup" data-turn="${r.turn - 1}" style="padding:2px 8px; font-size:0.8em;">バフ設定</button>
+                        <span style="display:flex; gap:6px; flex-wrap:wrap; max-width:44ch; word-break:break-word;">${summary}</span>
+                        ${delBtn}
                     </div>
                 </td>
-                <td style="${speedChanged ? 'color:#a8d5ff; font-weight:bold;' : ''}">${speedText}</td>
-                <td>${actualAV.toFixed(2)}</td>
-                <td style="font-weight:bold; color: var(--accent-gold);">${cumulativeAV.toFixed(2)}</td>
+                <td style="${r.speedChanged ? 'color:#a8d5ff; font-weight:bold;' : ''}">${speedText}</td>
+                <td>${r.actualAV.toFixed(2)}</td>
+                <td style="font-weight:bold; color: var(--accent-gold);">${r.cumulativeAV.toFixed(2)}</td>
             `;
             tbody.appendChild(tr);
-
-            turn++;
-            if (turn > 200) break; // 無限ループ防止
-        }
+        });
 
         tbody.querySelectorAll('.adv-buff-setup').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 openBuffModal(panel.id, parseInt(e.currentTarget.getAttribute('data-turn'), 10), e.currentTarget);
             });
         });
+
+        // このターンのバフを削除 (その場で即削除して再描画)
+        tbody.querySelectorAll('.adv-turn-clear').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const ti = parseInt(e.currentTarget.getAttribute('data-turn'), 10);
+                if (panel.turns[ti]) panel.turns[ti].events = [];
+                if (modalPanelId === panel.id && modalTurnIndex === ti) buffModal.style.display = 'none';
+                renderPanelTable(panel);
+            });
+        });
+    }
+
+    // タイムラインを共有用プレーンテキストに整形 (画像化はChromeのCanvas汚染で不可のため)
+    function buildPanelText(panel) {
+        const { threshold, rows } = computePanelTimeline(panel);
+        const lines = [];
+        lines.push(`【${panel.name}】`);
+        lines.push(`基礎速度:${panel.baseSpeed} / 開始前速度:${panel.preSpeed} / 目標閾値:${threshold}`);
+        lines.push('ターン | 効果 | 適用速度 | 実行動値 | 累計AV');
+        rows.forEach((r) => {
+            if (r.drawWallBefore) lines.push(`--- 目標閾値(${threshold})到達 ---`);
+            const eff = r.chips.length
+                ? r.chips.map(c => {
+                    const suffix = c.kind === 'cum' ? `@累計${evAtAV(c.ev)}` : `@${evOffset(c.ev)}AV`;
+                    return evLabel(c.ev) + suffix + (c.notFired ? '(不発)' : '');
+                }).join(', ')
+                : '-';
+            const speedText = r.speedChanged
+                ? `${r.sim.startSpeed.toFixed(1)}→${r.sim.endSpeed.toFixed(1)}`
+                : r.sim.startSpeed.toFixed(1);
+            lines.push(`T${r.turn} | ${eff} | ${speedText} | ${r.actualAV.toFixed(2)} | ${r.cumulativeAV.toFixed(2)}`);
+        });
+        return lines.join('\n');
+    }
+
+    // クリップボードへテキストをコピー (Clipboard API → 旧execCommand の順でフォールバック)
+    //   非フォーカス時など Clipboard API が拒否するケースでも execCommand で救済する。
+    async function copyTextToClipboard(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return;
+            } catch {
+                // フォーカス無し/権限拒否などは下の execCommand 経路へフォールバック
+            }
+        }
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.top = '-9999px';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (!ok) throw new Error('execCommand copy failed');
     }
 
     function renderAllAdvPanels() {
         advPanels.forEach(renderPanelTable);
-    }
-
-    async function copyPanelImage(panelEl) {
-        const clone = panelEl.cloneNode(true);
-        
-        clone.querySelectorAll('.adv-panel-remove, .adv-panel-share').forEach(el => el.remove());
-        
-        const origInputs = panelEl.querySelectorAll('input, select');
-        const cloneInputs = clone.querySelectorAll('input, select');
-        origInputs.forEach((orig, i) => {
-            if (orig.tagName === 'INPUT') {
-                cloneInputs[i].setAttribute('value', orig.value);
-            } else if (orig.tagName === 'SELECT') {
-                const selectedIdx = orig.selectedIndex;
-                if (selectedIdx >= 0) {
-                    const opts = cloneInputs[i].querySelectorAll('option');
-                    if (opts[selectedIdx]) opts[selectedIdx].setAttribute('selected', 'selected');
-                }
-            }
-        });
-
-        let styleText = '';
-        for (const sheet of document.styleSheets) {
-            try {
-                for (const rule of sheet.cssRules) {
-                    styleText += rule.cssText + '\n';
-                }
-            } catch (e) {
-                // cross-origin ignore
-            }
-        }
-        
-        const bodyStyles = window.getComputedStyle(document.body);
-        let inlineStyles = '';
-        for (let i = 0; i < bodyStyles.length; i++) {
-            const name = bodyStyles[i];
-            if (name.startsWith('--')) {
-                inlineStyles += `${name}: ${bodyStyles.getPropertyValue(name)};\n`;
-            }
-        }
-
-        const xmlSerializer = new XMLSerializer();
-        const cloneXml = xmlSerializer.serializeToString(clone);
-        
-        const svgString = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="${panelEl.offsetWidth}" height="${panelEl.offsetHeight}">
-                <foreignObject width="100%" height="100%">
-                    <div xmlns="http://www.w3.org/1999/xhtml" class="screenshot-wrapper" style="width: ${panelEl.offsetWidth}px; height: ${panelEl.offsetHeight}px;">
-                        <style>
-                        <![CDATA[
-                            ${styleText}
-                            .screenshot-wrapper {
-                                ${inlineStyles}
-                            }
-                        ]]>
-                        </style>
-                        <div style="background-color: #1e1e1e; padding: 1rem; box-sizing: border-box; width: 100%; height: 100%; border-radius: 8px;">
-                            ${cloneXml}
-                        </div>
-                    </div>
-                </foreignObject>
-            </svg>
-        `;
-
-        const img = new Image();
-        const svgBlob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
-        const url = URL.createObjectURL(svgBlob);
-        
-        return new Promise((resolve, reject) => {
-            img.onload = () => {
-                try {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = panelEl.offsetWidth;
-                    canvas.height = panelEl.offsetHeight;
-                    const ctx = canvas.getContext('2d');
-                    ctx.fillStyle = '#1e1e1e'; 
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(img, 0, 0);
-                    URL.revokeObjectURL(url);
-                    canvas.toBlob(blob => {
-                        if (blob) resolve(blob);
-                        else reject(new Error('Canvas to Blob failed'));
-                    }, 'image/png');
-                } catch (e) {
-                    URL.revokeObjectURL(url);
-                    reject(e);
-                }
-            };
-            img.onerror = () => {
-                URL.revokeObjectURL(url);
-                reject(new Error('Image load failed'));
-            };
-            img.src = url;
-        });
     }
 
     function buildPanelDOM(panel) {
@@ -591,11 +585,14 @@ document.addEventListener('DOMContentLoaded', () => {
         card.style.cssText = 'min-width: 470px; flex: 0 0 auto; padding: 1rem; margin: 0; position: relative;';
         card.innerHTML = `
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.8rem;">
-                <input type="text" class="adv-panel-name" value="${escapeAttr(panel.name)}" style="font-weight:bold; font-size:1.05rem; flex:1; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:4px; padding:4px 8px; color:var(--text-color);">
-                <button class="secondary-btn-small adv-panel-share" title="このパネルを画像としてコピー" style="padding:2px 10px;">共有</button>
-                <button class="secondary-btn-small adv-panel-remove" title="このパネルを削除" style="padding:2px 10px;">✕</button>
+                <span style="font-size:0.78em; color:var(--text-muted); flex:none;">No.</span>
+                <input type="number" class="adv-panel-order" min="1" step="1" value="1" title="番号を変更するとその位置へ並び替えます" style="width:42px; flex:none; text-align:center; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:4px; padding:4px 2px; color:var(--text-color); font-weight:bold;">
+                <input type="text" class="adv-panel-name" value="${escapeAttr(panel.name)}" style="font-weight:bold; font-size:1.05rem; flex:1; min-width:0; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:4px; padding:4px 8px; color:var(--text-color);">
+                <button class="secondary-btn-small adv-panel-duplicate" title="このパネルを複製" style="padding:2px 10px; flex:none;">複製</button>
+                <button class="secondary-btn-small adv-panel-share" title="タイムラインをテキストでコピー" style="padding:2px 10px; flex:none;">共有</button>
+                <button class="secondary-btn-small adv-panel-remove" title="このパネルを削除" style="padding:2px 10px; flex:none;">✕</button>
             </div>
-            <div style="display:flex; gap:0.8rem; flex-wrap:wrap; margin-bottom:1rem;">
+            <div style="display:flex; gap:0.8rem; flex-wrap:wrap; align-items:flex-end; margin-bottom:1rem;">
                 <div class="input-group" style="margin-bottom:0;">
                     <label>基礎速度:</label>
                     <input type="number" class="adv-base-speed" value="${panel.baseSpeed}" min="1" step="1" style="width:90px;">
@@ -608,13 +605,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     <label>目標閾値:</label>
                     <input type="number" class="adv-threshold" value="${panel.threshold}" min="1" step="1" style="width:90px;">
                 </div>
+                <button class="secondary-btn-small adv-panel-clear-buffs" title="このパネルの全ターンのバフを消去" style="margin-left:auto; padding:4px 10px; color:#ff8787;">バフ全消去</button>
             </div>
             <div class="cycle-box" style="margin:0;">
                 <table class="cycle-table">
                     <thead>
                         <tr>
                             <th style="width:46px;">ターン</th>
-                            <th>効果 (発動AV指定可)</th>
+                            <th>効果</th>
                             <th style="width:96px;">適用速度</th>
                             <th style="width:70px;">実行動値</th>
                             <th style="width:78px;">累計</th>
@@ -627,6 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         panel.el = {
             card,
+            orderInput: card.querySelector('.adv-panel-order'),
             nameInput: card.querySelector('.adv-panel-name'),
             baseInput: card.querySelector('.adv-base-speed'),
             preInput: card.querySelector('.adv-pre-speed'),
@@ -651,28 +650,28 @@ document.addEventListener('DOMContentLoaded', () => {
             renderPanelTable(panel);
         });
         
+        // No. 変更で並び替え
+        panel.el.orderInput.addEventListener('change', () => {
+            const cur = advPanels.findIndex(p => p.id === panel.id);
+            if (cur === -1) return;
+            let target = parseInt(panel.el.orderInput.value, 10);
+            if (!Number.isFinite(target)) { refreshPanelOrders(); return; }
+            target = Math.max(1, Math.min(advPanels.length, target)) - 1; // 0-based へ
+            if (target === cur) { refreshPanelOrders(); return; }
+            const [moved] = advPanels.splice(cur, 1);
+            advPanels.splice(target, 0, moved);
+            reorderPanelDOM();
+            refreshPanelOrders();
+        });
+
         const shareBtn = card.querySelector('.adv-panel-share');
         if (shareBtn) {
             shareBtn.addEventListener('click', async () => {
                 const originalText = shareBtn.textContent;
-                shareBtn.textContent = '生成中...';
                 shareBtn.disabled = true;
                 try {
-                    const blob = await copyPanelImage(card);
-                    if (navigator.clipboard && navigator.clipboard.write) {
-                        await navigator.clipboard.write([
-                            new ClipboardItem({ 'image/png': blob })
-                        ]);
-                        shareBtn.textContent = 'コピー完了!';
-                    } else {
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `timeline_${Date.now()}.png`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                        shareBtn.textContent = '保存完了!';
-                    }
+                    await copyTextToClipboard(buildPanelText(panel));
+                    shareBtn.textContent = 'コピー完了!';
                 } catch (err) {
                     console.error(err);
                     shareBtn.textContent = '失敗';
@@ -680,10 +679,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 setTimeout(() => {
                     shareBtn.textContent = originalText;
                     shareBtn.disabled = false;
-                }, 2000);
+                }, 1500);
             });
         }
-        
+
+        card.querySelector('.adv-panel-duplicate').addEventListener('click', () => duplicateAdvPanel(panel.id));
+        card.querySelector('.adv-panel-clear-buffs').addEventListener('click', () => {
+            if (!window.confirm(`「${panel.name}」の全ターンのバフを消去しますか？`)) return;
+            panel.turns.forEach(t => { t.events = []; });
+            if (modalPanelId === panel.id) buffModal.style.display = 'none';
+            renderPanelTable(panel);
+        });
         card.querySelector('.adv-panel-remove').addEventListener('click', () => removeAdvPanel(panel.id));
 
         return card;
@@ -703,7 +709,42 @@ document.addEventListener('DOMContentLoaded', () => {
         advPanels.push(panel);
         advPanelsContainer.appendChild(buildPanelDOM(panel));
         renderPanelTable(panel);
+        refreshPanelOrders();
         return panel;
+    }
+
+    // パネルを複製 (状態をディープコピーして元パネルの直後へ挿入)
+    function duplicateAdvPanel(id) {
+        const idx = advPanels.findIndex(p => p.id === id);
+        if (idx === -1) return;
+        const src = advPanels[idx];
+        advPanelSeq++;
+        const copy = {
+            id: 'adv-panel-' + advPanelSeq,
+            name: src.name + ' (複製)',
+            baseSpeed: src.baseSpeed,
+            preSpeed: src.preSpeed,
+            threshold: src.threshold,
+            turns: src.turns.map(t => ({ events: (t.events || []).map(ev => ({ ...ev })) })),
+            el: null,
+        };
+        advPanels.splice(idx + 1, 0, copy);
+        const card = buildPanelDOM(copy);
+        src.el.card.after(card); // 元パネルの直後へ配置
+        renderPanelTable(copy);
+        refreshPanelOrders();
+    }
+
+    // 配列順に合わせて DOM を並び替え (appendChild は既存ノードを移動させる)
+    function reorderPanelDOM() {
+        advPanels.forEach(p => { if (p.el && p.el.card) advPanelsContainer.appendChild(p.el.card); });
+    }
+
+    // 各パネル左上の No. 表示を現在の並び順 (1始まり) に同期
+    function refreshPanelOrders() {
+        advPanels.forEach((p, i) => {
+            if (p.el && p.el.orderInput) p.el.orderInput.value = String(i + 1);
+        });
     }
 
     function removeAdvPanel(id) {
@@ -713,6 +754,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (removed.el && removed.el.card) removed.el.card.remove();
         if (modalPanelId === id) buffModal.style.display = 'none';
         if (advPanels.length === 0) createAdvPanel(); // 最低1枚は残す
+        refreshPanelOrders();
     }
 
     // ---- バフ設定モーダル (イベントリスト編集) ----
@@ -932,6 +974,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if (advAddPanelBtn) advAddPanelBtn.addEventListener('click', () => createAdvPanel());
+
+    // パネル列の上で縦ホイールしたら横スクロールに変換 (一番下のスクロールバー以外でも横移動できるように)
+    //   横にスクロール余地がある方向のときだけ横移動を奪い、端まで来たら通常の縦スクロールへ戻す。
+    if (advPanelsContainer) {
+        advPanelsContainer.addEventListener('wheel', (e) => {
+            if (e.deltaY === 0) return;                 // 横ホイール(deltaX)はそのまま native に任せる
+            const maxScroll = advPanelsContainer.scrollWidth - advPanelsContainer.clientWidth;
+            if (maxScroll <= 0) return;                 // 横にあふれていない → 通常の縦スクロール
+            const goingRight = e.deltaY > 0;
+            const canScrollRight = advPanelsContainer.scrollLeft < maxScroll - 1;
+            const canScrollLeft = advPanelsContainer.scrollLeft > 0;
+            if ((goingRight && canScrollRight) || (!goingRight && canScrollLeft)) {
+                advPanelsContainer.scrollLeft += e.deltaY;
+                e.preventDefault();                     // ページ縦スクロールを抑止して横移動に充てる
+            }
+        }, { passive: false });
+    }
 
     // 初期化処理
     updateUI();

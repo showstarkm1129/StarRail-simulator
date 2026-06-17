@@ -8,3 +8,4 @@ import './Self-Enshrouded Recluse.js';          // 星の光を隠した隠者
 import './Warrior Goddess of Sun and Thunder.js'; // 烈陽と雷鳴の武神
 import './World-Remaking Deliverer.js';         // 天地再創の救世主
 import './Sacerdos\' Relived Ordeal.js';        // 再び苦難の道を歩む司祭
+import './Smith\'s Fire Beast Mask.js';          // 神業を探求する名匠

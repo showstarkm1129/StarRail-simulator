@@ -23,7 +23,7 @@
 //   - taken_factor:          被ダメ増デバフ(攻撃者から見た敵側の係数。本ツールで対象に追加)
 
 import { StatComputer } from './statComputer.js';
-import { STAT, STAT_DEFAULTS, makeElementDmgKey } from './statKeys.js';
+import { STAT, STAT_DEFAULTS, ALL_STAT_KEYS, makeElementDmgKey } from './statKeys.js';
 
 // ---- デフォルト前提 -----------------------------------------------------
 
@@ -53,7 +53,10 @@ const DEFAULT_OPTIONS = Object.freeze({
 export const Diminishing = Object.freeze({
     DEFAULT_OPTIONS,
     compareBuilds,
+    compareStats,
     compareWithModification,
+    // 直接ステ入力モード用 (生ステータス → FinalStats 互換オブジェクト)
+    directStatsToFinalStats,
     // ヘルパ
     cloneBuild,
     swapRelicMain,
@@ -92,10 +95,16 @@ export const Diminishing = Object.freeze({
 //       options: 適用オプション
 //     }
 function compareBuilds(buildBefore, buildAfter, opts = {}) {
-    const options = { ...DEFAULT_OPTIONS, ...opts };
-
     const beforeStats = StatComputer.compute(buildBefore);
     const afterStats  = StatComputer.compute(buildAfter);
+    return compareStats(beforeStats, afterStats, opts);
+}
+
+// FinalStats 同士を直接比較する (compareBuilds の内部実体)。
+//   直接ステ入力モードでは StatComputer を介さず directStatsToFinalStats() の
+//   結果をそのまま渡せる。
+function compareStats(beforeStats, afterStats, opts = {}) {
+    const options = { ...DEFAULT_OPTIONS, ...opts };
 
     const beforeFactors = computeDamageFactors(beforeStats, options);
     const afterFactors  = computeDamageFactors(afterStats,  options);
@@ -244,6 +253,79 @@ function computeDamageFactors(finalStats, opts = DEFAULT_OPTIONS) {
 
 // スキル種別 breakdown 用の key 一覧。base = 共通枠のみ、他 4 つは + DMG_<TYPE>。
 const DMG_TYPE_KEYS = ['base', 'basic', 'skill', 'ult', 'followup'];
+
+// ---- 直接ステ入力モード ------------------------------------------------
+//
+// 遺物のメインステ/サブステからビルドを積み上げず、最終ステータスを直接受け取って
+// FinalStats 互換オブジェクト ({ raw, derived, meta }) を組み立てる。
+//   - 軌跡・パーティバフ・セット効果は一切載らない (入力値が最終値そのもの)。
+//   - computeDamageFactors / STATS 表示 がそのまま使える形に整える。
+//
+// 入力 direct のキー (すべて小数。% は 0.25 = 25%):
+//   atk, hp, def, spd                          基礎ステ (最終値)
+//   critRate, critDmg                          会心 (基礎 5% / 50% 込みの最終値)
+//   dmgAll                                     与ダメージ% (共通+属性をまとめた値)
+//   dmgBasic, dmgSkill, dmgUlt, dmgFollowup    スキル種別ダメ枠
+//   fixedDmg, sepMult                          確定ダメージ / 別枠乗算
+//   defDown, defIgnore, resPen, dmgTaken       デバフ系
+//   breakEffect, energyRegen, ehr, eres        その他 (energyRegen は 100% 込みの最終値)
+function directStatsToFinalStats(direct = {}) {
+    const g = (k) => {
+        const v = Number(direct[k]);
+        return Number.isFinite(v) ? v : 0;
+    };
+
+    const raw = {};
+    for (const k of ALL_STAT_KEYS) raw[k] = 0;
+
+    // 会心・EP回復は「基礎込みの最終値」を受け取り、raw 側は加算分に戻す
+    // (computeDamageFactors / finalize が BASE を再加算するため二重計上を避ける)。
+    const critRate = g('critRate');
+    const critDmg  = g('critDmg');
+    const energyRegen = g('energyRegen');
+
+    raw[STAT.CRIT_RATE]       = critRate - STAT_DEFAULTS.CRIT_RATE_BASE;
+    raw[STAT.CRIT_DMG]        = critDmg  - STAT_DEFAULTS.CRIT_DMG_BASE;
+    raw[STAT.ENERGY_REGEN]    = energyRegen - STAT_DEFAULTS.ENERGY_REGEN_BASE;
+    raw[STAT.DMG_ALL]         = g('dmgAll');
+    raw[STAT.DMG_BASIC]       = g('dmgBasic');
+    raw[STAT.DMG_SKILL]       = g('dmgSkill');
+    raw[STAT.DMG_ULT]         = g('dmgUlt');
+    raw[STAT.DMG_FOLLOWUP]    = g('dmgFollowup');
+    raw[STAT.FIXED_DMG]       = g('fixedDmg');
+    raw[STAT.SEP_MULT]        = g('sepMult');
+    raw[STAT.DEF_DOWN]        = g('defDown');
+    raw[STAT.DEF_IGNORE]      = g('defIgnore');
+    raw[STAT.RES_PEN]         = g('resPen');
+    raw[STAT.DMG_TAKEN]       = g('dmgTaken');
+    raw[STAT.BREAK_EFFECT]    = g('breakEffect');
+    raw[STAT.EFFECT_HIT_RATE] = g('ehr');
+    raw[STAT.EFFECT_RES]      = g('eres');
+
+    const atk = g('atk'), hp = g('hp'), def = g('def'), spd = g('spd');
+    const derived = {
+        atk, hp, def, spd,
+        speedAV: spd > 0 ? 10000 / spd : Infinity,
+        critRate,
+        critDmg,
+        critExpected: 1 + Math.min(critRate, 1.0) * critDmg,
+        energyRegenPct: energyRegen,
+        dmgOwnElement: raw[STAT.DMG_ALL],         // element=null のため共通枠のみ
+        breakEffectPct: 1 + raw[STAT.BREAK_EFFECT],
+        dmgByElement: {},
+    };
+
+    return {
+        raw,
+        derived,
+        contributions: {},
+        // element=null にすると computeDamageFactors の与ダメ枠は dmgAll のみ参照する
+        meta: {
+            characterId: null, element: null, path: null,
+            lightconeId: null, superimpose: null, eidolon: 0,
+        },
+    };
+}
 
 // ---- ビルド操作ヘルパ (immutable) ---------------------------------------
 
