@@ -1487,9 +1487,10 @@ function gatherTeammateEffects(teammateBuild) {
     const teammateEidolon = teammateBuild.eidolon || 0;
 
     // キャラ (星魂条件 minEidolon でフィルタ)
+    const charSrcKey = `char:${ch.id}`;
     for (const ef of ch.partyEffects || []) {
         if (ef.minEidolon && teammateEidolon < ef.minEidolon) continue;
-        out.push({ srcKey: 'char', srcLabel: `キャラ: ${ch.name}`, ef });
+        out.push({ srcKey: charSrcKey, srcLabel: `キャラ: ${ch.name}`, ef });
     }
 
     // テスト用キャラ: 全 LC / 全セット (2pc+4pc) / 全オーナメントの partyEffects を
@@ -1604,13 +1605,14 @@ function gatherFocusEffects(build) {
     const eidolon = build.eidolon || 0;
 
     // 1. キャラ
+    const charSrcKey = `char:${ch.id}`;
     for (const ef of ch.partyEffects || []) {
         if (ef.minEidolon && eidolon < ef.minEidolon) continue;
-        out.push({ srcKey: 'char', srcLabel: `キャラ: ${ch.name}`, ef, type: 'party' });
+        out.push({ srcKey: charSrcKey, srcLabel: `キャラ: ${ch.name}`, ef, type: 'party' });
     }
     for (const ef of ch.selfEffects || []) {
         if (ef.minEidolon && eidolon < ef.minEidolon) continue;
-        out.push({ srcKey: 'char', srcLabel: `キャラ: ${ch.name}`, ef, type: 'self' });
+        out.push({ srcKey: charSrcKey, srcLabel: `キャラ: ${ch.name}`, ef, type: 'self' });
     }
 
     // 2. 光円錐
