@@ -62,13 +62,13 @@ js/data/
 │   ├── template.js        ← 新規キャラ用テンプレート
 │   ├── bronya.js / hyacine.js  ← 実装済みキャラ
 │   └── testAll.js / testAllS1.js  ← 全装備 partyEffect 検証用テストキャラ
-├── Lightcones/            ← 光円錐 (HSR 公式英名)
+├── lightcones/            ← 光円錐
 │   ├── _index.js
 │   └── 各光円錐 .js
-├── Cavern Relics/         ← 4 部位遺物セット (HSR 公式英名)
+├── cavern relics/         ← 4 部位遺物セット
 │   ├── _index.js
 │   └── 各セット .js
-└── Planar Ornaments/      ← 2 部位オーナメント (HSR 公式英名)
+└── planar ornaments/      ← 2 部位オーナメント
     ├── _index.js
     └── 各セット .js
 ```
@@ -105,14 +105,14 @@ js/data/
 
 ## データファイル追加フロー
 
-1. `js/data/<カテゴリ>/<HSR 公式英名>.js` を作成
+1. `js/data/<カテゴリ>/<先頭小文字のHSR公式英名>.js` を作成
 2. `Registry.lightcone.add({ ... })` 等で登録 (ファイル冒頭で `import { Registry } from '../../build/registry.js';`)
 3. 同じカテゴリの `_index.js` に `import './<新ファイル>.js';` を1行追加
 
 ## 命名規則
 
-- データフォルダ名は **HSR 公式英名** (`Lightcones` / `Cavern Relics` / `Planar Ornaments`)
-- データファイル名は HSR 公式英名 (例: `Epoch Etched in Golden Blood.js`)
+- データフォルダ名は **小文字** (`characters` / `lightcones` / `cavern relics` / `planar ornaments`)
+- データファイル名は HSR 公式英名の先頭だけ小文字 (例: `epoch Etched in Golden Blood.js`)
 - ユーザーが手動で正規英名にリネーム中の段階では `_index.js` と既存ファイル名を勝手に変更しない (作業衝突防止)
 
 ## スタットキーの扱い

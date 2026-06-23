@@ -5,8 +5,8 @@
 
 ## 1. 基本ファイル構成と登録
 
-- **ファイル作成**: `js/data/lightcones/<HSR公式英名>.js` としてファイルを作成します（例: `But the Battle Isn't Over.js`）。
-- **インポート**: 新たに作成したファイルは `js/data/lightcones/_index.js` に `import './<HSR公式英名>.js';` を追加して読み込ませます。
+- **ファイル作成**: `js/data/lightcones/<先頭小文字のHSR公式英名>.js` としてファイルを作成します（例: `but the Battle Isn't Over.js`）。
+- **インポート**: 新たに作成したファイルは `js/data/lightcones/_index.js` に `import './<先頭小文字のHSR公式英名>.js';` を追加して読み込ませます。
 - **登録**: `Registry.lightcone.add({ ... })` を用いて光円錐オブジェクトを登録します。
 - **インポート元の統一**: 
   - `PATH` は `import { PATH } from '../../build/constants.js';`

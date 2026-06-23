@@ -37,8 +37,8 @@ StarRail-simulator/
     ├── data/               # データ定義層 (キャラ、装備データ)
     │   ├── characters/
     │   ├── lightcones/
-    │   ├── Cavern Relics/
-    │   └── Planar Ornaments/
+    │   ├── cavern relics/
+    │   └── planar ornaments/
     └── ui/                 # UIコンポーネント層 (複雑なUI処理)
 ```
 
@@ -107,12 +107,12 @@ StarRail-simulator/
 | :--- | :--- |
 | `characters/` | キャラクターの基本ステータスやスキルの定義ファイルが格納されています。`template.js`（新規キャラ用雛形）や `testAll.js` / `testAllS1.js`（全装備 partyEffect 検証用テストキャラ）も含みます。 |
 | `lightcones/` | 光円錐のステータスやパッシブ効果の定義ファイルが格納されています。 |
-| `Cavern Relics/` | トンネル遺物（4部位セット）のセット効果の定義ファイルが格納されています。 |
-| `Planar Ornaments/` | 次元界オーナメント（2部位セット）のセット効果の定義ファイルが格納されています。 |
+| `cavern relics/` | トンネル遺物（4部位セット）のセット効果の定義ファイルが格納されています。 |
+| `planar ornaments/` | 次元界オーナメント（2部位セット）のセット効果の定義ファイルが格納されています。 |
 
 ※ 各フォルダ内のデータは `_index.js` で集約され、import 時の副作用で自動的にシステム（Registry）に登録される仕組みになっています。
 ※ `characters/` と `lightcones/` には `IMPLEMENTATION_RULES.md`、`js/data/` 直下には `IMPLEMENTATION.md` があり、データ追加時の実装ルールが記載されています。
-※ フォルダ名・ファイル名は HSR 公式英名で統一しています。
+※ フォルダ名は小文字、データファイル名は HSR 公式英名の先頭だけ小文字で統一しています。
 
 ---
 

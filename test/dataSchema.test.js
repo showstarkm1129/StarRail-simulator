@@ -20,8 +20,8 @@ import { Registry } from '../js/build/registry.js';
 
 import '../js/data/characters/_index.js';
 import '../js/data/lightcones/_index.js';
-import '../js/data/Cavern Relics/_index.js';
-import '../js/data/Planar Ornaments/_index.js';
+import '../js/data/cavern relics/_index.js';
+import '../js/data/planar ornaments/_index.js';
 
 // --- 許可語彙 ---------------------------------------------------------------
 const TICK_RULES = new Set(['target_turn_start', 'target_turn_end', 'caster_turn_end', 'none']);

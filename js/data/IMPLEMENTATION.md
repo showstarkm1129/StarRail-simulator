@@ -4,7 +4,7 @@
 追加・編集するときの統一ルール。**カテゴリごとに別の手引きを作らないこと** —
 本ファイルが唯一の手引きで、語彙の正は検証テストが持つ。
 
-> 旧 `Cavern Relics/IMPLEMENTATION_GUIDE.md` と `Planar Ornaments/IMPLEMENTATION_RULES.md` は
+> 旧 `cavern relics/IMPLEMENTATION_GUIDE.md` と `planar ornaments/IMPLEMENTATION_RULES.md` は
 > 本ファイルへ統合・削除済み。
 
 ---
@@ -76,7 +76,7 @@
 
 ## 4. ファイル・登録の作法
 
-1. ファイル名は **HSR 公式英名**(例 `Messenger Traversing Hackerspace.js`)。
+1. ファイル名は **HSR 公式英名の先頭だけ小文字**(例 `messenger Traversing Hackerspace.js`)。
 2. `id` は**日本語ローマ字 / 短い英略称**(例 `messenger` / `kunanShisai`)。ファイル名とは別。
 3. 追加したら同カテゴリの `_index.js` に `import './<新ファイル>.js';` を1行追記。
 4. 計算対象外のステ(バリア耐久など専用枠が無いもの)は `stats` を空にし、コメントで未対応を明記。
