@@ -17,7 +17,7 @@ const DEF_DOWN_DAZED = [0.16, 0.18, 0.20, 0.22, 0.24];
 const DEF_DOWN_STOLEN = [0.08, 0.09, 0.10, 0.11, 0.12];
 
 Registry.lightcone.add({
-    id: 'kazeNiTayutauKyogen',
+    id: 'Lies Dance on the Breeze',
     name: '風に揺蕩う虚言',
     path: PATH.NIHILITY,
     rarity: 5,
@@ -38,7 +38,7 @@ Registry.lightcone.add({
         const stolen = DEF_DOWN_STOLEN[idx];
         return [
             {
-                id: 'kazeKyogen_dazed_party',
+                id: 'lies_dance_dazed_party',
                 source: 'lc',
                 name: `攻撃後 敵防御力-${(dazed*100).toFixed(0)}% (茫然/2T)`,
                 description: `装備キャラが攻撃を行った後、敵の防御力-${(dazed*100).toFixed(0)}%。2ターン継続。`,
@@ -50,7 +50,7 @@ Registry.lightcone.add({
                 dispellable: false,
             },
             {
-                id: 'kazeKyogen_stolen_party',
+                id: 'lies_dance_stolen_party',
                 source: 'lc',
                 name: `速度170以上時 敵防御力-${(stolen*100).toFixed(0)}% (盗難/2T)`,
                 description: `装備キャラの速度が170以上の場合、敵の防御力-${(stolen*100).toFixed(0)}%。2ターン継続。`,
@@ -71,7 +71,7 @@ Registry.lightcone.add({
         const baseChance = 1.2;
         return [
             {
-                id: 'kazeKyogen_dazed',
+                id: 'lies_dance_dazed',
                 source: 'lc',
                 name: `攻撃後 敵防御力-${(dazed*100).toFixed(0)}% (茫然/2T)`,
                 description: `装備キャラが攻撃を行った後、${(baseChance*100).toFixed(0)}%の基礎確率で攻撃を受ける敵の防御力-${(dazed*100).toFixed(0)}%、2ターン継続。`,
@@ -85,7 +85,7 @@ Registry.lightcone.add({
                 baseChance: baseChance,
             },
             {
-                id: 'kazeKyogen_stolen',
+                id: 'lies_dance_stolen',
                 source: 'lc',
                 name: `速度170以上時 敵防御力-${(stolen*100).toFixed(0)}% (盗難/2T)`,
                 description: `装備キャラの速度が170以上の場合、${(baseChance*100).toFixed(0)}%の基礎確率で攻撃を受ける敵の防御力-${(stolen*100).toFixed(0)}%、2ターン継続。`,

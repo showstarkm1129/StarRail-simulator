@@ -9,6 +9,27 @@
 const KEY = 'srsim_builds_v1';
 const SCHEMA = 1;
 
+const SET_ID_ALIASES = Object.freeze({
+    // 旧ローマ字/短縮ID → 公式英名ID。保存済みビルドの互換用。
+    eagle: 'Eagle of Twilight Line',
+    messenger: 'Messenger Traversing Hackerspace',
+    kunanShisai: 'Sacerdos\' Relived Ordeal',
+    hoshikageInja: 'Self-Enshrouded Recluse',
+    kamiwazaMeisho: 'Divine-Querying Master Smith',
+    retsuyoBusin: 'Warrior Goddess of Sun and Thunder',
+    tenchiSaisou: 'World-Remaking Deliverer',
+
+    vonwacq: 'Sprightly Vonwacq',
+    rougaiSenshu: 'Fleet of the Ageless',
+    oretaRyukotsu: 'Broken Keel',
+    rusaka: 'Lushaka, the Sunken Seas',
+    yumePenacony: 'Penacony, Land of the Dreams',
+    onparos: 'Amphoreus, The Eternal Land',
+    gokkaRenchu: 'Forge of the Kalpagni Lantern',
+    shinryoKyoju: 'Giant Tree of Rapt Brooding',
+    sennoHoshi: 'City of Converging Stars',
+});
+
 // ---- 内部 ---------------------------------------------------------------
 
 function readRaw() {
@@ -36,10 +57,22 @@ function migrate(data) {
     // 将来 v2/v3 への移行ロジックをここに集約
     if (!data || typeof data !== 'object') return { schemaVersion: SCHEMA, builds: [] };
     if (!Array.isArray(data.builds)) data.builds = [];
+    data.builds = data.builds.map(normalizeLegacySetIds);
     if (data.schemaVersion === SCHEMA) return data;
     // 未知バージョン → 警告のみ。互換可能な範囲でそのまま使う。
     console.warn(`[buildStore] schemaVersion ${data.schemaVersion} は未知です。現バージョン ${SCHEMA} で扱います。`);
     return { ...data, schemaVersion: SCHEMA };
+}
+
+function normalizeLegacySetIds(build) {
+    if (!build || typeof build !== 'object' || !build.relics) return build;
+    for (const relic of Object.values(build.relics)) {
+        if (!relic || typeof relic !== 'object') continue;
+        if (SET_ID_ALIASES[relic.setId]) {
+            relic.setId = SET_ID_ALIASES[relic.setId];
+        }
+    }
+    return build;
 }
 
 function nowIso() {
@@ -53,6 +86,7 @@ function genId() {
 function normalize(build) {
     if (!build) throw new Error('[buildStore] build が空です');
     if (!build.characterId) throw new Error('[buildStore] build.characterId が必要です');
+    build = normalizeLegacySetIds(build);
     const meta = build.meta || {};
     return {
         schemaVersion: SCHEMA,

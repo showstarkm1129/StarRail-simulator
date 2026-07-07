@@ -627,9 +627,117 @@ body {
     cursor: pointer;
     font-size: 0.8rem;
 }
-.secondary-btn-small:hover {
+.secondary-btn-small:hover:not(:disabled) {
     color: var(--text-main);
     border-color: var(--text-muted);
+}
+
+.secondary-btn-small:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.adv-scroll-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.adv-scroll-btn {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.adv-scroll-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.adv-panels-wrap {
+    position: relative;
+    isolation: isolate;
+}
+
+#adv-panels {
+    position: relative;
+    z-index: 1;
+}
+
+.adv-panel-jump {
+    position: absolute;
+    top: 52%;
+    z-index: 30;
+    width: 48px;
+    height: 48px;
+    border-radius: 999px;
+    border: 2px solid rgba(74, 144, 226, 0.85);
+    background: rgba(18, 18, 26, 0.82);
+    color: #79baff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 1.6rem;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+    pointer-events: auto;
+    transform: translateY(-50%);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+    transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.adv-panel-jump-left {
+    left: 12px;
+}
+
+.adv-panel-jump-right {
+    right: 12px;
+}
+
+.adv-panel-jump:hover:not(:disabled) {
+    background: rgba(74, 144, 226, 0.18);
+    border-color: #79baff;
+}
+
+.adv-panel-jump:disabled {
+    opacity: 0.18;
+    cursor: not-allowed;
+}
+
+.adv-provider-grid {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 0.6rem 0.8rem;
+    align-items: center;
+}
+
+.adv-provider-grid label {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-weight: bold;
+}
+
+.adv-provider-grid input,
+.adv-provider-grid select {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-color);
+    padding: 0.5rem;
+}
+
+.adv-provider-grid input:focus,
+.adv-provider-grid select:focus {
+    outline: none;
+    border-color: var(--accent-blue);
 }
 .build-tag {
     background-color: var(--accent-blue);

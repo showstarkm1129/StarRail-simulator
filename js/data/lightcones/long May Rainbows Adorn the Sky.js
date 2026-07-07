@@ -19,7 +19,7 @@ import { Registry } from '../../build/registry.js';
 const TAKEN_BY_SI = [0.180, 0.225, 0.270, 0.315, 0.360];
 
 Registry.lightcone.add({
-    id: 'hyaSky',
+    id: 'Long May Rainbows Adorn the Sky',
     name: '空の虹が消えぬように',
     path: PATH.REMEMBRANCE,
     rarity: 5,
@@ -51,7 +51,7 @@ Registry.lightcone.add({
         const taken = TAKEN_BY_SI[Math.max(0, Math.min(4, superimpose - 1))];
         return [
             {
-                id: 'hyaSky_spirit_taken_party',
+                id: 'long_may_rainbows_spirit_taken_party',
                 source: 'lc',
                 name: `精霊スキル発動時 敵被ダメ+${(taken*100).toFixed(1)}% (2T、同系統非累積)`,
                 description: `記憶の精霊が精霊スキルを発動した時、敵全体の受けるダメージ+${(taken*100).toFixed(1)}%、2T継続。同系統スキルは重ねがけ不可。`,
@@ -71,7 +71,7 @@ Registry.lightcone.add({
         const taken = TAKEN_BY_SI[Math.max(0, Math.min(4, superimpose - 1))];
         return [
             {
-                id: 'hyaSky_spirit_taken',
+                id: 'long_may_rainbows_spirit_taken',
                 source: 'lc',
                 name: `精霊スキル発動時 敵被ダメ+${(taken*100).toFixed(1)}% (2T、同系統非累積)`,
                 description: `記憶の精霊が精霊スキルを発動した時、敵全体の受けるダメージ+${(taken*100).toFixed(1)}%、2T継続。同系統スキルは重ねがけ不可。`,

@@ -81,9 +81,9 @@ export function buildToEntity(build, opts = {}) {
 
     // hasEagle4 等のフラグは Entity constructor で計算済みだが、
     // setCounts 由来の判定で上書きする(simulator.js 側のフォールバックと同等の動作)。
-    entity.hasEagle4    = (entity.setCounts.eagle    || 0) >= 4 || entity.hasEagle4;
-    entity.hasMessenger4 = (entity.setCounts.messenger || 0) >= 4 || entity.hasMessenger4;
-    entity.hasVonwacq   = (entity.setCounts.vonwacq  || 0) >= 2 || entity.hasVonwacq;
+    entity.hasEagle4 = (entity.setCounts['Eagle of Twilight Line'] || entity.setCounts.eagle || 0) >= 4 || entity.hasEagle4;
+    entity.hasMessenger4 = (entity.setCounts['Messenger Traversing Hackerspace'] || entity.setCounts.messenger || 0) >= 4 || entity.hasMessenger4;
+    entity.hasVonwacq = (entity.setCounts['Sprightly Vonwacq'] || entity.setCounts.vonwacq || 0) >= 2 || entity.hasVonwacq;
 
     return entity;
 }

@@ -15,7 +15,7 @@ import { SET_TYPE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
-    id: 'kamiwazaMeisho',
+    id: 'Divine-Querying Master Smith',
     name: '神業を探求する名匠',
     type: SET_TYPE.CAVERN,
 
@@ -32,8 +32,8 @@ Registry.relicSet.add({
             {
                 id: 'kamiwaza_def_down_cd',
                 source: 'set',
-                name: '防御ダウン敵へCD+28%',
-                description: '装備キャラが防御力ダウン状態の敵に与える会心ダメージ+28%。(対象が防御ダウン状態の前提でON)',
+                name: '防御ダウン敵へ会心ダメージ+28%',
+                description: '装備キャラが防御力ダウン状態の敵に与える会心ダメージ+28%。対象が防御ダウン状態の時に有効にする。',
                 stats: { [STAT.CRIT_DMG]: 0.28 },
                 defaultActive: false,
                 target: 'single',
@@ -49,8 +49,8 @@ Registry.relicSet.add({
             {
                 id: 'kamiwaza_jonen_dmg',
                 source: 'set',
-                name: '助燃:味方与ダメ+15% (2T)',
-                description: '装備キャラが敵に防御力ダウン状態を付与した後、味方全体が「助燃」を獲得する(2T継続)。「助燃」を持つ味方の与ダメージ+15%。',
+                name: '助燃: 味方与ダメージ+15% (2ターン)',
+                description: '装備キャラが敵に防御力ダウン状態を付与した後、味方全体が「助燃」を獲得する(2ターン継続)。「助燃」を持つ味方の与ダメージ+15%。',
                 stats: { [STAT.DMG_ALL]: 0.15 },
                 defaultActive: false,
                 target: 'all',

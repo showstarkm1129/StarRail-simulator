@@ -9,7 +9,7 @@ import { SET_TYPE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
-    id: 'vonwacq',
+    id: 'Sprightly Vonwacq',
     name: '生命のウェンワーク',
     type: SET_TYPE.PLANAR,
 

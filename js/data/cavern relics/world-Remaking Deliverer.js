@@ -18,7 +18,7 @@ import { SET_TYPE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
-    id: 'tenchiSaisou',
+    id: 'World-Remaking Deliverer',
     name: '天地再創の救世主',
     type: SET_TYPE.CAVERN,
 
@@ -28,6 +28,23 @@ Registry.relicSet.add({
 
     pc4: {
         stats: {},
+    },
+
+    selfEffects: {
+        pc4: [
+            {
+                id: 'world_remaking_spirit_hp',
+                source: 'set',
+                name: '通常/スキル後 自身HP+24% (記憶の精霊在場)',
+                description: '装備キャラが通常攻撃または戦闘スキルを発動した後、記憶の精霊がフィールド上にいる場合、装備キャラとその記憶の精霊の最大HP+24%。',
+                stats: { [STAT.HP_PERCENT]: 0.24 },
+                defaultActive: false,
+                target: 'single',
+                duration: 'conditional',
+                tickRule: 'none',
+                dispellable: false,
+            },
+        ],
     },
 
     partyEffects: {

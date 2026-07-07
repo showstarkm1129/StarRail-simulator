@@ -110,7 +110,6 @@ function compareStats(beforeStats, afterStats, opts = {}) {
     const afterFactors  = computeDamageFactors(afterStats,  options);
 
     const factors = {};
-    let totalRatio = 1;
     for (const key of ['atk', 'crit', 'dmgBonus', 'def', 'res', 'taken', 'break', 'fixedDmg', 'sepMult']) {
         const b = beforeFactors[key];
         const a = afterFactors[key];
@@ -121,7 +120,6 @@ function compareStats(beforeStats, afterStats, opts = {}) {
             ratio,
             contribution: ratio - 1,
         };
-        totalRatio *= ratio;
     }
 
     // スキル種別 breakdown — 与ダメ枠を 5 種類で別途比較

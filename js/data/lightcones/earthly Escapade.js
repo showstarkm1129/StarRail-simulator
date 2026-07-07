@@ -20,7 +20,7 @@ const CR_BY_SI = [0.10, 0.11, 0.12, 0.13, 0.14];   // S1~S5
 const CD_BY_SI = [0.28, 0.35, 0.42, 0.49, 0.56];   // S1~S5
 
 Registry.lightcone.add({
-    id: 'jinseiAsobi',
+    id: 'Earthly Escapade',
     name: '人生は遊び',
     path: PATH.HARMONY,
     rarity: 5,
@@ -48,7 +48,7 @@ Registry.lightcone.add({
         const cd = CD_BY_SI[idx];
         return [
             {
-                id: 'jinsei_mask_cr_cd',
+                id: 'earthly_escapade_mask_cr_cd',
                 source: 'lc',
                 name: `仮面中 味方CR+${(cr*100).toFixed(0)}%・CD+${(cd*100).toFixed(0)}%`,
                 description: `装備キャラが「仮面」を持っている時、装備キャラ以外の味方の会心率+${(cr*100).toFixed(0)}%・会心ダメージ+${(cd*100).toFixed(0)}%。仮面は戦闘開始時 3T 自動付与 + 虹色の炎4層で再付与 4T。`,

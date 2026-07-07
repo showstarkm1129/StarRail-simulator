@@ -21,7 +21,7 @@ const DEF_BY_SI    = [0.40, 0.46, 0.52, 0.58, 0.64];   // S1~S5
 const TAKEN_BY_SI  = [0.100, 0.115, 0.130, 0.145, 0.160];   // S1~S5
 
 Registry.lightcone.add({
-    id: 'fukouheiUnmei',
+    id: 'Inherently Unjust Destiny',
     name: '運命は常に不公平',
     path: PATH.PRESERVATION,
     rarity: 5,
@@ -43,7 +43,7 @@ Registry.lightcone.add({
         const taken = TAKEN_BY_SI[Math.max(0, Math.min(4, superimpose - 1))];
         return [
             {
-                id: 'fukoUnmei_taken_party',
+                id: 'inherently_unjust_destiny_taken_party',
                 source: 'lc',
                 name: `追加攻撃命中時 敵被ダメ+${(taken*100).toFixed(1)}% (2T)`,
                 description: `装備キャラの追加攻撃が敵に命中する時、攻撃を受ける敵の被ダメージ+${(taken*100).toFixed(1)}%、2T継続。`,
@@ -63,7 +63,7 @@ Registry.lightcone.add({
         const baseChance = 1.0 + 0.15 * idx;
         return [
             {
-                id: 'fukoUnmei_taken',
+                id: 'inherently_unjust_destiny_taken',
                 source: 'lc',
                 name: `追加攻撃命中時 敵被ダメ+${(taken*100).toFixed(1)}% (2T)`,
                 description: `装備キャラの追加攻撃が敵に命中する時、${(baseChance*100).toFixed(0)}%の基礎確率で攻撃を受ける敵の被ダメージ+${(taken*100).toFixed(1)}%、2T継続。`,

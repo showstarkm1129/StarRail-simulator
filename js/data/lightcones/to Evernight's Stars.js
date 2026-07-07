@@ -30,7 +30,7 @@ const DEF_IGN_BY_SI = [0.200, 0.225, 0.250, 0.275, 0.300];
 const DMG_BY_SI     = [0.300, 0.375, 0.450, 0.525, 0.600];
 
 Registry.lightcone.add({
-    id: 'nagakiYoru',
+    id: "To Evernight's Stars",
     name: '長き夜に輝く星へ',
     path: PATH.REMEMBRANCE,
     rarity: 5,

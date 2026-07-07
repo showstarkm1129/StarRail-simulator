@@ -19,7 +19,7 @@ import { Registry } from '../../build/registry.js';
 const ALLY_CD_BY_SI = [0.48, 0.60, 0.72, 0.84, 0.96];   // S1~S5
 
 Registry.lightcone.add({
-    id: 'moshiToki',
+    id: 'If Time Were a Flower',
     name: 'もしも時が花だったら',
     path: PATH.HARMONY,
     rarity: 5,
@@ -46,7 +46,7 @@ Registry.lightcone.add({
         const cd = ALLY_CD_BY_SI[idx];
         return [
             {
-                id: 'moshiToki_revelation_cd',
+                id: 'if_time_were_a_flower_revelation_cd',
                 source: 'lc',
                 name: `啓示中 味方CD+${(cd*100).toFixed(0)}% (2T)`,
                 description: `装備キャラが「啓示」を所持している時、味方全体の会心ダメージ+${(cd*100).toFixed(0)}%、2T継続。啓示は戦闘開始時 + 追加攻撃時に自動付与。`,

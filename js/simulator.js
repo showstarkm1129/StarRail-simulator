@@ -27,10 +27,15 @@ class Entity {
         this.resource = null;
         
         // セット効果フラグ (setCounts が後から付与された場合にも対応するフォールバック)
-        this.hasEagle4     = (this.setCounts?.eagle     >= 4) || (this.equipment.relic1 === 'eagle'     && this.equipment.relic2 === 'eagle');
-        this.hasMessenger4 = (this.setCounts?.messenger >= 4) || (this.equipment.relic1 === 'messenger' && this.equipment.relic2 === 'messenger');
-        this.hasDDD        = (this.equipment.lc === 'ddd');
-        this.hasVonwacq    = (this.setCounts?.vonwacq   >= 2) || (this.equipment.ornament === 'vonwacq');
+        this.hasEagle4 = (this.setCounts?.['Eagle of Twilight Line'] >= 4) || (this.setCounts?.eagle >= 4)
+            || (this.equipment.relic1 === 'Eagle of Twilight Line' && this.equipment.relic2 === 'Eagle of Twilight Line')
+            || (this.equipment.relic1 === 'eagle' && this.equipment.relic2 === 'eagle');
+        this.hasMessenger4 = (this.setCounts?.['Messenger Traversing Hackerspace'] >= 4) || (this.setCounts?.messenger >= 4)
+            || (this.equipment.relic1 === 'Messenger Traversing Hackerspace' && this.equipment.relic2 === 'Messenger Traversing Hackerspace')
+            || (this.equipment.relic1 === 'messenger' && this.equipment.relic2 === 'messenger');
+        this.hasDDD        = (this.equipment.lc === 'Dance! Dance! Dance!');
+        this.hasVonwacq = (this.setCounts?.['Sprightly Vonwacq'] >= 2) || (this.setCounts?.vonwacq >= 2)
+            || (this.equipment.ornament === 'Sprightly Vonwacq') || (this.equipment.ornament === 'vonwacq');
         
         this.calculateSpeed();
         this.resetActionValue();
@@ -98,7 +103,7 @@ if (typeof window !== 'undefined') window.Entity = Entity;
 
 document.addEventListener('DOMContentLoaded', () => {
     let entities = [];
-    let state = {
+    const state = {
         currentAV: 0,
         activeEntity: null,
         phase: 'SETUP' // 'SETUP', 'WAITING_ACTION', 'ACTION_FINISHED'
@@ -200,10 +205,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             // Fallback (旧UI用)
             if(v === 'none') return 'なし';
-            if(v === 'eagle') return '昼夜の狭間を翔ける鷹';
-            if(v === 'messenger') return 'メッセンジャー';
-            if(v === 'ddd') return 'ダンス';
-            if(v === 'vonwacq') return '生命のウェンワーク';
+            if(v === 'Eagle of Twilight Line' || v === 'eagle') return '昼夜の狭間を翔ける鷹';
+            if(v === 'Messenger Traversing Hackerspace' || v === 'messenger') return 'メッセンジャー';
+            if(v === 'Dance! Dance! Dance!') return 'ダンス';
+            if(v === 'Sprightly Vonwacq' || v === 'vonwacq') return '生命のウェンワーク';
             return v;
         };
 
@@ -372,10 +377,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (entity.equipment) {
             equipHtml = `
                 <div class="status-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
-                    <span style="color:var(--text-muted); font-size:0.8rem;">光円錐: ${entity.equipment?.lc === 'ddd' ? 'ダンス・ダンス・ダンス' : 'なし'}</span>
-                    <span style="color:var(--text-muted); font-size:0.8rem;">遺物1: ${entity.equipment?.relic1 === 'eagle' ? '昼夜の狭間を翔ける鷹' : entity.equipment?.relic1 === 'messenger' ? 'メッセンジャー' : 'なし'}</span>
-                    <span style="color:var(--text-muted); font-size:0.8rem;">遺物2: ${entity.equipment?.relic2 === 'eagle' ? '昼夜の狭間を翔ける鷹' : entity.equipment?.relic2 === 'messenger' ? 'メッセンジャー' : 'なし'}</span>
-                    <span style="color:var(--text-muted); font-size:0.8rem;">オーナメント: ${entity.equipment?.ornament === 'vonwacq' ? '生命のウェンワーク' : 'なし'}</span>
+                    <span style="color:var(--text-muted); font-size:0.8rem;">光円錐: ${entity.equipment?.lc === 'Dance! Dance! Dance!' ? 'ダンス！ダンス！ダンス！' : 'なし'}</span>
+                    <span style="color:var(--text-muted); font-size:0.8rem;">遺物1: ${entity.equipment?.relic1 === 'Eagle of Twilight Line' || entity.equipment?.relic1 === 'eagle' ? '昼夜の狭間を翔ける鷹' : entity.equipment?.relic1 === 'Messenger Traversing Hackerspace' || entity.equipment?.relic1 === 'messenger' ? 'メッセンジャー' : 'なし'}</span>
+                    <span style="color:var(--text-muted); font-size:0.8rem;">遺物2: ${entity.equipment?.relic2 === 'Eagle of Twilight Line' || entity.equipment?.relic2 === 'eagle' ? '昼夜の狭間を翔ける鷹' : entity.equipment?.relic2 === 'Messenger Traversing Hackerspace' || entity.equipment?.relic2 === 'messenger' ? 'メッセンジャー' : 'なし'}</span>
+                    <span style="color:var(--text-muted); font-size:0.8rem;">オーナメント: ${entity.equipment?.ornament === 'Sprightly Vonwacq' || entity.equipment?.ornament === 'vonwacq' ? '生命のウェンワーク' : 'なし'}</span>
                 </div>
             `;
         }

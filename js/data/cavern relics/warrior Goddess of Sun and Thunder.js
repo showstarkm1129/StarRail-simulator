@@ -15,7 +15,7 @@ import { SET_TYPE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
-    id: 'retsuyoBusin',
+    id: 'Warrior Goddess of Sun and Thunder',
     name: '烈陽と雷鳴の武神',
     type: SET_TYPE.CAVERN,
 
@@ -27,13 +27,30 @@ Registry.relicSet.add({
         stats: {},
     },
 
+    selfEffects: {
+        pc4: [
+            {
+                id: 'warrior_goddess_sweet_rain_spd',
+                source: 'set',
+                name: '慈雨中 自身速度+6% (2ターン)',
+                description: '装備キャラが「慈雨」を持っている場合、速度+6%。',
+                stats: { [STAT.SPD_PERCENT]: 0.06 },
+                defaultActive: false,
+                target: 'single',
+                duration: 2,
+                tickRule: 'target_turn_start',
+                dispellable: false,
+            },
+        ],
+    },
+
     partyEffects: {
         pc4: [
             {
                 id: 'busin_jiu_cd',
                 source: 'set',
-                name: '慈雨中 味方CD+15% (2T、累積不可)',
-                description: '装備キャラまたは記憶の精霊が他の味方を治癒した後、装備キャラは「慈雨」を獲得 (2T)。慈雨中、味方全体の会心ダメージ+15%。',
+                name: '慈雨中 味方会心ダメージ+15% (2ターン、累積不可)',
+                description: '装備キャラまたは記憶の精霊が他の味方を治癒した後、装備キャラは「慈雨」を獲得 (2ターン)。慈雨中、味方全体の会心ダメージ+15%。',
                 stats: { [STAT.CRIT_DMG]: 0.15 },
                 defaultActive: false,
                 target: 'all',

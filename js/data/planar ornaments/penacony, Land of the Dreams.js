@@ -12,7 +12,7 @@ import { SET_TYPE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
-    id: 'yumePenacony',
+    id: 'Penacony, Land of the Dreams',
     name: '夢の地ピノコニー',
     type: SET_TYPE.PLANAR,
 
@@ -26,7 +26,7 @@ Registry.ornament.add({
                 id: 'penacony_same_element_dmg',
                 source: 'set',
                 name: '同属性味方 与ダメ+10% (常時発動)',
-                description: 'パーティ中の装備キャラと同じ属性の味方の与ダメージ+10%。focus と装備 teammate が同属性なら ON。',
+                description: 'パーティ中の装備キャラと同じ属性の味方の与ダメージ+10%。計算対象と装備している味方が同属性なら有効にする。',
                 stats: { [STAT.DMG_ALL]: 0.10 },
                 defaultActive: false,
                 target: 'all',

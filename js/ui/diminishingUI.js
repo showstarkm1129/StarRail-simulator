@@ -52,8 +52,6 @@ const SUB_INPUTS = [
 const SUB_LABEL_PREFIX = 'サブステ.';
 const PARTY_LABEL_PREFIX = 'パーティ.';   // envBuffs のラベル識別子
 
-const PARTY_SLOTS = 3;   // focus 以外のチームメンバー枠数
-
 // ---- 直接ステ入力モード -----------------------------------------------
 //
 // ビルド(キャラ+光円錐+遺物+バフ)を組まず、最終ステータスを直接打ち込んで
@@ -1475,7 +1473,7 @@ function partyBuildFor(slot) {
 
 // teammate に紐づく全 partyEffects をソース別に収集
 //   返り値: [{ srcKey, srcLabel, ef }, ...]
-//     srcKey 例: 'char' | 'lc' | 'set:messenger:pc4' | 'orn:vonwacq:pc2'
+//     srcKey 例: 'char' | 'lc' | 'set:Messenger Traversing Hackerspace:pc4' | 'orn:Sprightly Vonwacq:pc2'
 //
 // 星魂条件 (ef.minEidolon) 付きの効果は、teammate の現在星魂が満たない場合は除外される。
 function gatherTeammateEffects(teammateBuild) {
@@ -2787,8 +2785,6 @@ const TOTAL_ROWS = [
 
 function renderComparison(cmp) {
     const f = cmp.factors;
-    const a = cmp.beforeStats.derived;
-    const b = cmp.afterStats.derived;
 
     const factorRows = [...COMPARISON_ROWS, ...TOTAL_ROWS];
     const grouped = {};
@@ -2988,22 +2984,6 @@ const renderFactorRow = (row) => `
         <td class="${contribClass(row.contribution)}">${formatContrib(row.contribution)}</td>
     </tr>
 `;
-function renderStatRow(name, before, after, decimals) {
-    const d = after - before; const sign = d >= 0 ? '+' : '';
-    return `<tr><th>${name}</th><td>${before.toFixed(decimals)}</td><td>${after.toFixed(decimals)}</td><td class="${contribClass(d)}">${sign}${d.toFixed(decimals)}</td></tr>`;
-}
-function renderStatRowSpd(before, after, delta) {
-    const sign = delta >= 0 ? '+' : '';
-    return `<tr><th>速度 <span class="dim-note">(行動回数は速度タブで)</span></th><td>${before.toFixed(2)}</td><td>${after.toFixed(2)}</td><td class="${contribClass(delta)}">${sign}${delta.toFixed(2)}</td></tr>`;
-}
-function renderStatRowPct(name, before, after) {
-    const d = after - before; const sign = d >= 0 ? '+' : '';
-    return `<tr><th>${name}</th><td>${(before*100).toFixed(2)}%</td><td>${(after*100).toFixed(2)}%</td><td class="${contribClass(d)}">${sign}${(d*100).toFixed(2)}%pt</td></tr>`;
-}
-function renderStatRowMul(name, before, after) {
-    const ratio = before > 0 ? after / before : 0;
-    return `<tr><th>${name}</th><td>×${before.toFixed(4)}</td><td>×${after.toFixed(4)}</td><td class="${contribClass(ratio-1)}">×${ratio.toFixed(4)}</td></tr>`;
-}
 function formatFactorValue(v) { return Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(4); }
 function formatContrib(c) { return `${c >= 0 ? '+' : ''}${(c * 100).toFixed(2)}%`; }
 function contribClass(c) { return c > 0 ? 'dim-contrib-pos' : c < 0 ? 'dim-contrib-neg' : 'dim-contrib-zero'; }

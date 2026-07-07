@@ -24,7 +24,7 @@ const ALLY_DMG_BY_SI    = [0.24, 0.30, 0.36, 0.42, 0.48];
 const SUMMON_DMG_BY_SI  = [0.12, 0.15, 0.18, 0.21, 0.24];
 
 Registry.lightcone.add({
-    id: 'banriSanga',
+    id: 'Though Worlds Apart',
     name: '万里の山河を越えて',
     path: PATH.PRESERVATION,
     rarity: 5,
@@ -45,7 +45,7 @@ Registry.lightcone.add({
         const summon = SUMMON_DMG_BY_SI[idx];
         return [
             {
-                id: 'banriSanga_shugo_dmg',
+                id: 'though_worlds_apart_ward_dmg',
                 source: 'lc',
                 name: `守護中 味方与ダメ+${(dmg*100).toFixed(0)}% (3T)`,
                 description: `装備キャラの必殺発動後、味方全体は「守護」を獲得 (3T)。守護中の味方の与ダメージ+${(dmg*100).toFixed(0)}%。`,
@@ -57,7 +57,7 @@ Registry.lightcone.add({
                 dispellable: false,
             },
             {
-                id: 'banriSanga_summon_bonus',
+                id: 'though_worlds_apart_summon_bonus',
                 source: 'lc',
                 name: `守護中 召喚物持ち追加 与ダメ+${(summon*100).toFixed(0)}% (3T)`,
                 description: `「守護」を獲得した味方が召喚物を持っている場合、追加で与ダメージ+${(summon*100).toFixed(0)}%。focus が記憶の精霊持ち等であれば「守護中バフ」と併用してONにする。`,

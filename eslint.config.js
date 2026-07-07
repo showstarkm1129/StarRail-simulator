@@ -62,7 +62,7 @@ export default [
 
     // グローバル無視
     {
-        ignores: ['node_modules/**', 'coverage/**'],
+        ignores: ['node_modules/**', 'coverage/**', 'test-results/**', 'playwright-report/**', 'blob-report/**'],
     },
 
     // 1. ES Modules (アプリ計算層 / データ層 / UI モジュール)

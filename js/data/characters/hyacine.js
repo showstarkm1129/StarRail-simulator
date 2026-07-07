@@ -18,7 +18,7 @@
 //     traces に常時加算しない (条件成立を保証できないため)。
 
 import { ELEMENT, PATH } from '../../build/constants.js';
-import { STAT, ELEMENT_DMG_KEYS } from '../../build/statKeys.js';
+import { STAT } from '../../build/statKeys.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.character.add({

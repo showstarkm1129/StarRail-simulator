@@ -18,7 +18,7 @@ import { Registry } from '../../build/registry.js';
 const DMG_BY_SI = [0.30, 0.35, 0.40, 0.45, 0.50];   // S1~S5
 
 Registry.lightcone.add({
-    id: 'dagaSensou',
+    id: "But the Battle Isn't Over",
     name: 'だが戦争は終わらない',
     path: PATH.HARMONY,
     rarity: 5,
@@ -44,7 +44,7 @@ Registry.lightcone.add({
         const dmg = DMG_BY_SI[Math.max(0, Math.min(4, superimpose - 1))];
         return [
             {
-                id: 'dagaSensou_skill_next_dmg',
+                id: 'but_the_battle_isnt_over_skill_next_dmg',
                 source: 'lc',
                 name: `戦闘スキル後 次行動の他味方 与ダメ+${(dmg*100).toFixed(0)}% (1T)`,
                 description: `装備キャラが戦闘スキルを発動した後、次に行動する他の味方の与ダメージ+${(dmg*100).toFixed(0)}%、1ターン継続。`,

@@ -7,7 +7,7 @@ import { SET_TYPE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
-    id: 'eagle',
+    id: 'Eagle of Twilight Line',
     name: '昼夜の狭間を翔ける鷹',
     type: SET_TYPE.CAVERN,
 

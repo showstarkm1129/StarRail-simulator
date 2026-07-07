@@ -69,15 +69,15 @@
 |---|---|---|---|---|
 | **キャラクター** | `Registry.character.add` | `partyEffects` / `selfEffects` / `enemyEffects` = **配列** | `traces.stats` / `eidolons.<n>.stats` | `skills`(`levels` + `maxLevel`) / `extras` / `eidolonsDetail`。雛形: `characters/template.js` |
 | **光円錐** | `Registry.lightcone.add` | `(superimpose) => []` の**関数** or 配列 | `stats`(S1〜S5 の**5件配列**) | `base { atk, hp, def }`。`hooks` も `(superimpose) => ({})` |
-| **トンネル遺物** | `Registry.relicSet.add` | `partyEffects` / `enemyEffects` = **`{ pc2:[], pc4:[] }`** | `pc2.stats` / `pc4.stats` | `type: SET_TYPE.CAVERN`。`hooks` は `pc4` 内 or ルート |
-| **次元界オーナメント** | `Registry.ornament.add` | **`{ pc2:[] }`** (pc2のみ) | `pc2.stats` | `type: SET_TYPE.PLANAR` |
+| **トンネル遺物** | `Registry.relicSet.add` | `partyEffects` / `selfEffects` = **`{ pc2:[], pc4:[] }`** | `pc2.stats` / `pc4.stats` | `type: SET_TYPE.CAVERN`。`hooks` は `pc4` 内 or ルート |
+| **次元界オーナメント** | `Registry.ornament.add` | `partyEffects` / `selfEffects` = **`{ pc2:[] }`** (pc2のみ) | `pc2.stats` | `type: SET_TYPE.PLANAR` |
 
 ---
 
 ## 4. ファイル・登録の作法
 
 1. ファイル名は **HSR 公式英名の先頭だけ小文字**(例 `messenger Traversing Hackerspace.js`)。
-2. `id` は**日本語ローマ字 / 短い英略称**(例 `messenger` / `kunanShisai`)。ファイル名とは別。
+2. `id` は **HSR 公式英名**。UI表示用の `name` は日本語表記にする。
 3. 追加したら同カテゴリの `_index.js` に `import './<新ファイル>.js';` を1行追記。
 4. 計算対象外のステ(バリア耐久など専用枠が無いもの)は `stats` を空にし、コメントで未対応を明記。
 5. 装備者本人のみに効く条件付き自己バフ(focus に伝わらないもの)は省略可。その旨をコメントに残す。

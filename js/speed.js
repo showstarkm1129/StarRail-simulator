@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const FIXED_LLM_TEMPERATURE = 0;
+
     // --- UI: サブタブの切り替え ---
     const subTabBtns = document.querySelectorAll('.sub-tab-btn');
     const subTabPanes = document.querySelectorAll('.sub-tab-pane');
@@ -19,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderThresholdTable();
             } else if (targetId === 'sub-speed-advanced') {
                 renderAllAdvPanels();
+                scheduleAdvScrollButtonUpdate();
             }
         });
     });
@@ -263,8 +266,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Sub Tab 3: 行動順シミュ (複数パネル比較) ---
     // 各パネルは独立したタイムライン。バフは「ターン開始からの行動値オフセット(発動AV)」で
     // 発動タイミングを指定でき、ターン内ゲージ計算で正確に反映する。
+    const advPanelsWrap = document.querySelector('.adv-panels-wrap');
     const advPanelsContainer = document.getElementById('adv-panels');
     const advAddPanelBtn = document.getElementById('adv-add-panel');
+    const advCopyStateBtn = document.getElementById('adv-copy-state');
+    const advImportStateBtn = document.getElementById('adv-import-state');
+    const advScrollLeftBtn = document.getElementById('adv-scroll-left');
+    const advScrollRightBtn = document.getElementById('adv-scroll-right');
+    const advPanelPrevBtn = document.getElementById('adv-panel-prev');
+    const advPanelNextBtn = document.getElementById('adv-panel-next');
 
     // 共有モーダル要素
     const buffModal = document.getElementById('adv-buff-modal');
@@ -274,6 +284,37 @@ document.addEventListener('DOMContentLoaded', () => {
     const buffModalApply = document.getElementById('adv-buff-modal-apply');
     const buffEventList = document.getElementById('adv-buff-event-list');
     const buffAddEventBtn = document.getElementById('adv-buff-add-event');
+    const stateModal = document.getElementById('adv-state-modal');
+    const closeStateModal = document.getElementById('close-adv-state-modal');
+    const stateInput = document.getElementById('adv-state-input');
+    const stateMessage = document.getElementById('adv-state-message');
+    const stateCopyFromModalBtn = document.getElementById('adv-state-copy-from-modal');
+    const stateApplyBtn = document.getElementById('adv-state-apply');
+    const aiOpenBtn = document.getElementById('adv-ai-open');
+    const aiSettingsBtn = document.getElementById('adv-ai-settings');
+    const aiModal = document.getElementById('adv-ai-modal');
+    const closeAiModal = document.getElementById('close-adv-ai-modal');
+    const aiProviderSelect = document.getElementById('adv-ai-provider-select');
+    const aiOpenSettingsBtn = document.getElementById('adv-ai-open-settings');
+    const aiRequestInput = document.getElementById('adv-ai-request');
+    const aiCopyContextBtn = document.getElementById('adv-ai-copy-context');
+    const aiRunBtn = document.getElementById('adv-ai-run');
+    const aiOutput = document.getElementById('adv-ai-output');
+    const aiMessage = document.getElementById('adv-ai-message');
+    const aiApplyBtn = document.getElementById('adv-ai-apply');
+    const providerModal = document.getElementById('adv-provider-modal');
+    const closeProviderModal = document.getElementById('close-adv-provider-modal');
+    const providerList = document.getElementById('adv-provider-list');
+    const providerTypeSelect = document.getElementById('adv-provider-type');
+    const providerNameInput = document.getElementById('adv-provider-name');
+    const providerEndpointInput = document.getElementById('adv-provider-endpoint');
+    const providerModelInput = document.getElementById('adv-provider-model');
+    const providerApiKeyInput = document.getElementById('adv-provider-api-key');
+    const providerTemperatureInput = document.getElementById('adv-provider-temperature');
+    const providerMessage = document.getElementById('adv-provider-message');
+    const providerNewBtn = document.getElementById('adv-provider-new');
+    const providerDeleteBtn = document.getElementById('adv-provider-delete');
+    const providerSaveBtn = document.getElementById('adv-provider-save');
 
     // バフイベントの種類定義 (使いまわし用にここで一元管理)
     const EVENT_TYPES = {
@@ -281,9 +322,91 @@ document.addEventListener('DOMContentLoaded', () => {
         speedFlat: { label: '速度増加 (固定)',  def: 20 },
         speedPct:  { label: '速度増加 (%基礎)', def: 12 },
     };
+    const ADV_STATE_SCHEMA = 'srsim.speedAdvanced.v1';
+    const LLM_PROVIDER_KEY = 'srsim_adv_llm_providers';
+    const LLM_ACTIVE_PROVIDER_KEY = 'srsim_adv_llm_active_provider';
+    const CUSTOM_LLM_PROVIDER_TYPE = 'custom';
+    const LLM_PROVIDER_PRESETS = Object.freeze([
+        {
+            type: 'openrouter',
+            label: 'OpenRouter',
+            endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+            modelPlaceholder: '例: google/gemma-4-31b-it:free',
+            keyPlaceholder: 'sk-or-...',
+            hostnames: ['openrouter.ai'],
+        },
+        {
+            type: 'openai',
+            label: 'OpenAI',
+            endpoint: 'https://api.openai.com/v1/chat/completions',
+            modelPlaceholder: '例: gpt-4.1-mini',
+            keyPlaceholder: 'sk-...',
+            hostnames: ['api.openai.com'],
+        },
+        {
+            type: 'gemini',
+            label: 'Google Gemini',
+            endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+            modelPlaceholder: '例: gemini-3.5-flash',
+            keyPlaceholder: 'Gemini APIキー',
+            hostnames: ['generativelanguage.googleapis.com'],
+        },
+        {
+            type: 'groq',
+            label: 'Groq',
+            endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+            modelPlaceholder: '例: llama-3.3-70b-versatile',
+            keyPlaceholder: 'gsk_...',
+            hostnames: ['api.groq.com'],
+        },
+        {
+            type: 'deepseek',
+            label: 'DeepSeek',
+            endpoint: 'https://api.deepseek.com/chat/completions',
+            modelPlaceholder: '例: deepseek-v4-flash',
+            keyPlaceholder: 'sk-...',
+            hostnames: ['api.deepseek.com'],
+        },
+        {
+            type: 'together',
+            label: 'Together AI',
+            endpoint: 'https://api.together.ai/v1/chat/completions',
+            modelPlaceholder: '例: meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8',
+            keyPlaceholder: 'Together APIキー',
+            hostnames: ['api.together.ai'],
+        },
+        {
+            type: 'mistral',
+            label: 'Mistral AI',
+            endpoint: 'https://api.mistral.ai/v1/chat/completions',
+            modelPlaceholder: '例: mistral-large-latest',
+            keyPlaceholder: 'Mistral APIキー',
+            hostnames: ['api.mistral.ai'],
+        },
+        {
+            type: 'xai',
+            label: 'xAI',
+            endpoint: 'https://api.x.ai/v1/chat/completions',
+            modelPlaceholder: '例: grok-4.3',
+            keyPlaceholder: 'xAI APIキー',
+            hostnames: ['api.x.ai'],
+        },
+        {
+            type: CUSTOM_LLM_PROVIDER_TYPE,
+            label: 'カスタム',
+            endpoint: '',
+            modelPlaceholder: '例: provider/model または model-name',
+            keyPlaceholder: 'APIキー',
+            hostnames: [],
+        },
+    ]);
 
     const advPanels = [];   // パネル状態の配列
     let advPanelSeq = 0;  // パネル連番 (名前デフォルト用)
+    let llmProviders = [];
+    let activeProviderId = '';
+    let editingProviderId = '';
+    let advScrollUpdateScheduled = false;
 
     // モーダルの編集対象
     let modalPanelId = null;
@@ -299,6 +422,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // モーダルを body 直下へ (絶対配置のため)
     if (buffModal && buffModal.parentElement !== document.body) {
         document.body.appendChild(buffModal);
+    }
+    if (stateModal && stateModal.parentElement !== document.body) {
+        document.body.appendChild(stateModal);
+    }
+    if (aiModal && aiModal.parentElement !== document.body) {
+        document.body.appendChild(aiModal);
+    }
+    if (providerModal && providerModal.parentElement !== document.body) {
+        document.body.appendChild(providerModal);
     }
 
     // ---- シミュレーション本体 ----
@@ -575,8 +707,770 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!ok) throw new Error('execCommand copy failed');
     }
 
+    function normalizeNumber(value, fallback, minValue) {
+        const n = parseFloat(value);
+        if (!Number.isFinite(n)) return fallback;
+        return minValue === undefined ? n : Math.max(minValue, n);
+    }
+
+    function normalizeAdvEvent(raw) {
+        const source = raw && typeof raw === 'object' ? raw : {};
+        const type = EVENT_TYPES[source.type] ? source.type : 'advance';
+        const timing = source.timing === 'cum' ? 'cum' : 'turn';
+        return {
+            type,
+            value: normalizeNumber(source.value, EVENT_TYPES[type].def),
+            name: typeof source.name === 'string' ? source.name : '',
+            timing,
+            offset: normalizeNumber(source.offset, 0, 0),
+            atAV: normalizeNumber(source.atAV, 100, 0),
+        };
+    }
+
+    function normalizeAdvTurns(turns) {
+        if (!Array.isArray(turns)) return [];
+        return turns.map((turn) => ({
+            events: Array.isArray(turn && turn.events)
+                ? turn.events.map(normalizeAdvEvent)
+                : [],
+        }));
+    }
+
+    function trimEmptyTrailingTurns(turns) {
+        const trimmed = normalizeAdvTurns(turns);
+        while (trimmed.length > 0 && trimmed[trimmed.length - 1].events.length === 0) {
+            trimmed.pop();
+        }
+        return trimmed;
+    }
+
+    function serializeAdvPanel(panel) {
+        return {
+            name: panel.name || '',
+            baseSpeed: normalizeNumber(panel.baseSpeed, 100, 1),
+            preSpeed: normalizeNumber(panel.preSpeed, 134, 1),
+            threshold: normalizeNumber(panel.threshold, 150, 1),
+            turns: trimEmptyTrailingTurns(panel.turns),
+        };
+    }
+
+    function buildAdvStateText(panels, mode) {
+        const payload = {
+            schema: ADV_STATE_SCHEMA,
+            mode: mode === 'panel' ? 'panel' : 'all',
+            exportedAt: new Date().toISOString(),
+            panels: panels.map(serializeAdvPanel),
+        };
+        return JSON.stringify(payload, null, 2);
+    }
+
+    function parseAdvStateText(text) {
+        const parsed = JSON.parse(text);
+        const root = parsed && typeof parsed === 'object' ? parsed : {};
+        const panelsRaw = Array.isArray(parsed)
+            ? parsed
+            : Array.isArray(root.panels)
+                ? root.panels
+                : root.panel
+                    ? [root.panel]
+                    : null;
+        if (!panelsRaw || panelsRaw.length === 0) {
+            throw new Error('panels が見つかりません。');
+        }
+
+        const panels = panelsRaw.map((raw, idx) => {
+            const source = raw && typeof raw === 'object' ? raw : {};
+            const name = typeof source.name === 'string' && source.name.trim()
+                ? source.name
+                : `キャラ${idx + 1}`;
+            return {
+                name,
+                baseSpeed: normalizeNumber(source.baseSpeed, 100, 1),
+                preSpeed: normalizeNumber(source.preSpeed, 134, 1),
+                threshold: normalizeNumber(source.threshold, 150, 1),
+                turns: normalizeAdvTurns(source.turns),
+            };
+        });
+
+        return {
+            mode: root.mode === 'panel' || root.panel ? 'panel' : 'all',
+            panels,
+        };
+    }
+
+    function clearAdvPanels() {
+        advPanels.forEach((panel) => {
+            if (panel.el && panel.el.card) panel.el.card.remove();
+        });
+        advPanels.length = 0;
+    }
+
+    function importAdvPanels(imported) {
+        const append = imported.mode === 'panel';
+        if (!append) clearAdvPanels();
+        imported.panels.forEach((panel) => createAdvPanel(panel));
+        refreshPanelOrders();
+        scheduleAdvScrollButtonUpdate();
+    }
+
+    function setStateMessage(text, isError) {
+        if (!stateMessage) return;
+        stateMessage.textContent = text;
+        stateMessage.style.color = isError ? '#ff8787' : 'var(--text-muted)';
+    }
+
+    async function copyAdvState(panels, mode, button) {
+        const originalText = button ? button.textContent : '';
+        const text = buildAdvStateText(panels, mode);
+        if (button) button.disabled = true;
+        try {
+            await copyTextToClipboard(text);
+            if (button) button.textContent = 'コピー完了!';
+            setStateMessage('コピーしました。', false);
+        } catch (err) {
+            console.error(err);
+            openStateModal(text);
+            if (button) button.textContent = '失敗';
+            setStateMessage('クリップボードにコピーできませんでした。テキスト欄からコピーしてください。', true);
+        }
+        if (button) {
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.disabled = false;
+            }, 1500);
+        }
+    }
+
+    function openStateModal(prefill) {
+        if (!stateModal || !stateInput) return;
+        stateInput.value = prefill || '';
+        setStateMessage('', false);
+        stateModal.style.display = 'block';
+        stateInput.focus();
+        if (prefill) stateInput.select();
+    }
+
+    function applyStateInput() {
+        if (!stateInput) return;
+        let imported;
+        try {
+            imported = parseAdvStateText(stateInput.value);
+        } catch (err) {
+            setStateMessage(`読み取りに失敗しました: ${err.message}`, true);
+            return;
+        }
+        if (imported.mode !== 'panel' && advPanels.length > 0) {
+            const ok = window.confirm('現在の行動順シミュのパネルを置き換えて復元しますか？');
+            if (!ok) return;
+        }
+        importAdvPanels(imported);
+        if (stateModal) stateModal.style.display = 'none';
+    }
+
+    function makeProviderId() {
+        return 'llm' + Date.now() + Math.random().toString(36).slice(2, 6);
+    }
+
+    function getEmptyProvider() {
+        const preset = getProviderPreset('openrouter');
+        return {
+            id: makeProviderId(),
+            type: preset.type,
+            name: preset.label,
+            endpoint: preset.endpoint,
+            model: '',
+            apiKey: '',
+            temperature: FIXED_LLM_TEMPERATURE,
+        };
+    }
+
+    function loadLlmProviders() {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(LLM_PROVIDER_KEY));
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    }
+
+    function saveLlmProviders() {
+        try {
+            localStorage.setItem(LLM_PROVIDER_KEY, JSON.stringify(llmProviders));
+            localStorage.setItem(LLM_ACTIVE_PROVIDER_KEY, activeProviderId || '');
+        } catch {
+            setProviderMessage('保存できませんでした。ブラウザの保存容量を確認してください。', true);
+        }
+    }
+
+    function setProviderMessage(text, isError) {
+        if (!providerMessage) return;
+        providerMessage.textContent = text;
+        providerMessage.style.color = isError ? '#ff8787' : 'var(--text-muted)';
+    }
+
+    function setAiMessage(text, isError) {
+        if (!aiMessage) return;
+        aiMessage.textContent = text;
+        aiMessage.style.color = isError ? '#ff8787' : 'var(--text-muted)';
+    }
+
+    function getProviderById(id) {
+        return llmProviders.find(p => p.id === id) || null;
+    }
+
+    function getActiveProvider() {
+        return getProviderById(activeProviderId) || llmProviders[0] || null;
+    }
+
+    function getProviderPreset(type) {
+        return LLM_PROVIDER_PRESETS.find(p => p.type === type) || null;
+    }
+
+    function getProviderTypeFromEndpoint(endpoint) {
+        try {
+            const url = new URL(endpoint);
+            const preset = LLM_PROVIDER_PRESETS.find(p => p.hostnames.some(host =>
+                url.hostname === host || url.hostname.endsWith(`.${host}`)));
+            return preset ? preset.type : CUSTOM_LLM_PROVIDER_TYPE;
+        } catch {
+            return CUSTOM_LLM_PROVIDER_TYPE;
+        }
+    }
+
+    function getProviderType(provider) {
+        if (provider && getProviderPreset(provider.type)) return provider.type;
+        return getProviderTypeFromEndpoint(provider && provider.endpoint);
+    }
+
+    function isPresetLabel(value) {
+        return LLM_PROVIDER_PRESETS.some(p => p.label === value);
+    }
+
+    function renderProviderTypeOptions() {
+        if (!providerTypeSelect) return;
+        providerTypeSelect.innerHTML = LLM_PROVIDER_PRESETS
+            .map(p => `<option value="${escapeAttr(p.type)}">${escapeAttr(p.label)}</option>`)
+            .join('');
+    }
+
+    function renderProviderSelects() {
+        const active = getActiveProvider();
+        if (active) activeProviderId = active.id;
+        const optionHtml = llmProviders.length
+            ? llmProviders.map(p => `<option value="${escapeAttr(p.id)}" ${p.id === activeProviderId ? 'selected' : ''}>${escapeAttr(p.name || p.model || '未命名')}</option>`).join('')
+            : '<option value="">未登録</option>';
+        if (aiProviderSelect) aiProviderSelect.innerHTML = optionHtml;
+        if (providerList) providerList.innerHTML = optionHtml;
+    }
+
+    function fillProviderForm(provider) {
+        const p = provider || getEmptyProvider();
+        const providerType = getProviderType(p);
+        const endpoint = normalizeLlmEndpoint(p.endpoint, providerType);
+        editingProviderId = p.id || '';
+        if (providerTypeSelect) providerTypeSelect.value = providerType;
+        if (providerNameInput) providerNameInput.value = p.name || '';
+        if (providerEndpointInput) providerEndpointInput.value = endpoint;
+        if (providerModelInput) providerModelInput.value = p.model || '';
+        if (providerApiKeyInput) providerApiKeyInput.value = p.apiKey || '';
+        if (providerTemperatureInput) providerTemperatureInput.value = String(FIXED_LLM_TEMPERATURE);
+        if (providerList && getProviderById(p.id)) providerList.value = p.id;
+        syncProviderTypeFields(false);
+    }
+
+    function readProviderForm() {
+        const selected = editingProviderId || (providerList ? providerList.value : activeProviderId);
+        const existing = getProviderById(selected);
+        const providerType = providerTypeSelect ? providerTypeSelect.value : getProviderType(existing);
+        const rawEndpoint = providerEndpointInput ? providerEndpointInput.value.trim() : '';
+        const endpoint = normalizeLlmEndpoint(rawEndpoint, providerType);
+        const rawModel = providerModelInput ? providerModelInput.value.trim() : '';
+        return {
+            id: existing ? existing.id : selected || makeProviderId(),
+            type: getProviderPreset(providerType) ? providerType : CUSTOM_LLM_PROVIDER_TYPE,
+            name: providerNameInput ? providerNameInput.value.trim() : '',
+            endpoint,
+            model: normalizeLlmModel(rawModel || rawEndpoint, providerType),
+            apiKey: providerApiKeyInput ? providerApiKeyInput.value.trim() : '',
+            temperature: FIXED_LLM_TEMPERATURE,
+        };
+    }
+
+    function syncProviderTypeFields(isUserChange) {
+        if (!providerTypeSelect) return;
+        const preset = getProviderPreset(providerTypeSelect.value);
+        if (!preset) return;
+        if (providerEndpointInput) {
+            providerEndpointInput.readOnly = preset.type !== CUSTOM_LLM_PROVIDER_TYPE;
+            providerEndpointInput.placeholder = preset.endpoint || 'https://api.example.com/v1/chat/completions';
+            if (preset.type !== CUSTOM_LLM_PROVIDER_TYPE) {
+                providerEndpointInput.value = preset.endpoint;
+            }
+        }
+        if (providerModelInput) providerModelInput.placeholder = preset.modelPlaceholder;
+        if (providerApiKeyInput) providerApiKeyInput.placeholder = preset.keyPlaceholder;
+        if (isUserChange && providerNameInput) {
+            const currentName = providerNameInput.value.trim();
+            if (!currentName || isPresetLabel(currentName)) providerNameInput.value = preset.label;
+        }
+    }
+
+    function normalizeLlmEndpoint(endpoint, providerType) {
+        const value = String(endpoint || '').trim();
+        const preset = getProviderPreset(providerType);
+        if (preset && preset.type !== CUSTOM_LLM_PROVIDER_TYPE) return preset.endpoint;
+        if (!value) return '';
+        try {
+            const url = new URL(value);
+            const matchedPreset = getProviderPreset(getProviderTypeFromEndpoint(value));
+            if (matchedPreset && matchedPreset.type !== CUSTOM_LLM_PROVIDER_TYPE) {
+                return matchedPreset.endpoint;
+            }
+        } catch {
+            return value;
+        }
+        return value;
+    }
+
+    function normalizeLlmModel(model, providerType) {
+        const value = String(model || '').trim();
+        if (!value) return '';
+        try {
+            const url = new URL(value);
+            if (getProviderTypeFromEndpoint(value) === 'openrouter') {
+                const slug = url.pathname.replace(/^\/+|\/+$/g, '');
+                if (slug && !slug.startsWith('api/')) return slug;
+            }
+        } catch {
+            return value;
+        }
+        return providerType === 'openrouter' ? value.replace(/^\/+|\/+$/g, '') : value;
+    }
+
+    function isOpenRouterEndpoint(endpoint) {
+        try {
+            const url = new URL(endpoint);
+            return url.hostname === 'openrouter.ai' || url.hostname.endsWith('.openrouter.ai');
+        } catch {
+            return false;
+        }
+    }
+
+    function buildLlmHeaders(provider) {
+        const headers = {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${provider.apiKey}`,
+        };
+        if (isOpenRouterEndpoint(provider.endpoint)) {
+            headers['HTTP-Referer'] = window.location.href;
+            headers['X-OpenRouter-Title'] = 'StarRail Simulator';
+        }
+        return headers;
+    }
+
+    function openProviderModal() {
+        if (!providerModal) return;
+        renderProviderTypeOptions();
+        renderProviderSelects();
+        fillProviderForm(getActiveProvider());
+        setProviderMessage('', false);
+        providerModal.style.display = 'block';
+        if (providerNameInput) providerNameInput.focus();
+    }
+
+    function openAiModal() {
+        if (!aiModal) return;
+        renderProviderSelects();
+        if (aiRequestInput && !aiRequestInput.value.trim()) {
+            aiRequestInput.value = '現在の行動順を元に、必要なバフを追加して比較しやすい形に調整してください。';
+        }
+        if (aiOutput && !aiOutput.value.trim()) aiOutput.value = '';
+        setAiMessage('', false);
+        aiModal.style.display = 'block';
+        if (aiRequestInput) aiRequestInput.focus();
+    }
+
+    function initLlmProviders() {
+        renderProviderTypeOptions();
+        llmProviders = loadLlmProviders();
+        activeProviderId = localStorage.getItem(LLM_ACTIVE_PROVIDER_KEY) || (llmProviders[0] && llmProviders[0].id) || '';
+        renderProviderSelects();
+        fillProviderForm(getActiveProvider());
+    }
+
+    function saveProviderFromForm() {
+        const rawEndpoint = providerEndpointInput ? providerEndpointInput.value.trim() : '';
+        const rawModel = providerModelInput ? providerModelInput.value.trim() : '';
+        const provider = readProviderForm();
+        if (!provider.name) provider.name = provider.model || 'LLMプロバイダー';
+        if (!provider.endpoint || !provider.model || !provider.apiKey) {
+            setProviderMessage('API URL、モデル、APIキーを入力してください。', true);
+            return;
+        }
+        const normalizedMessages = [];
+        if (rawEndpoint && rawEndpoint !== provider.endpoint) normalizedMessages.push('API URLを補正');
+        if (rawModel && rawModel !== provider.model) normalizedMessages.push('モデル名を補正');
+        const idx = llmProviders.findIndex(p => p.id === provider.id);
+        if (idx === -1) llmProviders.push(provider);
+        else llmProviders[idx] = provider;
+        activeProviderId = provider.id;
+        saveLlmProviders();
+        renderProviderSelects();
+        fillProviderForm(provider);
+        setProviderMessage(normalizedMessages.length
+            ? `${normalizedMessages.join('、')}して保存しました。`
+            : '保存しました。',
+        false);
+    }
+
+    function deleteSelectedProvider() {
+        const selected = providerList ? providerList.value : activeProviderId;
+        const idx = llmProviders.findIndex(p => p.id === selected);
+        if (idx === -1) return;
+        if (!window.confirm('選択中のLLMプロバイダー設定を削除しますか？')) return;
+        llmProviders.splice(idx, 1);
+        activeProviderId = (llmProviders[0] && llmProviders[0].id) || '';
+        saveLlmProviders();
+        renderProviderSelects();
+        fillProviderForm(getActiveProvider());
+        setProviderMessage('削除しました。', false);
+    }
+
+    function getBuiltInBuffPresets() {
+        return Array.from(document.querySelectorAll('.adv-quick-add')).map(btn => ({
+            label: btn.textContent.trim(),
+            type: btn.dataset.type,
+            value: normalizeNumber(btn.dataset.value, 0),
+            name: btn.dataset.name || btn.textContent.trim(),
+        }));
+    }
+
+    function getKnownBuffPresets() {
+        const custom = customQuickPresets.map(p => ({
+            label: p.label,
+            type: p.type,
+            value: p.value,
+            name: p.name || p.label,
+        }));
+        return [...getBuiltInBuffPresets(), ...custom];
+    }
+
+    function buildAiSkillPrompt() {
+        return [
+            'あなたは崩壊スターレイルの行動順シミュレーター用JSONを編集する補助AIです。',
+            'ユーザーの自然言語指示を読み、現在のJSONを必要最小限だけ変更したJSONを返してください。',
+            '',
+            '絶対ルール:',
+            '- 返答はJSONのみ。Markdown、説明文、コードフェンスは禁止。',
+            `- schema は必ず "${ADV_STATE_SCHEMA}" を使う。`,
+            '- mode は全体置換なら "all"、単一パネル追加なら "panel"。',
+            '- panels は1件以上の配列。',
+            '- 既存パネル名、速度、閾値、既存イベントは、指示がない限り保持する。',
+            '- type は advance / speedFlat / speedPct のどれかだけ。',
+            '- timing は turn または cum。turn は offset、cum は atAV を使う。',
+            '- 数値は数値型で返す。文字列の数値は禁止。',
+            '- 不明な効果名は、最も近い意味の type/value/name に変換する。',
+            '',
+            'JSON構造:',
+            JSON.stringify({
+                schema: ADV_STATE_SCHEMA,
+                mode: 'all',
+                panels: [{
+                    name: 'キャラ名',
+                    baseSpeed: 100,
+                    preSpeed: 134,
+                    threshold: 150,
+                    turns: [{
+                        events: [{
+                            type: 'advance',
+                            value: 25,
+                            name: '表示名',
+                            timing: 'turn',
+                            offset: 0,
+                            atAV: 100,
+                        }],
+                    }],
+                }],
+            }, null, 2),
+            '',
+            '使用できる効果タイプ:',
+            JSON.stringify(EVENT_TYPES, null, 2),
+            '',
+            '登録済みバフ候補:',
+            JSON.stringify(getKnownBuffPresets(), null, 2),
+        ].join('\n');
+    }
+
+    function buildAiUserPrompt() {
+        const request = aiRequestInput ? aiRequestInput.value.trim() : '';
+        const currentState = buildAdvStateText(advPanels, 'all');
+        return [
+            'ユーザー指示:',
+            request || '現在のJSONを読み取り、破綻があれば修正してください。',
+            '',
+            '現在の行動順シミュJSON:',
+            currentState,
+            '',
+            '上記を元に、復元可能なJSONだけを返してください。',
+        ].join('\n');
+    }
+
+    function buildAiContextText() {
+        return [
+            'SYSTEM:',
+            buildAiSkillPrompt(),
+            '',
+            'USER:',
+            buildAiUserPrompt(),
+        ].join('\n');
+    }
+
+    function extractJsonText(text) {
+        const trimmed = String(text || '').trim();
+        if (!trimmed) throw new Error('AIの返答が空です。');
+        if (trimmed.startsWith('{') || trimmed.startsWith('[')) return trimmed;
+        const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        if (fenced) return fenced[1].trim();
+        const firstObj = trimmed.indexOf('{');
+        const lastObj = trimmed.lastIndexOf('}');
+        if (firstObj !== -1 && lastObj > firstObj) return trimmed.slice(firstObj, lastObj + 1);
+        const firstArr = trimmed.indexOf('[');
+        const lastArr = trimmed.lastIndexOf(']');
+        if (firstArr !== -1 && lastArr > firstArr) return trimmed.slice(firstArr, lastArr + 1);
+        throw new Error('JSONを見つけられませんでした。');
+    }
+
+    function getApiErrorDetail(raw) {
+        const text = String(raw || '').trim();
+        if (!text) return '';
+        try {
+            const data = JSON.parse(text);
+            const message = data && data.error && data.error.message
+                ? data.error.message
+                : data.message;
+            return message ? String(message).slice(0, 220) : '';
+        } catch {
+            return text.slice(0, 220);
+        }
+    }
+
+    function buildApiErrorMessage(status, raw) {
+        const detail = getApiErrorDetail(raw);
+        let message;
+        if (status === 401 || status === 403) {
+            message = `AIサーバーに拒否されました（HTTP ${status}）。APIキーや利用権限を確認してください。`;
+        } else if (status === 404) {
+            message = `API URLが見つかりません（HTTP 404）。URLが chat/completions 用になっているか確認してください。`;
+        } else if (status === 429) {
+            message = 'AIサーバーの利用制限にかかりました（HTTP 429）。少し待ってから再実行してください。';
+        } else if (status >= 500) {
+            message = `AIサーバー側でエラーが起きています（HTTP ${status}）。時間を置くか、別のプロバイダーを試してください。`;
+        } else {
+            message = `AIサーバーがリクエストを受け付けませんでした（HTTP ${status}）。AI設定を確認してください。`;
+        }
+        return detail ? `${message} 詳細: ${detail}` : message;
+    }
+
+    function buildNetworkErrorMessage(err) {
+        if (err instanceof TypeError) {
+            return 'AIサーバーに接続できませんでした。API URL、ネットワーク接続、ブラウザからのアクセス許可を確認してください。';
+        }
+        return err.message || 'AI送信に失敗しました。原因不明のエラーです。';
+    }
+
+    async function requestAiJson() {
+        const provider = getActiveProvider();
+        if (!provider) {
+            setAiMessage('AI設定がまだありません。API URL、モデル、APIキーを登録してください。', true);
+            openProviderModal();
+            return;
+        }
+        if (!provider.endpoint || !provider.model || !provider.apiKey) {
+            setAiMessage('AI設定に未入力があります。API URL、モデル、APIキーを入力してください。', true);
+            openProviderModal();
+            return;
+        }
+        if (aiRunBtn) aiRunBtn.disabled = true;
+        setAiMessage('AIに送信しています。', false);
+        try {
+            const endpoint = normalizeLlmEndpoint(provider.endpoint, getProviderType(provider));
+            if (endpoint !== provider.endpoint) {
+                provider.endpoint = endpoint;
+                saveLlmProviders();
+                fillProviderForm(provider);
+            }
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: buildLlmHeaders(provider),
+                body: JSON.stringify({
+                    model: provider.model,
+                    temperature: FIXED_LLM_TEMPERATURE,
+                    messages: [
+                        { role: 'system', content: buildAiSkillPrompt() },
+                        { role: 'user', content: buildAiUserPrompt() },
+                    ],
+                }),
+            });
+            const raw = await res.text();
+            if (!res.ok) throw new Error(buildApiErrorMessage(res.status, raw));
+            let data;
+            try {
+                data = JSON.parse(raw);
+            } catch {
+                throw new Error('AIサーバーから返答はありましたが、形式が想定と違います。API URLが chat/completions 用か確認してください。');
+            }
+            const content = data && data.choices && data.choices[0] && data.choices[0].message
+                ? data.choices[0].message.content
+                : '';
+            if (!content) {
+                throw new Error('AIの返答本文が空でした。モデル名が正しいか、プロバイダーがOpenAI互換の返答形式か確認してください。');
+            }
+            let jsonText;
+            try {
+                jsonText = extractJsonText(content);
+                parseAdvStateText(jsonText);
+            } catch (parseErr) {
+                throw new Error(`AIの返答を復元用JSONとして読めませんでした。もう一度実行するか、JSON案欄の内容を確認してください。詳細: ${parseErr.message}`);
+            }
+            if (aiOutput) aiOutput.value = jsonText;
+            setAiMessage('JSON案を作成しました。内容を確認してから反映してください。', false);
+        } catch (err) {
+            console.error(err);
+            setAiMessage(buildNetworkErrorMessage(err), true);
+        } finally {
+            if (aiRunBtn) aiRunBtn.disabled = false;
+        }
+    }
+
+    function applyAiOutput() {
+        if (!aiOutput) return;
+        let imported;
+        try {
+            imported = parseAdvStateText(extractJsonText(aiOutput.value));
+        } catch (err) {
+            setAiMessage(`JSONを読み取れません: ${err.message}`, true);
+            return;
+        }
+        if (imported.mode !== 'panel' && advPanels.length > 0) {
+            const ok = window.confirm('AIのJSON案で現在の行動順シミュを置き換えますか？');
+            if (!ok) return;
+        }
+        importAdvPanels(imported);
+        setAiMessage('反映しました。', false);
+    }
+
     function renderAllAdvPanels() {
         advPanels.forEach(renderPanelTable);
+        scheduleAdvScrollButtonUpdate();
+    }
+
+    function getAdvMaxScroll() {
+        if (!advPanelsContainer) return 0;
+        return Math.max(0, advPanelsContainer.scrollWidth - advPanelsContainer.clientWidth);
+    }
+
+    function updateAdvScrollButtons() {
+        if (!advPanelsContainer) return;
+        const maxScroll = getAdvMaxScroll();
+        const atStart = maxScroll <= 0 || advPanelsContainer.scrollLeft <= 2;
+        const atEnd = maxScroll <= 0 || advPanelsContainer.scrollLeft >= maxScroll - 2;
+        if (advScrollLeftBtn) advScrollLeftBtn.disabled = atStart;
+        if (advScrollRightBtn) advScrollRightBtn.disabled = atEnd;
+        if (advPanelPrevBtn) advPanelPrevBtn.disabled = atStart;
+        if (advPanelNextBtn) advPanelNextBtn.disabled = atEnd;
+    }
+
+    function scheduleAdvScrollButtonUpdate() {
+        if (!advPanelsContainer || advScrollUpdateScheduled) return;
+        advScrollUpdateScheduled = true;
+        requestAnimationFrame(() => {
+            updateAdvScrollButtons();
+            requestAnimationFrame(() => {
+                updateAdvScrollButtons();
+                advScrollUpdateScheduled = false;
+            });
+        });
+        setTimeout(updateAdvScrollButtons, 80);
+    }
+
+    function clampAdvScroll(left) {
+        return Math.max(0, Math.min(left, getAdvMaxScroll()));
+    }
+
+    function normalizeWheelDelta(delta, deltaMode, pageSize) {
+        if (deltaMode === WheelEvent.DOM_DELTA_LINE) return delta * 16;
+        if (deltaMode === WheelEvent.DOM_DELTA_PAGE) return delta * pageSize;
+        return delta;
+    }
+
+    function scrollAdvPanelsBy(delta) {
+        if (!advPanelsContainer || delta === 0) return false;
+        const nextLeft = clampAdvScroll(advPanelsContainer.scrollLeft + delta);
+        if (Math.abs(nextLeft - advPanelsContainer.scrollLeft) < 0.5) return false;
+        advPanelsContainer.scrollLeft = nextLeft;
+        scheduleAdvScrollButtonUpdate();
+        return true;
+    }
+
+    function getAdvPanelOffsets() {
+        if (!advPanelsContainer) return [];
+        const containerRect = advPanelsContainer.getBoundingClientRect();
+        return advPanels
+            .filter(panel => panel.el && panel.el.card)
+            .map(panel => {
+                const rect = panel.el.card.getBoundingClientRect();
+                return advPanelsContainer.scrollLeft + rect.left - containerRect.left;
+            });
+    }
+
+    function scrollAdvPanelToIndex(index) {
+        const offsets = getAdvPanelOffsets();
+        if (offsets.length === 0) return;
+        const targetIndex = Math.max(0, Math.min(index, offsets.length - 1));
+        const nextLeft = clampAdvScroll(offsets[targetIndex]);
+        advPanelsContainer.scrollLeft = nextLeft;
+        scheduleAdvScrollButtonUpdate();
+    }
+
+    function scrollAdvPanelByStep(direction) {
+        const offsets = getAdvPanelOffsets();
+        if (offsets.length === 0 || direction === 0) return;
+        const currentLeft = advPanelsContainer.scrollLeft;
+        const EPS = 4;
+        if (direction > 0) {
+            const nextIndex = offsets.findIndex(left => left > currentLeft + EPS);
+            scrollAdvPanelToIndex(nextIndex === -1 ? offsets.length - 1 : nextIndex);
+            return;
+        }
+        let prevIndex = 0;
+        for (let i = offsets.length - 1; i >= 0; i--) {
+            if (offsets[i] < currentLeft - EPS) {
+                prevIndex = i;
+                break;
+            }
+        }
+        scrollAdvPanelToIndex(prevIndex);
+    }
+
+    function isPointInRect(x, y, rect) {
+        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    }
+
+    function handleAdvPanelJumpClick(e) {
+        if (!advPanelPrevBtn || !advPanelNextBtn) return;
+        const x = e.clientX;
+        const y = e.clientY;
+        const prevRect = advPanelPrevBtn.getBoundingClientRect();
+        const nextRect = advPanelNextBtn.getBoundingClientRect();
+        if (isPointInRect(x, y, prevRect)) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!advPanelPrevBtn.disabled) scrollAdvPanelByStep(-1);
+        } else if (isPointInRect(x, y, nextRect)) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!advPanelNextBtn.disabled) scrollAdvPanelByStep(1);
+        }
     }
 
     function buildPanelDOM(panel) {
@@ -590,6 +1484,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="text" class="adv-panel-name" value="${escapeAttr(panel.name)}" style="font-weight:bold; font-size:1.05rem; flex:1; min-width:0; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:4px; padding:4px 8px; color:var(--text-color);">
                 <button class="secondary-btn-small adv-panel-duplicate" title="このパネルを複製" style="padding:2px 10px; flex:none;">複製</button>
                 <button class="secondary-btn-small adv-panel-share" title="タイムラインをテキストでコピー" style="padding:2px 10px; flex:none;">共有</button>
+                <button class="secondary-btn-small adv-panel-copy-state" title="このパネルの復元用データをコピー" style="padding:2px 10px; flex:none;">データ</button>
                 <button class="secondary-btn-small adv-panel-remove" title="このパネルを削除" style="padding:2px 10px; flex:none;">✕</button>
             </div>
             <div style="display:flex; gap:0.8rem; flex-wrap:wrap; align-items:flex-end; margin-bottom:1rem;">
@@ -683,6 +1578,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        const copyStateBtn = card.querySelector('.adv-panel-copy-state');
+        if (copyStateBtn) {
+            copyStateBtn.addEventListener('click', () => copyAdvState([panel], 'panel', copyStateBtn));
+        }
+
         card.querySelector('.adv-panel-duplicate').addEventListener('click', () => duplicateAdvPanel(panel.id));
         card.querySelector('.adv-panel-clear-buffs').addEventListener('click', () => {
             if (!window.confirm(`「${panel.name}」の全ターンのバフを消去しますか？`)) return;
@@ -703,13 +1603,14 @@ document.addEventListener('DOMContentLoaded', () => {
             baseSpeed: (initial && initial.baseSpeed) || 100,
             preSpeed: (initial && initial.preSpeed) || 134,
             threshold: (initial && initial.threshold) || 150,
-            turns: [],
+            turns: normalizeAdvTurns(initial && initial.turns),
             el: null,
         };
         advPanels.push(panel);
         advPanelsContainer.appendChild(buildPanelDOM(panel));
         renderPanelTable(panel);
         refreshPanelOrders();
+        scheduleAdvScrollButtonUpdate();
         return panel;
     }
 
@@ -733,6 +1634,7 @@ document.addEventListener('DOMContentLoaded', () => {
         src.el.card.after(card); // 元パネルの直後へ配置
         renderPanelTable(copy);
         refreshPanelOrders();
+        scheduleAdvScrollButtonUpdate();
     }
 
     // 配列順に合わせて DOM を並び替え (appendChild は既存ノードを移動させる)
@@ -755,6 +1657,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (modalPanelId === id) buffModal.style.display = 'none';
         if (advPanels.length === 0) createAdvPanel(); // 最低1枚は残す
         refreshPanelOrders();
+        scheduleAdvScrollButtonUpdate();
     }
 
     // ---- バフ設定モーダル (イベントリスト編集) ----
@@ -951,12 +1854,108 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeBuffModal) {
         closeBuffModal.addEventListener('click', () => { buffModal.style.display = 'none'; });
     }
+    if (closeStateModal) {
+        closeStateModal.addEventListener('click', () => { stateModal.style.display = 'none'; });
+    }
+    if (stateInput) {
+        stateInput.placeholder = 'コピーした行動順シミュのJSONを貼り付け';
+    }
+    if (stateCopyFromModalBtn) {
+        stateCopyFromModalBtn.addEventListener('click', () => copyAdvState(advPanels, 'all', stateCopyFromModalBtn));
+    }
+    if (stateApplyBtn) {
+        stateApplyBtn.addEventListener('click', applyStateInput);
+    }
+    if (aiOpenBtn) {
+        aiOpenBtn.addEventListener('click', openAiModal);
+    }
+    if (aiSettingsBtn) {
+        aiSettingsBtn.addEventListener('click', openProviderModal);
+    }
+    if (aiOpenSettingsBtn) {
+        aiOpenSettingsBtn.addEventListener('click', openProviderModal);
+    }
+    if (closeAiModal) {
+        closeAiModal.addEventListener('click', () => { aiModal.style.display = 'none'; });
+    }
+    if (closeProviderModal) {
+        closeProviderModal.addEventListener('click', () => { providerModal.style.display = 'none'; });
+    }
+    if (aiProviderSelect) {
+        aiProviderSelect.addEventListener('change', () => {
+            activeProviderId = aiProviderSelect.value;
+            saveLlmProviders();
+            renderProviderSelects();
+            fillProviderForm(getActiveProvider());
+        });
+    }
+    if (providerList) {
+        providerList.addEventListener('change', () => {
+            activeProviderId = providerList.value;
+            saveLlmProviders();
+            fillProviderForm(getActiveProvider());
+            renderProviderSelects();
+        });
+    }
+    if (providerTypeSelect) {
+        providerTypeSelect.addEventListener('change', () => syncProviderTypeFields(true));
+    }
+    if (providerNewBtn) {
+        providerNewBtn.addEventListener('click', () => {
+            fillProviderForm(getEmptyProvider());
+            setProviderMessage('新しいプロバイダーを入力してください。', false);
+        });
+    }
+    if (providerSaveBtn) {
+        providerSaveBtn.addEventListener('click', saveProviderFromForm);
+    }
+    if (providerDeleteBtn) {
+        providerDeleteBtn.addEventListener('click', deleteSelectedProvider);
+    }
+    if (aiCopyContextBtn) {
+        aiCopyContextBtn.addEventListener('click', () => copyTextToClipboard(buildAiContextText())
+            .then(() => setAiMessage('AIへ渡す内容をコピーしました。', false))
+            .catch((err) => {
+                console.error(err);
+                if (aiOutput) {
+                    aiOutput.value = buildAiContextText();
+                    aiOutput.select();
+                }
+                setAiMessage('コピーできませんでした。JSON案欄に送信内容を出しました。', true);
+            }));
+    }
+    if (aiRunBtn) {
+        aiRunBtn.addEventListener('click', requestAiJson);
+    }
+    if (aiApplyBtn) {
+        aiApplyBtn.addEventListener('click', applyAiOutput);
+    }
 
     // モーダル外クリックで閉じる (削除ボタンで要素がDOMから外れた場合は isConnected で除外)
     document.addEventListener('click', (e) => {
         if (buffModal && buffModal.style.display === 'block') {
             if (e.target.isConnected && !buffModal.contains(e.target) && !e.target.closest('.adv-buff-setup')) {
                 buffModal.style.display = 'none';
+            }
+        }
+        if (stateModal && stateModal.style.display === 'block') {
+            if (e.target.isConnected && !stateModal.contains(e.target) && !e.target.closest('#adv-import-state')) {
+                stateModal.style.display = 'none';
+            }
+        }
+        if (aiModal && aiModal.style.display === 'block') {
+            if (e.target.isConnected && !aiModal.contains(e.target) && !e.target.closest('#adv-ai-open')) {
+                aiModal.style.display = 'none';
+            }
+        }
+        if (providerModal && providerModal.style.display === 'block') {
+            if (
+                e.target.isConnected &&
+                !providerModal.contains(e.target) &&
+                !e.target.closest('#adv-ai-settings') &&
+                !e.target.closest('#adv-ai-open-settings')
+            ) {
+                providerModal.style.display = 'none';
             }
         }
     });
@@ -971,23 +1970,72 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
             }
         }
+        if (stateModal && stateModal.style.display === 'block' && e.key === 'Escape') {
+            stateModal.style.display = 'none';
+            e.preventDefault();
+        }
+        if (aiModal && aiModal.style.display === 'block' && e.key === 'Escape') {
+            aiModal.style.display = 'none';
+            e.preventDefault();
+        }
+        if (providerModal && providerModal.style.display === 'block' && e.key === 'Escape') {
+            providerModal.style.display = 'none';
+            e.preventDefault();
+        }
     });
 
     if (advAddPanelBtn) advAddPanelBtn.addEventListener('click', () => createAdvPanel());
+    if (advCopyStateBtn) advCopyStateBtn.addEventListener('click', () => copyAdvState(advPanels, 'all', advCopyStateBtn));
+    if (advImportStateBtn) advImportStateBtn.addEventListener('click', () => openStateModal());
 
-    // パネル列の上で縦ホイールしたら横スクロールに変換 (一番下のスクロールバー以外でも横移動できるように)
-    //   横にスクロール余地がある方向のときだけ横移動を奪い、端まで来たら通常の縦スクロールへ戻す。
+    if (advScrollLeftBtn) {
+        advScrollLeftBtn.addEventListener('click', () => {
+            scrollAdvPanelsBy(-Math.max(240, advPanelsContainer.clientWidth * 0.75));
+        });
+    }
+    if (advScrollRightBtn) {
+        advScrollRightBtn.addEventListener('click', () => {
+            scrollAdvPanelsBy(Math.max(240, advPanelsContainer.clientWidth * 0.75));
+        });
+    }
+    if (advPanelPrevBtn) {
+        advPanelPrevBtn.addEventListener('click', () => scrollAdvPanelByStep(-1));
+    }
+    if (advPanelNextBtn) {
+        advPanelNextBtn.addEventListener('click', () => scrollAdvPanelByStep(1));
+    }
+    if (advPanelsWrap) {
+        advPanelsWrap.addEventListener('click', handleAdvPanelJumpClick, true);
+    }
+
+    // 縦スクロールはページに通し、横意図が明確な入力だけパネル列の横移動に使う。
+    //   - トラックパッド等の横ホイール(deltaX優勢)
+    //   - Shift + 縦ホイール
     if (advPanelsContainer) {
+        advPanelsContainer.addEventListener('scroll', scheduleAdvScrollButtonUpdate);
+        window.addEventListener('resize', scheduleAdvScrollButtonUpdate);
         advPanelsContainer.addEventListener('wheel', (e) => {
-            if (e.deltaY === 0) return;                 // 横ホイール(deltaX)はそのまま native に任せる
-            const maxScroll = advPanelsContainer.scrollWidth - advPanelsContainer.clientWidth;
-            if (maxScroll <= 0) return;                 // 横にあふれていない → 通常の縦スクロール
-            const goingRight = e.deltaY > 0;
-            const canScrollRight = advPanelsContainer.scrollLeft < maxScroll - 1;
-            const canScrollLeft = advPanelsContainer.scrollLeft > 0;
-            if ((goingRight && canScrollRight) || (!goingRight && canScrollLeft)) {
-                advPanelsContainer.scrollLeft += e.deltaY;
-                e.preventDefault();                     // ページ縦スクロールを抑止して横移動に充てる
+            if (e.ctrlKey || getAdvMaxScroll() <= 0) return;
+            const target = e.target;
+            if (
+                document.activeElement === target &&
+                (target instanceof HTMLInputElement ||
+                 target instanceof HTMLSelectElement ||
+                 target instanceof HTMLTextAreaElement)
+            ) {
+                return;
+            }
+
+            const pageSize = advPanelsContainer.clientWidth || window.innerWidth;
+            const dx = normalizeWheelDelta(e.deltaX, e.deltaMode, pageSize);
+            const dy = normalizeWheelDelta(e.deltaY, e.deltaMode, pageSize);
+            const absX = Math.abs(dx);
+            const absY = Math.abs(dy);
+
+            if (absX > absY && scrollAdvPanelsBy(dx)) {
+                e.preventDefault();
+            } else if (e.shiftKey && absY > 0 && scrollAdvPanelsBy(dy)) {
+                e.preventDefault();
             }
         }, { passive: false });
     }
@@ -996,6 +2044,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateUI();
     renderThresholdTable();
     renderQuickPresets();
+    initLlmProviders();
     if (advPanelsContainer) {
         createAdvPanel({ name: 'キャラ1' });
         createAdvPanel({ name: 'キャラ2' });

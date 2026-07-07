@@ -11,7 +11,7 @@ import { SET_TYPE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
-    id: 'oretaRyukotsu',
+    id: 'Broken Keel',
     name: '折れた竜骨',
     type: SET_TYPE.PLANAR,
 
@@ -24,8 +24,8 @@ Registry.ornament.add({
             {
                 id: 'oretaRyukotsu_crit_dmg',
                 source: 'set',
-                name: '効果抵抗≧30% 条件 味方CD+10% (常時発動)',
-                description: '装備キャラの効果抵抗が30%以上の場合、パーティ全体の会心ダメージ+10%。装備 teammate の効果抵抗が条件を満たしていればONにする。',
+                name: '効果抵抗≧30% 条件 味方会心ダメージ+10% (常時発動)',
+                description: '装備キャラの効果抵抗が30%以上の場合、パーティ全体の会心ダメージ+10%。装備している味方の効果抵抗が条件を満たしていれば有効にする。',
                 stats: { [STAT.CRIT_DMG]: 0.10 },
                 defaultActive: false,
                 target: 'all',

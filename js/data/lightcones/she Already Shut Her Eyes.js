@@ -21,7 +21,7 @@ const ERR_BY_SI = [0.12, 0.14, 0.16, 0.18, 0.20];
 const DMG_BY_SI = [0.090, 0.105, 0.120, 0.135, 0.150];
 
 Registry.lightcone.add({
-    id: 'tojitaHitomi',
+    id: 'She Already Shut Her Eyes',
     name: '閉ざした瞳',
     path: PATH.PRESERVATION,
     rarity: 5,
@@ -43,7 +43,7 @@ Registry.lightcone.add({
         const dmg = DMG_BY_SI[Math.max(0, Math.min(4, superimpose - 1))];
         return [
             {
-                id: 'tojitaHitomi_hp_loss_dmg',
+                id: 'she_already_shut_her_eyes_hp_loss_dmg',
                 source: 'lc',
                 name: `装備者HP減少時 味方与ダメ+${(dmg*100).toFixed(1)}% (2T)`,
                 description: `装備キャラのHPが減った時、味方全体の与ダメージ+${(dmg*100).toFixed(1)}%、2T継続。`,

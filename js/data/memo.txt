@@ -1,0 +1,45 @@
+遺物・次元界オーナメント追加メモ
+================================
+
+今回の方針
+----------
+- UI表示用の name は日本語表記。
+- Registry の id とファイル名は公式英名ベース。
+- 旧ローマ字/短縮 id は buildStore.js で公式英名 id に読み替える。
+- 条件付きの本人バフは selfEffects、味方に渡す効果は partyEffects に置く。
+- 専用枠がない効果は stats に無理に入れず、コメントとこの memo に残す。
+
+ver4.3時点で追加できた最新セットの目安
+--------------------------------------
+- Cavern Relic Sets
+  - As Navigator Isee Sees It
+  - Divine-Querying Master Smith
+- Planar Ornaments
+  - Punklorde Stage Zero
+  - City of Converging Stars
+- 直近の既知追加分として v4.0 の Ever-Glorious Magical Girl / Diviner of Distant Reach、v3.7 の Amphoreus, The Eternal Land / Tengoku@Livestream まで登録済み。
+
+不明・未対応として残したもの
+----------------------------
+- v4.0以降の一部日本語名は添付資料に公式日本語が無かったため、UI用に仮訳を置いた。
+  - Ever-Glorious Magical Girl: 永遠に輝く魔法少女
+  - Diviner of Distant Reach: 遠方を占う者
+  - As Navigator Isee Sees It: ナビゲーター・アイシーの見たままに
+  - Punklorde Stage Zero: パンクロード・ステージゼロ
+- 愉悦(Elation)専用ステータス枠は未実装。
+  - Punklorde Stage Zero の「愉悦+8%」は未反映。
+  - Diviner of Distant Reach の「味方全体の愉悦+10%」は未反映。
+  - Ever-Glorious Magical Girl の防御無視は、愉悦ダメージ計算時のみ手動ONする selfEffects として登録。
+- バリア耐久値の専用ステータス枠は未実装。
+  - Knight of Purity Palace の4セット、Self-Enshrouded Recluse のバリア耐久部分は stats 未反映。
+- 装備者の被ダメージ軽減/HP回復/SP回復/EP固定回復は、火力比較の主要枠ではないため未反映。
+  - Guard of Wuthering Snow、Passerby of Wandering Cloud 4セット、Thief of Shooting Meteor 4セットの回復部分など。
+- 記憶の精霊だけに効く値は、現状は装備者側の selfEffects として近似登録。精霊単独ステータス枠は未実装。
+
+今後追加時の確認ポイント
+------------------------
+- 新規セットの id とファイル名は公式英名にする。
+- UI名は日本語。公式日本語が未確認なら仮訳と分かるようにこの memo に追記。
+- 火力に直接効く値は STAT 定数または ELEMENT_DMG_KEYS 経由で登録。
+- 条件付き効果は常時 stats に入れず、selfEffects / partyEffects で手動ONできるようにする。
+- 敵弱点、デバフ数、SP消費、愉悦値などユーザー判断が必要な条件は description に明記する。

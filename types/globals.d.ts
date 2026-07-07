@@ -16,5 +16,13 @@ declare global {
         consumeAlliesHP?: (ratio: number, opts?: Record<string, unknown>) => number;
         /** 戦闘シミュの Entity クラス (simulator.js が定義) */
         Entity?: new (...args: any[]) => any;
+        /** bootstrap.js が公開するアプリ共通 API */
+        SRSIM?: {
+            Registry: {
+                character: { list: () => unknown[] };
+                lightcone: { list: () => unknown[] };
+            };
+            [key: string]: unknown;
+        };
     }
 }

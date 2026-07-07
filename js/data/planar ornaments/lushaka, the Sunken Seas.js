@@ -12,7 +12,7 @@ import { SET_TYPE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
-    id: 'rusaka',
+    id: 'Lushaka, the Sunken Seas',
     name: '海に沈んだルサカ',
     type: SET_TYPE.PLANAR,
 
@@ -25,8 +25,8 @@ Registry.ornament.add({
             {
                 id: 'rusaka_first_slot_atk',
                 source: 'set',
-                name: '1枠目キャラ ATK+12% (サポート装備時 常時発動)',
-                description: '装備キャラがパーティの1枠目のキャラでない場合、1枠目のキャラの攻撃力+12%。装備 teammate はサポート枠想定のため条件は常に成立。',
+                name: '1枠目キャラ 攻撃力+12% (サポート装備時 常時発動)',
+                description: '装備キャラがパーティの1枠目のキャラでない場合、1枠目のキャラの攻撃力+12%。装備している味方がサポート枠なら条件成立として扱う。',
                 stats: { [STAT.ATK_PERCENT]: 0.12 },
                 defaultActive: true,
                 target: 'single',

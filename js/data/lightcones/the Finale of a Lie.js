@@ -14,7 +14,7 @@ const ATK_BY_SI = [0.40, 0.50, 0.60, 0.70, 0.80];
 const TAKEN_BY_SI = [0.20, 0.225, 0.25, 0.275, 0.30];
 
 Registry.lightcone.add({
-    id: 'aruUsoNoShuumaku',
+    id: 'The Finale of a Lie',
     name: '或る嘘の終幕',
     path: PATH.HUNT,
     rarity: 5,
@@ -40,7 +40,7 @@ Registry.lightcone.add({
         const atk = ATK_BY_SI[idx];
         return [
             {
-                id: 'aruUso_kagekui_atk',
+                id: 'the_finale_of_a_lie_shadow_atk',
                 source: 'lc',
                 name: `「影喰い」攻撃力+${(atk*100).toFixed(0)}% (3T)`,
                 description: `戦闘開始時、または装備キャラが追加攻撃を累計4回発動するたびに「影喰い」を付与(3T)。装備キャラが「影喰い」を持つ時、攻撃力+${(atk*100).toFixed(0)}%。`,
@@ -59,7 +59,7 @@ Registry.lightcone.add({
         const taken = TAKEN_BY_SI[idx];
         return [
             {
-                id: 'aruUso_kagekui_taken_party',
+                id: 'the_finale_of_a_lie_shadow_taken_party',
                 source: 'lc',
                 name: `「影喰い」敵全体被ダメ+${(taken*100).toFixed(1)}% (3T)`,
                 description: `装備キャラが「影喰い」を持つ時、敵全体の受けるダメージ+${(taken*100).toFixed(1)}%。同系統スキルは重ねがけ不可。`,
@@ -78,7 +78,7 @@ Registry.lightcone.add({
         const taken = TAKEN_BY_SI[idx];
         return [
             {
-                id: 'aruUso_kagekui_taken',
+                id: 'the_finale_of_a_lie_shadow_taken',
                 source: 'lc',
                 name: `「影喰い」敵全体被ダメ+${(taken*100).toFixed(1)}% (3T)`,
                 description: `装備キャラが「影喰い」を持つ時、敵全体の受けるダメージ+${(taken*100).toFixed(1)}%。同系統スキルは重ねがけ不可。`,

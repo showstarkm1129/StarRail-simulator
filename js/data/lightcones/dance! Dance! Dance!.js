@@ -5,8 +5,8 @@ import { PATH } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.lightcone.add({
-    id: 'ddd',
-    name: 'ダンス・ダンス・ダンス',
+    id: 'Dance! Dance! Dance!',
+    name: 'ダンス！ダンス！ダンス！',
     path: PATH.HARMONY,
     rarity: 4,
 

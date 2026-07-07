@@ -21,7 +21,7 @@ import { Registry } from '../../build/registry.js';
 const PER_LAYER_DMG_BY_SI = [0.15, 0.17, 0.19, 0.21, 0.24];
 
 Registry.lightcone.add({
-    id: 'daichiNiAme',
+    id: 'A Grounded Ascent',
     name: '大地より天を目指して',
     path: PATH.HARMONY,
     rarity: 5,
@@ -42,7 +42,7 @@ Registry.lightcone.add({
         const per = PER_LAYER_DMG_BY_SI[idx];
         return [
             {
-                id: 'daichi_chorus',
+                id: 'a_grounded_ascent_chorus',
                 source: 'lc',
                 name: `聖なる詠唱 1層あたり 与ダメ+${(per*100).toFixed(0)}%`,
                 description: `装備キャラの単体スキル/必殺を受けたターゲットに「聖なる詠唱」+1層 (max3層、3T継続)、1層につき与ダメ+${(per*100).toFixed(0)}%。層数は UI で 1〜3 を選択。`,

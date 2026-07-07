@@ -20,7 +20,7 @@ import { Registry } from '../../build/registry.js';
 const SKILL_DMG_BY_SI = [0.54, 0.675, 0.81, 0.945, 1.08];   // S1~S5
 
 Registry.lightcone.add({
-    id: 'oogonNoChi',
+    id: 'Epoch Etched in Golden Blood',
     name: '黄金の血で刻む時代',
     path: PATH.HARMONY,
     rarity: 5,
@@ -46,7 +46,7 @@ Registry.lightcone.add({
         const skillDmg = SKILL_DMG_BY_SI[Math.max(0, Math.min(4, superimpose - 1))];
         return [
             {
-                id: 'oogon_skill_dmg',
+                id: 'epoch_etched_skill_dmg',
                 source: 'lc',
                 name: `戦闘スキル後 味方単体 戦闘スキルダメ+${(skillDmg*100).toFixed(1)}% (3T)`,
                 description: `装備キャラが味方単体に戦闘スキルを発動した後、その味方の戦闘スキルダメージ+${(skillDmg*100).toFixed(1)}%、3T継続。DMG_SKILL 枠 (比較表「与ダメ枠 (戦闘スキル)」行に反映)。`,

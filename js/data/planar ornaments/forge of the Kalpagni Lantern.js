@@ -12,12 +12,29 @@ import { SET_TYPE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
-    id: 'gokkaRenchu',
+    id: 'Forge of the Kalpagni Lantern',
     name: '劫火と蓮灯の鋳煉宮',
     type: SET_TYPE.PLANAR,
 
     pc2: {
         stats: { [STAT.SPD_PERCENT]: 0.06 },
+    },
+
+    selfEffects: {
+        pc2: [
+            {
+                id: 'forge_fire_weakness_break',
+                source: 'set',
+                name: '炎弱点命中 自身撃破特効+40% (1ターン)',
+                description: '装備キャラの攻撃が炎属性弱点を持つ敵に命中する時、撃破特効+40%、1ターン継続。',
+                stats: { [STAT.BREAK_EFFECT]: 0.40 },
+                defaultActive: false,
+                target: 'single',
+                duration: 1,
+                tickRule: 'target_turn_start',
+                dispellable: false,
+            },
+        ],
     },
 
     partyEffects: { pc2: [] },

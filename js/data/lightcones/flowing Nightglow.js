@@ -22,7 +22,7 @@ const SELF_ATK_BY_SI = [0.48, 0.60, 0.72, 0.84, 0.96];   // S1~S5
 const ALLY_DMG_BY_SI = [0.24, 0.28, 0.32, 0.36, 0.40];   // S1~S5
 
 Registry.lightcone.add({
-    id: 'hikariNoYoru',
+    id: 'Flowing Nightglow',
     name: '光あふれる夜',
     path: PATH.HARMONY,
     rarity: 5,
@@ -43,7 +43,7 @@ Registry.lightcone.add({
         const dmg = ALLY_DMG_BY_SI[idx];
         return [
             {
-                id: 'hikariNoYoru_kasai_dmg',
+                id: 'flowing_nightglow_cantillation_dmg',
                 source: 'lc',
                 name: `華彩中 味方与ダメ+${(dmg*100).toFixed(0)}% (1T)`,
                 description: `必殺発動後の「華彩」状態中、味方全体の与ダメージ+${(dmg*100).toFixed(0)}%、1T継続。装備キャラ自身は ATK+${(SELF_ATK_BY_SI[idx]*100).toFixed(0)}% (本人ステ反映済み想定 — focus には伝わらない)。`,

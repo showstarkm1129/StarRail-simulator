@@ -18,7 +18,7 @@ import { Registry } from '../../build/registry.js';
 const ALLY_DMG_BY_SI = [0.24, 0.28, 0.32, 0.36, 0.40];   // S1~S5
 
 Registry.lightcone.add({
-    id: 'kagamiUchi',
+    id: 'Past Self in Mirror',
     name: '鏡の中の私',
     path: PATH.HARMONY,
     rarity: 5,
@@ -45,7 +45,7 @@ Registry.lightcone.add({
         const dmg = ALLY_DMG_BY_SI[idx];
         return [
             {
-                id: 'kagami_ult_dmg',
+                id: 'past_self_in_mirror_ult_dmg',
                 source: 'lc',
                 name: `必殺後 味方与ダメ+${(dmg*100).toFixed(0)}% (3T、同系統非累積)`,
                 description: `装備キャラが必殺技を発動した後、味方の与ダメージ+${(dmg*100).toFixed(0)}%、3T継続。同系統スキルは重ねがけ不可。`,

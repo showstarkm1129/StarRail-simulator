@@ -15,9 +15,6 @@ import {
     makeElementDmgKey,
 } from './statKeys.js';
 import {
-    SLOT,
-    RELIC_SLOTS,
-    ORNAMENT_SLOTS,
     ALL_SLOTS,
     SLOT_TO_SET_TYPE,
     SET_TYPE,
@@ -61,7 +58,7 @@ function makeStatsAccumulator() {
 }
 
 // 遺物セット種別ごとに装着数を集計
-//   countSetsByType(build.relics, SET_TYPE.CAVERN) → { messenger: 4 } 等
+//   countSetsByType(build.relics, SET_TYPE.CAVERN) → { 'Messenger Traversing Hackerspace': 4 } 等
 export function countSetsByType(relics, type) {
     const counts = {};
     for (const slot of ALL_SLOTS) {

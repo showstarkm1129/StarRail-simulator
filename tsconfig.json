@@ -32,7 +32,9 @@
     "js/build/**/*.js",
     "js/data/**/*.js",
     "server.js",
+    "playwright.config.ts",
     "test/**/*.js",
+    "tests/**/*.ts",
     "types/**/*.d.ts"
   ],
   "exclude": [

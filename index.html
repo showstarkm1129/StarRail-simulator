@@ -184,11 +184,23 @@
                     <p class="help-text" style="margin-bottom: 1rem;">複数キャラのタイムラインを横並びで比較できます。各ターンのバフは「ターン開始からの行動値オフセット (発動AV)」で発動タイミングを精密に指定できます。</p>
                     <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
                         <button id="adv-add-panel" class="primary-btn" style="padding: 6px 14px;">＋ パネル追加</button>
+                        <button id="adv-ai-open" class="primary-btn" style="padding: 6px 14px;">AI調整</button>
+                        <button id="adv-ai-settings" class="secondary-btn-small" style="padding: 6px 12px;">AI設定</button>
+                        <button id="adv-copy-state" class="secondary-btn-small" style="padding: 6px 12px;">データコピー</button>
+                        <button id="adv-import-state" class="secondary-btn-small" style="padding: 6px 12px;">データ復元</button>
+                        <div class="adv-scroll-controls">
+                            <button id="adv-scroll-left" class="secondary-btn-small adv-scroll-btn" title="左へスクロール" aria-label="左へスクロール">←</button>
+                            <button id="adv-scroll-right" class="secondary-btn-small adv-scroll-btn" title="右へスクロール" aria-label="右へスクロール">→</button>
+                        </div>
                         <span class="help-text" style="margin: 0;">各パネルは独立して速度・バフ・名前を設定できます。横にスクロールして比較できます。</span>
                     </div>
 
-                    <div id="adv-panels" style="display: flex; gap: 1rem; align-items: flex-start; overflow-x: auto; padding-bottom: 10px;">
-                        <!-- JS Generated panels -->
+                    <div class="adv-panels-wrap">
+                        <button id="adv-panel-prev" class="adv-panel-jump adv-panel-jump-left" title="左隣のパネルへ" aria-label="左隣のパネルへ">←</button>
+                        <div id="adv-panels" style="display: flex; gap: 1rem; align-items: flex-start; overflow-x: auto; padding-bottom: 10px;">
+                            <!-- JS Generated panels -->
+                        </div>
+                        <button id="adv-panel-next" class="adv-panel-jump adv-panel-jump-right" title="右隣のパネルへ" aria-label="右隣のパネルへ">→</button>
                     </div>
 
                     <!-- Shared Buff Modal for Advanced Simulator -->
@@ -209,6 +221,69 @@
                         </div>
                         <button id="adv-buff-add-event" class="secondary-btn-small" style="width: 100%;">＋ 効果を追加</button>
                         <button id="adv-buff-modal-apply" class="primary-btn" style="margin-top: 0.9rem; padding: 8px; width: 100%;">適用 (Enter)</button>
+                    </div>
+
+                    <div id="adv-state-modal" class="status-modal-content" style="display: none; position: fixed; z-index: 1001; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 640px; max-width: 94vw; margin: 0; box-shadow: 0 4px 18px rgba(0,0,0,0.55);">
+                        <span class="close-modal" id="close-adv-state-modal">&times;</span>
+                        <h2 style="color: var(--accent-gold); margin-bottom: 8px; font-size: 1.15rem;">行動順シミュ データ復元</h2>
+                        <textarea id="adv-state-input" spellcheck="false" style="width: 100%; min-height: 260px; resize: vertical; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color); padding: 0.75rem; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.85rem;"></textarea>
+                        <div id="adv-state-message" class="help-text" style="min-height: 1.4em; margin: 0.5rem 0 0;"></div>
+                        <div style="display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.8rem;">
+                            <button id="adv-state-copy-from-modal" class="secondary-btn-small" style="padding: 6px 12px;">現在データをコピー</button>
+                            <button id="adv-state-apply" class="primary-btn" style="padding: 6px 16px;">復元</button>
+                        </div>
+                    </div>
+
+                    <div id="adv-ai-modal" class="status-modal-content" style="display: none; position: fixed; z-index: 1002; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 760px; max-width: 94vw; max-height: 92vh; overflow: auto; margin: 0; box-shadow: 0 4px 18px rgba(0,0,0,0.55);">
+                        <span class="close-modal" id="close-adv-ai-modal">&times;</span>
+                        <h2 style="color: var(--accent-gold); margin-bottom: 8px; font-size: 1.15rem;">行動順シミュ AI調整</h2>
+                        <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.7rem; align-items: end; margin-bottom: 0.8rem;">
+                            <div class="input-group" style="margin-bottom: 0; display: block;">
+                                <label for="adv-ai-provider-select" style="display: block; margin-bottom: 0.35rem;">LLMプロバイダー:</label>
+                                <select id="adv-ai-provider-select" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color); padding: 0.5rem;"></select>
+                            </div>
+                            <button id="adv-ai-open-settings" class="secondary-btn-small" style="padding: 7px 12px;">設定</button>
+                        </div>
+                        <label for="adv-ai-request" style="display: block; font-weight: bold; margin-bottom: 0.35rem;">自然言語で調整内容を入力:</label>
+                        <textarea id="adv-ai-request" spellcheck="false" style="width: 100%; min-height: 110px; resize: vertical; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color); padding: 0.75rem;"></textarea>
+                        <div style="display: flex; justify-content: flex-end; gap: 0.6rem; margin: 0.8rem 0;">
+                            <button id="adv-ai-copy-context" class="secondary-btn-small" style="padding: 6px 12px;">送信内容コピー</button>
+                            <button id="adv-ai-run" class="primary-btn" style="padding: 6px 16px;">JSON案を作成</button>
+                        </div>
+                        <label for="adv-ai-output" style="display: block; font-weight: bold; margin-bottom: 0.35rem;">AIが返したJSON案:</label>
+                        <textarea id="adv-ai-output" spellcheck="false" style="width: 100%; min-height: 230px; resize: vertical; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color); padding: 0.75rem; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.85rem;"></textarea>
+                        <div id="adv-ai-message" class="help-text" style="min-height: 1.4em; margin: 0.5rem 0 0;"></div>
+                        <div style="display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.8rem;">
+                            <button id="adv-ai-apply" class="primary-btn" style="padding: 6px 16px;">JSON案を反映</button>
+                        </div>
+                    </div>
+
+                    <div id="adv-provider-modal" class="status-modal-content" style="display: none; position: fixed; z-index: 1003; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 680px; max-width: 94vw; max-height: 92vh; overflow: auto; margin: 0; box-shadow: 0 4px 18px rgba(0,0,0,0.55);">
+                        <span class="close-modal" id="close-adv-provider-modal">&times;</span>
+                        <h2 style="color: var(--accent-gold); margin-bottom: 8px; font-size: 1.15rem;">LLMプロバイダー設定</h2>
+                        <p class="help-text" style="margin-bottom: 0.8rem;">設定はこのブラウザのlocalStorageに保存されます。APIキーはローカル利用前提で扱ってください。</p>
+                        <div class="adv-provider-grid">
+                            <label>登録済み</label>
+                            <select id="adv-provider-list"></select>
+                            <label>提供元</label>
+                            <select id="adv-provider-type"></select>
+                            <label>表示名</label>
+                            <input id="adv-provider-name" type="text" placeholder="例: OpenAI互換">
+                            <label>API URL</label>
+                            <input id="adv-provider-endpoint" type="text" placeholder="https://api.example.com/v1/chat/completions">
+                            <label>モデル</label>
+                            <input id="adv-provider-model" type="text" placeholder="例: gpt-4.1-mini">
+                            <label>APIキー</label>
+                            <input id="adv-provider-api-key" type="password" placeholder="sk-...">
+                        </div>
+                        <div id="adv-provider-message" class="help-text" style="min-height: 1.4em; margin: 0.5rem 0 0;"></div>
+                        <div style="display: flex; justify-content: space-between; gap: 0.6rem; margin-top: 0.8rem; flex-wrap: wrap;">
+                            <button id="adv-provider-new" class="secondary-btn-small" style="padding: 6px 12px;">新規</button>
+                            <div style="display: flex; gap: 0.6rem;">
+                                <button id="adv-provider-delete" class="secondary-btn-small" style="padding: 6px 12px; color:#ff8787;">削除</button>
+                                <button id="adv-provider-save" class="primary-btn" style="padding: 6px 16px;">保存</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

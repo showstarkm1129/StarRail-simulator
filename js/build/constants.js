@@ -25,6 +25,7 @@ export const PATH = Object.freeze({
     PRESERVATION: 'preservation',
     ABUNDANCE: 'abundance',
     REMEMBRANCE: 'remembrance',
+    ELATION: 'elation',
 });
 
 export const SLOT = Object.freeze({

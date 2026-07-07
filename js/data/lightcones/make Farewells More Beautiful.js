@@ -24,7 +24,7 @@ const DEF_IGN_BY_SI = [0.30, 0.35, 0.40, 0.45, 0.50];
 // 参考 (本ツール未使用): 行動順加速 = [0.12, 0.15, 0.18, 0.21, 0.24]
 
 Registry.lightcone.add({
-    id: 'eiketsuYo',
+    id: 'Make Farewells More Beautiful',
     name: '永訣よ美しくあれ',
     path: PATH.REMEMBRANCE,
     rarity: 5,

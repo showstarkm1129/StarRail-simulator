@@ -17,7 +17,7 @@ import { SET_TYPE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
-    id: 'kunanShisai',
+    id: 'Sacerdos\' Relived Ordeal',
     name: '再び苦難の道を歩む司祭',
     type: SET_TYPE.CAVERN,
 
@@ -34,8 +34,8 @@ Registry.relicSet.add({
             {
                 id: 'shisai_target_cd',
                 source: 'set',
-                name: '単体スキル/必殺後 1層あたり ターゲット CD+18% (2T、max2層)',
-                description: '装備キャラが味方単体に戦闘スキルまたは必殺技を発動した時、スキルターゲットの会心ダメージ+18%、2T継続、最大2層。focus が対象になる前提で ON。',
+                name: '単体スキル/必殺後 1層あたり対象会心ダメージ+18% (2ターン、最大2層)',
+                description: '装備キャラが味方単体に戦闘スキルまたは必殺技を発動した時、スキルターゲットの会心ダメージ+18%、2ターン継続、最大2層。計算対象が対象になった時に有効にする。',
                 stats: { [STAT.CRIT_DMG]: 0.18 },
                 stackable: { max: 2, default: 2 },
                 defaultActive: false,

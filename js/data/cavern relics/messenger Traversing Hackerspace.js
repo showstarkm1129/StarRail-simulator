@@ -7,7 +7,7 @@ import { SET_TYPE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
-    id: 'messenger',
+    id: 'Messenger Traversing Hackerspace',
     name: '仮想空間を漫遊するメッセンジャー',
     type: SET_TYPE.CAVERN,
 
@@ -33,8 +33,8 @@ Registry.relicSet.add({
             {
                 id: 'msg4_ult_spd',
                 source: 'set',
-                name: '必殺後 味方 SPD+12% (1T)',
-                description: '装着 teammate が必殺を発動した時、味方全体の SPD +12%、1T',
+                name: '味方対象の必殺後 味方速度+12% (1ターン)',
+                description: '装備している味方が味方対象の必殺技を発動した時、味方全体の速度+12%、1ターン継続。',
                 stats: { [STAT.SPD_PERCENT]: 0.12 },
                 defaultActive: false,
                 target: 'all',

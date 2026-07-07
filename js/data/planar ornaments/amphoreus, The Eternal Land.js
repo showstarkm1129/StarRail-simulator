@@ -12,7 +12,7 @@ import { SET_TYPE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
-    id: 'onparos',
+    id: 'Amphoreus, The Eternal Land',
     name: '永遠の地オンパロス',
     type: SET_TYPE.PLANAR,
 
@@ -25,7 +25,7 @@ Registry.ornament.add({
             {
                 id: 'onparos_spirit_spd',
                 source: 'set',
-                name: '記憶の精霊フィールド上時 味方SPD+8% (累積不可)',
+                name: '記憶の精霊フィールド上時 味方速度+8% (累積不可)',
                 description: '装備キャラの記憶の精霊がフィールド上にいる時、味方全体の速度+8%。同系統は累積不可。',
                 stats: { [STAT.SPD_PERCENT]: 0.08 },
                 defaultActive: false,

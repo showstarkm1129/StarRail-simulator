@@ -12,7 +12,7 @@ import { SET_TYPE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
-    id: 'rougaiSenshu',
+    id: 'Fleet of the Ageless',
     name: '老いぬ者の仙舟',
     type: SET_TYPE.PLANAR,
 
@@ -25,8 +25,8 @@ Registry.ornament.add({
             {
                 id: 'rougai_atk_aura',
                 source: 'set',
-                name: 'SPD≧120 条件 味方ATK+8% (常時発動)',
-                description: '装備キャラのSPDが120以上の場合、味方全体の攻撃力+8%。装備 teammate の SPD が条件を満たしていればONにする。',
+                name: '速度≧120 条件 味方攻撃力+8% (常時発動)',
+                description: '装備キャラの速度が120以上の場合、味方全体の攻撃力+8%。装備している味方の速度が条件を満たしていれば有効にする。',
                 stats: { [STAT.ATK_PERCENT]: 0.08 },
                 defaultActive: false,
                 target: 'all',
