@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    rollsToStatDict, rollTotalMode, rollSingleSlot, calcManualAllocation,
+    rollsToStatDict, rollTotalMode, rollSingleSlot, rollPerSlotMode, calcManualAllocation,
     excludeMainStatFromCandidates,
 } from '../js/build/substatRoller.js';
 import { SUBSTAT_TABLE } from '../js/build/substatTable.js';
@@ -78,4 +78,25 @@ test('excludeMainStatFromCandidates: BODY×会心率メインは CRIT_RATE を�
 test('excludeMainStatFromCandidates: 属性ダメメインはサブステに無く無変化', () => {
     const subs = ['CRIT_RATE', 'ATK_PERCENT'];
     assert.deepEqual(excludeMainStatFromCandidates('sphere', 'fire_dmg', subs), subs);
+});
+
+test('rollPerSlotMode は部位別結果と全体合計を同時に返す', () => {
+    const result = rollPerSlotMode({
+        slots: [
+            {
+                slot: 'head', initialCount: 4, enhanceCount: 0, tier: 'mid',
+                candidateSubKeys: ['ATK_PERCENT', 'CRIT_RATE', 'CRIT_DMG', 'HP_PERCENT'],
+            },
+            {
+                slot: 'hands', initialCount: 3, enhanceCount: 1, tier: 'mid',
+                candidateSubKeys: ['ATK_PERCENT', 'CRIT_RATE', 'CRIT_DMG', 'HP_PERCENT'],
+            },
+        ],
+        rng: seqRng([0]),
+    });
+
+    assert.deepEqual(Object.keys(result.perSlot), ['head', 'hands']);
+    assert.equal(Object.values(result.perSlot.head.rolls).reduce((sum, count) => sum + count, 0), 4);
+    assert.equal(Object.values(result.perSlot.hands.rolls).reduce((sum, count) => sum + count, 0), 5);
+    assert.ok(result.totals.ATK_PERCENT > 0);
 });

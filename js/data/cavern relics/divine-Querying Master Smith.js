@@ -11,13 +11,18 @@
 //   - 4pc 「助燃」による味方全体の与ダメージ+15% は条件付きパーティバフ → partyEffects.pc4
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Divine-Querying Master Smith',
     name: '神業を探求する名匠',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE, RELIC_USAGE.SUPPORT],
+        attribute: [RELIC_ATTRIBUTE.HP, RELIC_ATTRIBUTE.CRIT_DMG],
+    },
 
     pc2: {
         stats: { [STAT.HP_PERCENT]: 0.12 },

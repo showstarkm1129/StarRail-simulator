@@ -3,13 +3,18 @@
 //   4pc: 戦闘スキル与ダメージ +12%。必殺技後、次の攻撃の炎属性与ダメージ +12%。
 
 import { STAT, ELEMENT_DMG_KEYS } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Firesmith of Lava-Forging',
     name: '溶岩で鍛造する火匠',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.FIRE],
+    },
 
     pc2: {
         stats: { [ELEMENT_DMG_KEYS.fire]: 0.10 },

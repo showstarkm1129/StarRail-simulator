@@ -4,13 +4,18 @@
 //        撃破特効250%以上で超撃破ダメージがさらに防御力を15%無視。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Iron Cavalry Against the Scourge',
     name: '蝗害を一掃せし鉄騎',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.BREAK_EFFECT],
+    },
 
     pc2: {
         stats: { [STAT.BREAK_EFFECT]: 0.16 },

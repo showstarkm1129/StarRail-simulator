@@ -17,6 +17,7 @@ const BROWSER_GLOBALS = {
     window: 'readonly',
     document: 'readonly',
     navigator: 'readonly',
+    getComputedStyle: 'readonly',
     localStorage: 'readonly',
     location: 'readonly',
     console: 'readonly',
@@ -25,6 +26,7 @@ const BROWSER_GLOBALS = {
     prompt: 'readonly',
     fetch: 'readonly',
     URL: 'readonly',
+    Blob: 'readonly',
     Event: 'readonly',
     CustomEvent: 'readonly',
     HTMLElement: 'readonly',
@@ -36,6 +38,7 @@ const BROWSER_GLOBALS = {
     clearInterval: 'readonly',
     requestAnimationFrame: 'readonly',
     structuredClone: 'readonly',
+    AbortController: 'readonly',
 };
 
 const NODE_GLOBALS = {
@@ -43,6 +46,9 @@ const NODE_GLOBALS = {
     Buffer: 'readonly',
     console: 'readonly',
     URL: 'readonly',
+    fetch: 'readonly',
+    AbortController: 'readonly',
+    AbortSignal: 'readonly',
     setTimeout: 'readonly',
     clearTimeout: 'readonly',
 };
@@ -67,7 +73,7 @@ export default [
 
     // 1. ES Modules (アプリ計算層 / データ層 / UI モジュール)
     {
-        files: ['js/build/**/*.js', 'js/data/**/*.js', 'js/ui/**/*.js', 'js/bootstrap.js'],
+        files: ['js/build/**/*.js', 'js/data/**/*.js', 'js/ui/**/*.js', 'js/ai/aiGateway.js', 'js/ai/diminishingTools.js', 'js/bootstrap.js'],
         languageOptions: {
             ecmaVersion: 2022,
             sourceType: 'module',
@@ -76,9 +82,9 @@ export default [
         rules: COMMON_RULES,
     },
 
-    // 2. Node スクリプト (静的サーバー / 設定 / ルート直下の単発 .mjs)
+    // 2. Node スクリプト (静的サーバー / 設定 / scripts 配下の単発 .mjs)
     {
-        files: ['server.js', 'eslint.config.js', '*.mjs'],
+        files: ['server.js', 'js/ai/serverGateway.js', 'js/ai/loadGameData.js', 'eslint.config.js', '*.mjs', 'scripts/**/*.mjs'],
         languageOptions: {
             ecmaVersion: 2022,
             sourceType: 'module',
@@ -99,7 +105,7 @@ export default [
     // 3. 非モジュール (window グローバル共有スクリプト)
     //    互いの関数をグローバル経由で参照するため no-undef は無効化。
     {
-        files: ['js/simulator.js', 'js/speed.js', 'js/ui.js'],
+        files: ['js/simulator.js', 'js/speed.js', 'js/ui.js', 'js/localSave.js'],
         languageOptions: {
             ecmaVersion: 2022,
             sourceType: 'script',

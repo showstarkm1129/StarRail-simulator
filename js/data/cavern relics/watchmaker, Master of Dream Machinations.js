@@ -3,13 +3,18 @@
 //   4pc: 味方に対して必殺技を発動する時、味方全体の撃破特効 +30%、2T。累積不可。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Watchmaker, Master of Dream Machinations',
     name: '夢を弄ぶ時計屋',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE, RELIC_USAGE.SUPPORT],
+        attribute: [RELIC_ATTRIBUTE.BREAK_EFFECT],
+    },
 
     pc2: {
         stats: { [STAT.BREAK_EFFECT]: 0.16 },

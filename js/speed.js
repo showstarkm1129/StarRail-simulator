@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const FIXED_LLM_TEMPERATURE = 0;
 
     // --- UI: サブタブの切り替え ---
     const subTabBtns = document.querySelectorAll('.sub-tab-btn');
@@ -22,6 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (targetId === 'sub-speed-advanced') {
                 renderAllAdvPanels();
                 scheduleAdvScrollButtonUpdate();
+            } else if (targetId === 'sub-speed-aha') {
+                renderAhaSpeed();
             }
         });
     });
@@ -271,6 +272,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const advAddPanelBtn = document.getElementById('adv-add-panel');
     const advCopyStateBtn = document.getElementById('adv-copy-state');
     const advImportStateBtn = document.getElementById('adv-import-state');
+    const advLoadLocalStateBtn = document.getElementById('adv-load-local-state');
+    const advCopyLocalPathBtn = document.getElementById('adv-copy-local-path');
     const advScrollLeftBtn = document.getElementById('adv-scroll-left');
     const advScrollRightBtn = document.getElementById('adv-scroll-right');
     const advPanelPrevBtn = document.getElementById('adv-panel-prev');
@@ -290,123 +293,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const stateMessage = document.getElementById('adv-state-message');
     const stateCopyFromModalBtn = document.getElementById('adv-state-copy-from-modal');
     const stateApplyBtn = document.getElementById('adv-state-apply');
-    const aiOpenBtn = document.getElementById('adv-ai-open');
-    const aiSettingsBtn = document.getElementById('adv-ai-settings');
-    const aiModal = document.getElementById('adv-ai-modal');
-    const closeAiModal = document.getElementById('close-adv-ai-modal');
-    const aiProviderSelect = document.getElementById('adv-ai-provider-select');
-    const aiOpenSettingsBtn = document.getElementById('adv-ai-open-settings');
-    const aiRequestInput = document.getElementById('adv-ai-request');
-    const aiCopyContextBtn = document.getElementById('adv-ai-copy-context');
-    const aiRunBtn = document.getElementById('adv-ai-run');
-    const aiOutput = document.getElementById('adv-ai-output');
-    const aiMessage = document.getElementById('adv-ai-message');
-    const aiApplyBtn = document.getElementById('adv-ai-apply');
-    const providerModal = document.getElementById('adv-provider-modal');
-    const closeProviderModal = document.getElementById('close-adv-provider-modal');
-    const providerList = document.getElementById('adv-provider-list');
-    const providerTypeSelect = document.getElementById('adv-provider-type');
-    const providerNameInput = document.getElementById('adv-provider-name');
-    const providerEndpointInput = document.getElementById('adv-provider-endpoint');
-    const providerModelInput = document.getElementById('adv-provider-model');
-    const providerApiKeyInput = document.getElementById('adv-provider-api-key');
-    const providerTemperatureInput = document.getElementById('adv-provider-temperature');
-    const providerMessage = document.getElementById('adv-provider-message');
-    const providerNewBtn = document.getElementById('adv-provider-new');
-    const providerDeleteBtn = document.getElementById('adv-provider-delete');
-    const providerSaveBtn = document.getElementById('adv-provider-save');
-
-    // バフイベントの種類定義 (使いまわし用にここで一元管理)
-    const EVENT_TYPES = {
-        advance:   { label: '行動値短縮 (%)',   def: 25 },
-        speedFlat: { label: '速度増加 (固定)',  def: 20 },
-        speedPct:  { label: '速度増加 (%基礎)', def: 12 },
-    };
-    const ADV_STATE_SCHEMA = 'srsim.speedAdvanced.v1';
-    const LLM_PROVIDER_KEY = 'srsim_adv_llm_providers';
-    const LLM_ACTIVE_PROVIDER_KEY = 'srsim_adv_llm_active_provider';
-    const CUSTOM_LLM_PROVIDER_TYPE = 'custom';
-    const LLM_PROVIDER_PRESETS = Object.freeze([
-        {
-            type: 'openrouter',
-            label: 'OpenRouter',
-            endpoint: 'https://openrouter.ai/api/v1/chat/completions',
-            modelPlaceholder: '例: google/gemma-4-31b-it:free',
-            keyPlaceholder: 'sk-or-...',
-            hostnames: ['openrouter.ai'],
-        },
-        {
-            type: 'openai',
-            label: 'OpenAI',
-            endpoint: 'https://api.openai.com/v1/chat/completions',
-            modelPlaceholder: '例: gpt-4.1-mini',
-            keyPlaceholder: 'sk-...',
-            hostnames: ['api.openai.com'],
-        },
-        {
-            type: 'gemini',
-            label: 'Google Gemini',
-            endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-            modelPlaceholder: '例: gemini-3.5-flash',
-            keyPlaceholder: 'Gemini APIキー',
-            hostnames: ['generativelanguage.googleapis.com'],
-        },
-        {
-            type: 'groq',
-            label: 'Groq',
-            endpoint: 'https://api.groq.com/openai/v1/chat/completions',
-            modelPlaceholder: '例: llama-3.3-70b-versatile',
-            keyPlaceholder: 'gsk_...',
-            hostnames: ['api.groq.com'],
-        },
-        {
-            type: 'deepseek',
-            label: 'DeepSeek',
-            endpoint: 'https://api.deepseek.com/chat/completions',
-            modelPlaceholder: '例: deepseek-v4-flash',
-            keyPlaceholder: 'sk-...',
-            hostnames: ['api.deepseek.com'],
-        },
-        {
-            type: 'together',
-            label: 'Together AI',
-            endpoint: 'https://api.together.ai/v1/chat/completions',
-            modelPlaceholder: '例: meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8',
-            keyPlaceholder: 'Together APIキー',
-            hostnames: ['api.together.ai'],
-        },
-        {
-            type: 'mistral',
-            label: 'Mistral AI',
-            endpoint: 'https://api.mistral.ai/v1/chat/completions',
-            modelPlaceholder: '例: mistral-large-latest',
-            keyPlaceholder: 'Mistral APIキー',
-            hostnames: ['api.mistral.ai'],
-        },
-        {
-            type: 'xai',
-            label: 'xAI',
-            endpoint: 'https://api.x.ai/v1/chat/completions',
-            modelPlaceholder: '例: grok-4.3',
-            keyPlaceholder: 'xAI APIキー',
-            hostnames: ['api.x.ai'],
-        },
-        {
-            type: CUSTOM_LLM_PROVIDER_TYPE,
-            label: 'カスタム',
-            endpoint: '',
-            modelPlaceholder: '例: provider/model または model-name',
-            keyPlaceholder: 'APIキー',
-            hostnames: [],
-        },
-    ]);
-
+    // 計算・正規化は build/actionOrder.js (DOM非依存) に集約。
+    // 行動順タブと AI ツールが同じ計算を共有するため、ここでは参照するだけにする。
+    const ActionOrder = window.SRSIM && window.SRSIM.ActionOrder;
+    // バフイベントの種類定義 (ラベル・既定値はモジュール側で一元管理)
+    const EVENT_TYPES = ActionOrder ? ActionOrder.EVENT_TYPES : {};
+    const ADV_STATE_SCHEMA = ActionOrder ? ActionOrder.ACTION_ORDER_STATE_SCHEMA : 'srsim.speedAdvanced.v1';
+    const ADV_LOCAL_STATE_ENDPOINT = '/api/local-save/action-order/entry/_autosave';
     const advPanels = [];   // パネル状態の配列
     let advPanelSeq = 0;  // パネル連番 (名前デフォルト用)
-    let llmProviders = [];
-    let activeProviderId = '';
-    let editingProviderId = '';
     let advScrollUpdateScheduled = false;
+    let advLocalSyncEnabled = false;
+    let advLocalSyncPaused = false;
+    let advLocalStatePath = 'local/action-order-state.json';
+    let advLocalWriteTimer = null;
+    let advLocalWriteInFlight = false;
+    let advLocalWritePending = false;
 
     // モーダルの編集対象
     let modalPanelId = null;
@@ -423,175 +325,87 @@ document.addEventListener('DOMContentLoaded', () => {
     if (buffModal && buffModal.parentElement !== document.body) {
         document.body.appendChild(buffModal);
     }
+
+    // --- Sub Tab 4: アッハ速度計算器 ---
+    const ahaSpeedInputs = Array.from(document.querySelectorAll('.aha-character-speed'));
+    const ahaSpeedResult = document.getElementById('aha-speed-result');
+    const ahaAvResult = document.getElementById('aha-av-result');
+    const ahaFormulaDetail = document.getElementById('aha-formula-detail');
+    const ahaRankingTbody = document.getElementById('aha-ranking-tbody');
+
+    function renderAhaSpeed() {
+        if (!ahaSpeedResult || !ahaAvResult || !ahaFormulaDetail || !ahaRankingTbody) return;
+
+        const calculator = window.SRSIM && window.SRSIM.AhaSpeed;
+        if (!calculator) {
+            ahaSpeedResult.textContent = '---';
+            ahaAvResult.textContent = '---';
+            ahaFormulaDetail.textContent = '計算機能を読み込めませんでした。';
+            ahaRankingTbody.innerHTML = '';
+            return;
+        }
+
+        const result = calculator.computeAhaSpeed(ahaSpeedInputs.map(input => input.value));
+        ahaSpeedResult.textContent = result.speed.toFixed(3);
+        ahaAvResult.textContent = result.actionValue.toFixed(2);
+        ahaFormulaDetail.textContent = `${result.baseSpeed} + ${result.ranked
+            .map(entry => `${entry.speed.toFixed(1)}×${entry.weight}`)
+            .join(' + ')} = ${result.speed.toFixed(3)}`;
+
+        ahaRankingTbody.innerHTML = '';
+        result.ranked.forEach((entry) => {
+            const row = document.createElement('tr');
+            const values = [
+                `${entry.rankIndex + 1}位`,
+                `愉悦キャラ ${entry.slotIndex + 1}`,
+                entry.speed.toFixed(1),
+                `×${entry.weight}`,
+                `+${entry.contribution.toFixed(3)}`,
+            ];
+            values.forEach((value) => {
+                const cell = document.createElement('td');
+                cell.textContent = value;
+                row.appendChild(cell);
+            });
+            ahaRankingTbody.appendChild(row);
+        });
+    }
+
+    ahaSpeedInputs.forEach(input => input.addEventListener('input', renderAhaSpeed));
     if (stateModal && stateModal.parentElement !== document.body) {
         document.body.appendChild(stateModal);
     }
-    if (aiModal && aiModal.parentElement !== document.body) {
-        document.body.appendChild(aiModal);
-    }
-    if (providerModal && providerModal.parentElement !== document.body) {
-        document.body.appendChild(providerModal);
-    }
-
-    // ---- シミュレーション本体 ----
-    // 1ターン分の行動を「ゲージ充填」で計算する。
-    //   ゲージ 0→10000 を speed (AV毎の充填量) で満たす。
-    //   行動値短縮 = ゲージへ即時加算 (value% × 10000)。
-    //   速度増加   = それ以降の充填速度を上げる。
-    //   各イベントは offset(発動AV: ターン開始からの経過AV) の時点で適用。
-    //   ※ offset=0 なら従来の「ターン最初に全適用」と一致する。
-    //   返り値: { actualAV(実消費AV), endSpeed, startSpeed, fired[](各イベントが発動したか) }
-    //   effective: [{ ev, offset }] (各効果を「このターン開始からの発動AV(offset)」へ正規化済み)
-    function simulateTurn(panel, effective) {
-        const base = panel.baseSpeed > 0 ? panel.baseSpeed : 1;
-        const startSpeed = panel.preSpeed > 0 ? panel.preSpeed : 1;
-        const EPS = 1e-9;
-
-        // offset昇順に処理。元のindexを保持して発動有無を返す。
-        const indexed = effective.map((e, i) => ({ e, i }));
-        indexed.sort((a, b) => a.e.offset - b.e.offset);
-        const fired = new Array(effective.length).fill(false);
-
-        let speed = startSpeed;
-        let gauge = 0;
-        let elapsed = 0;
-        let k = 0;
-        let guard = 0;
-
-        while (guard++ < 2000) {
-            const remaining = 10000 - gauge;
-            if (remaining <= EPS) break; // 行動値短縮でゲージが満タンに達した
-
-            const avToComplete = remaining / speed;
-            const completionElapsed = elapsed + avToComplete;
-            const nextOffset = k < indexed.length ? indexed[k].e.offset : Infinity;
-
-            if (completionElapsed <= nextOffset + EPS) {
-                // 次イベントより先に行動が完了
-                elapsed = completionElapsed;
-                break;
-            }
-
-            // 次イベントの発動AVまでゲージを進める
-            gauge += speed * (nextOffset - elapsed);
-            elapsed = nextOffset;
-
-            // 同じ offset のイベントをまとめて適用
-            while (k < indexed.length && indexed[k].e.offset <= nextOffset + EPS) {
-                const { e, i } = indexed[k];
-                const ev = e.ev;
-                fired[i] = true;
-                if (ev.type === 'advance')        gauge += (ev.value / 100) * 10000;
-                else if (ev.type === 'speedFlat') speed += ev.value;
-                else if (ev.type === 'speedPct')  speed += base * (ev.value / 100);
-                k++;
-            }
-        }
-
-        return { actualAV: elapsed, endSpeed: speed, startSpeed, fired };
-    }
-
-    // ---- イベント参照ヘルパ (旧データへの後方互換デフォルト込み) ----
-    function evTiming(ev) { return ev.timing === 'cum' ? 'cum' : 'turn'; }
-    function evOffset(ev) { return Number.isFinite(ev.offset) ? ev.offset : 0; }
-    function evAtAV(ev)   { return Number.isFinite(ev.atAV) ? ev.atAV : 0; }
-    function evAutoLabel(ev) {
-        if (ev.type === 'advance') return `短縮${ev.value}%`;
-        if (ev.type === 'speedFlat') return `速度+${ev.value}`;
-        return `速度+${ev.value}%`;
-    }
-    // 表示名: カスタム名があればそれ、無ければ自動ラベル
-    function evLabel(ev) {
-        return (ev.name && ev.name.trim()) ? ev.name.trim() : evAutoLabel(ev);
-    }
+    // ---- イベント参照ヘルパ (計算モジュールへの委譲) ----
+    const evTiming = (ev) => ActionOrder.evTiming(ev);
+    const evOffset = (ev) => ActionOrder.evOffset(ev);
+    const evAtAV = (ev) => ActionOrder.evAtAV(ev);
+    const evRefPanel = (ev) => ActionOrder.evRefPanel(ev);
+    const evRefTurn = (ev) => ActionOrder.evRefTurn(ev);
+    const evAutoLabel = (ev) => ActionOrder.evAutoLabel(ev);
+    const evLabel = (ev) => ActionOrder.evLabel(ev);
 
     // テーブルセル用の効果チップ1個分
     function renderSummaryChip(ev, kind, notFired) {
-        const suffix = kind === 'cum' ? `@累計${evAtAV(ev)}` : `@${evOffset(ev)}AV`;
+        let suffix;
+        if (kind === 'cum') suffix = `@累計${evAtAV(ev)}`;
+        else if (kind === 'panel') suffix = `@P${evRefPanel(ev) + 1}-T${evRefTurn(ev)}`;
+        else suffix = `@${evOffset(ev)}AV`;
         let style;
         if (notFired) style = 'color:#ff6b6b; text-decoration:line-through; opacity:0.85;';
         else if (kind === 'cum') style = 'color:#ffd479;'; // 累計AV発動は金色で区別
+        else if (kind === 'panel') style = 'color:#c9a8ff;'; // 他パネル参照発動は紫で区別
         else style = 'color:#a8d5ff;';
         const title = notFired ? ' title="行動が発動AVより先に完了したため不発"' : '';
         return `<span style="font-size:0.82em; font-weight:bold; ${style}"${title}>${escapeAttr(evLabel(ev))}${suffix}${notFired ? '(不発)' : ''}</span>`;
     }
 
     // ---- タイムライン計算 (テーブル描画とテキスト共有で共通利用) ----
-    // 各ターンの計算結果を行データの配列として返す。DOM/テキストは呼び出し側で組み立てる。
-    //   返り値: { threshold, rows: [{ turn, chips:[{ev,kind,notFired}], sim, actualAV,
-    //             cumulativeAV, speedChanged, pastThreshold, drawWallBefore }] }
+    // 計算本体は build/actionOrder.js。パネル参照バフ (他パネルの指定ターン到達AVに追従) は
+    // パネル間の依存関係を解決する必要があるため、常に全パネル分をまとめて計算する。
     function computePanelTimeline(panel) {
-        const threshold = panel.threshold > 0 ? panel.threshold : 150;
-        const EPS = 1e-9;
-
-        // パネル全体の「累計AV発動」バフを収集 (どのターンで発動するかは順次判定)
-        const cumPool = [];
-        panel.turns.forEach((td) => {
-            (td.events || []).forEach((ev) => {
-                if (evTiming(ev) === 'cum') cumPool.push({ ev, fired: false });
-            });
-        });
-
-        const rows = [];
-        let cumulativeAV = 0;
-        let turn = 0;
-        let turnsPastThreshold = 0;
-        let hasDrawnWall = false;
-
-        while (turnsPastThreshold < 3) {
-            if (turn >= panel.turns.length) panel.turns.push({ events: [] });
-            const turnData = panel.turns[turn];
-            const cumStart = cumulativeAV;
-
-            // このターンに効く効果を effective list へ正規化
-            //   turn効果: offset そのまま / cum効果: offset = atAV - cumStart (未発動かつ atAV>=cumStart のもの)
-            const effective = [];
-            (turnData.events || []).forEach((ev) => {
-                if (evTiming(ev) === 'turn') effective.push({ ev, offset: evOffset(ev), kind: 'turn' });
-            });
-            cumPool.forEach((c) => {
-                if (!c.fired && evAtAV(c.ev) >= cumStart - EPS) {
-                    effective.push({ ev: c.ev, offset: Math.max(0, evAtAV(c.ev) - cumStart), kind: 'cum', cumRef: c });
-                }
-            });
-
-            const sim = simulateTurn(panel, effective);
-            const actualAV = sim.actualAV;
-
-            // 発動した cum 効果をプール側に記録 (以降のターンで再適用しない)
-            effective.forEach((e, idx) => { if (e.kind === 'cum' && sim.fired[idx]) e.cumRef.fired = true; });
-
-            // サマリ: turn効果(不発含む) + このターンで発動した cum効果のみ
-            const chips = [];
-            effective.forEach((e, idx) => {
-                if (e.kind === 'turn') chips.push({ ev: e.ev, kind: 'turn', notFired: !sim.fired[idx] });
-                else if (e.kind === 'cum' && sim.fired[idx]) chips.push({ ev: e.ev, kind: 'cum', notFired: false });
-            });
-
-            let drawWallBefore = false;
-            if (!hasDrawnWall && (cumulativeAV + actualAV) > threshold) {
-                drawWallBefore = true;
-                hasDrawnWall = true;
-            }
-            cumulativeAV += actualAV;
-            if (cumulativeAV > threshold) turnsPastThreshold++;
-
-            rows.push({
-                turn: turn + 1,
-                chips,
-                sim,
-                actualAV,
-                cumulativeAV,
-                speedChanged: Math.abs(sim.endSpeed - sim.startSpeed) > 1e-6,
-                pastThreshold: cumulativeAV > threshold,
-                drawWallBefore,
-            });
-
-            turn++;
-            if (turn > 200) break; // 無限ループ防止
-        }
-
-        return { threshold, rows };
+        const idx = advPanels.indexOf(panel);
+        if (idx === -1) return ActionOrder.computeTimeline(panel);
+        return ActionOrder.computeAllTimelines(advPanels)[idx];
     }
 
     function renderPanelTable(panel) {
@@ -656,9 +470,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ti = parseInt(e.currentTarget.getAttribute('data-turn'), 10);
                 if (panel.turns[ti]) panel.turns[ti].events = [];
                 if (modalPanelId === panel.id && modalTurnIndex === ti) buffModal.style.display = 'none';
-                renderPanelTable(panel);
+                renderAllAdvPanels(); // 他パネルのパネル参照バフが追従できるよう全パネル再計算
             });
         });
+
+        scheduleAdvLocalStateWrite();
     }
 
     // タイムラインを共有用プレーンテキストに整形 (画像化はChromeのCanvas汚染で不可のため)
@@ -672,7 +488,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (r.drawWallBefore) lines.push(`--- 目標閾値(${threshold})到達 ---`);
             const eff = r.chips.length
                 ? r.chips.map(c => {
-                    const suffix = c.kind === 'cum' ? `@累計${evAtAV(c.ev)}` : `@${evOffset(c.ev)}AV`;
+                    const suffix = c.kind === 'cum' ? `@累計${evAtAV(c.ev)}`
+                        : c.kind === 'panel' ? `@P${evRefPanel(c.ev) + 1}-T${evRefTurn(c.ev)}`
+                        : `@${evOffset(c.ev)}AV`;
                     return evLabel(c.ev) + suffix + (c.notFired ? '(不発)' : '');
                 }).join(', ')
                 : '-';
@@ -707,95 +525,99 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!ok) throw new Error('execCommand copy failed');
     }
 
-    function normalizeNumber(value, fallback, minValue) {
-        const n = parseFloat(value);
-        if (!Number.isFinite(n)) return fallback;
-        return minValue === undefined ? n : Math.max(minValue, n);
-    }
-
-    function normalizeAdvEvent(raw) {
-        const source = raw && typeof raw === 'object' ? raw : {};
-        const type = EVENT_TYPES[source.type] ? source.type : 'advance';
-        const timing = source.timing === 'cum' ? 'cum' : 'turn';
-        return {
-            type,
-            value: normalizeNumber(source.value, EVENT_TYPES[type].def),
-            name: typeof source.name === 'string' ? source.name : '',
-            timing,
-            offset: normalizeNumber(source.offset, 0, 0),
-            atAV: normalizeNumber(source.atAV, 100, 0),
-        };
-    }
-
-    function normalizeAdvTurns(turns) {
-        if (!Array.isArray(turns)) return [];
-        return turns.map((turn) => ({
-            events: Array.isArray(turn && turn.events)
-                ? turn.events.map(normalizeAdvEvent)
-                : [],
-        }));
-    }
-
-    function trimEmptyTrailingTurns(turns) {
-        const trimmed = normalizeAdvTurns(turns);
-        while (trimmed.length > 0 && trimmed[trimmed.length - 1].events.length === 0) {
-            trimmed.pop();
-        }
-        return trimmed;
-    }
-
-    function serializeAdvPanel(panel) {
-        return {
-            name: panel.name || '',
-            baseSpeed: normalizeNumber(panel.baseSpeed, 100, 1),
-            preSpeed: normalizeNumber(panel.preSpeed, 134, 1),
-            threshold: normalizeNumber(panel.threshold, 150, 1),
-            turns: trimEmptyTrailingTurns(panel.turns),
-        };
-    }
+    // ---- 正規化・保存形式 (計算モジュールへの委譲) ----
+    const normalizeAdvTurns = (turns) => ActionOrder.normalizeTurns(turns);
+    const buildAdvStatePayload = (panels, mode) => ActionOrder.buildStatePayload(panels, mode);
+    const parseAdvStateText = (text) => ActionOrder.parseStateText(text);
 
     function buildAdvStateText(panels, mode) {
-        const payload = {
-            schema: ADV_STATE_SCHEMA,
-            mode: mode === 'panel' ? 'panel' : 'all',
-            exportedAt: new Date().toISOString(),
-            panels: panels.map(serializeAdvPanel),
-        };
-        return JSON.stringify(payload, null, 2);
+        return JSON.stringify(buildAdvStatePayload(panels, mode), null, 2);
     }
 
-    function parseAdvStateText(text) {
-        const parsed = JSON.parse(text);
-        const root = parsed && typeof parsed === 'object' ? parsed : {};
-        const panelsRaw = Array.isArray(parsed)
-            ? parsed
-            : Array.isArray(root.panels)
-                ? root.panels
-                : root.panel
-                    ? [root.panel]
-                    : null;
-        if (!panelsRaw || panelsRaw.length === 0) {
-            throw new Error('panels が見つかりません。');
+    // 行動順タブの保存状況は、上部の「行動順 JSON」パネル(js/localSave.js)のログ欄に一本化して表示する
+    function setAdvLocalSyncStatus(text, isError) {
+        window.SRSIM_LOCAL?.setStatus('action-order', text, isError);
+    }
+
+    function updateAdvLocalPath(data) {
+        if (!data || typeof data !== 'object') return;
+        advLocalStatePath = data.statePath || data.stateFile || advLocalStatePath;
+    }
+
+    async function readJsonResponse(res) {
+        const raw = await res.text();
+        if (!raw.trim()) return {};
+        try {
+            return JSON.parse(raw);
+        } catch {
+            return { error: raw };
         }
+    }
 
-        const panels = panelsRaw.map((raw, idx) => {
-            const source = raw && typeof raw === 'object' ? raw : {};
-            const name = typeof source.name === 'string' && source.name.trim()
-                ? source.name
-                : `キャラ${idx + 1}`;
-            return {
-                name,
-                baseSpeed: normalizeNumber(source.baseSpeed, 100, 1),
-                preSpeed: normalizeNumber(source.preSpeed, 134, 1),
-                threshold: normalizeNumber(source.threshold, 150, 1),
-                turns: normalizeAdvTurns(source.turns),
-            };
-        });
+    function scheduleAdvLocalStateWrite() {
+        if (!advLocalSyncEnabled || advLocalSyncPaused) return;
+        if (advLocalWriteTimer) clearTimeout(advLocalWriteTimer);
+        advLocalWriteTimer = setTimeout(flushAdvLocalStateWrite, 350);
+    }
 
-        return {
-            mode: root.mode === 'panel' || root.panel ? 'panel' : 'all',
-            panels,
-        };
+    async function flushAdvLocalStateWrite() {
+        if (!advLocalSyncEnabled || advLocalSyncPaused) return;
+        if (advLocalWriteInFlight) {
+            advLocalWritePending = true;
+            return;
+        }
+        advLocalWriteInFlight = true;
+        advLocalWritePending = false;
+        setAdvLocalSyncStatus('ローカルJSON: 保存中...', false);
+        try {
+            const res = await fetch(ADV_LOCAL_STATE_ENDPOINT, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state: buildAdvStatePayload(advPanels, 'all') }),
+            });
+            const data = await readJsonResponse(res);
+            if (!res.ok) throw new Error(data.error || 'ローカルJSONへ保存できませんでした。');
+            updateAdvLocalPath(data);
+            setAdvLocalSyncStatus(`ローカルJSON: 保存済み (${data.stateFile || advLocalStatePath})`, false);
+            window.SRSIM_LOCAL?.refresh('action-order');
+        } catch (err) {
+            advLocalSyncEnabled = false;
+            setAdvLocalSyncStatus(`ローカルJSON: 自動保存停止 (${err.message})`, true);
+        } finally {
+            advLocalWriteInFlight = false;
+            if (advLocalWritePending) scheduleAdvLocalStateWrite();
+        }
+    }
+
+    async function loadAdvLocalState(options) {
+        const isManual = Boolean(options && options.manual);
+        try {
+            const res = await fetch(ADV_LOCAL_STATE_ENDPOINT, { cache: 'no-store' });
+            const data = await readJsonResponse(res);
+            if (!res.ok) throw new Error(data.error || 'ローカルJSONを読めませんでした。');
+            updateAdvLocalPath(data);
+
+            if (!data.exists) {
+                advLocalSyncEnabled = true;
+                setAdvLocalSyncStatus(`ローカルJSON: 新規保存先 (${data.stateFile || advLocalStatePath})`, false);
+                scheduleAdvLocalStateWrite();
+                return false;
+            }
+
+            const imported = parseAdvStateText(JSON.stringify(data.state));
+            advLocalSyncPaused = true;
+            importAdvPanels(imported);
+            advLocalSyncPaused = false;
+            advLocalSyncEnabled = true;
+            setAdvLocalSyncStatus(`ローカルJSON: 読込済み (${data.stateFile || advLocalStatePath})`, false);
+            return true;
+        } catch (err) {
+            advLocalSyncPaused = false;
+            advLocalSyncEnabled = false;
+            const prefix = isManual ? 'ローカルJSON読込失敗' : 'ローカルJSON: 未接続';
+            setAdvLocalSyncStatus(`${prefix} (${err.message})`, true);
+            return false;
+        }
     }
 
     function clearAdvPanels() {
@@ -865,498 +687,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         importAdvPanels(imported);
         if (stateModal) stateModal.style.display = 'none';
-    }
-
-    function makeProviderId() {
-        return 'llm' + Date.now() + Math.random().toString(36).slice(2, 6);
-    }
-
-    function getEmptyProvider() {
-        const preset = getProviderPreset('openrouter');
-        return {
-            id: makeProviderId(),
-            type: preset.type,
-            name: preset.label,
-            endpoint: preset.endpoint,
-            model: '',
-            apiKey: '',
-            temperature: FIXED_LLM_TEMPERATURE,
-        };
-    }
-
-    function loadLlmProviders() {
-        try {
-            const parsed = JSON.parse(localStorage.getItem(LLM_PROVIDER_KEY));
-            return Array.isArray(parsed) ? parsed : [];
-        } catch {
-            return [];
-        }
-    }
-
-    function saveLlmProviders() {
-        try {
-            localStorage.setItem(LLM_PROVIDER_KEY, JSON.stringify(llmProviders));
-            localStorage.setItem(LLM_ACTIVE_PROVIDER_KEY, activeProviderId || '');
-        } catch {
-            setProviderMessage('保存できませんでした。ブラウザの保存容量を確認してください。', true);
-        }
-    }
-
-    function setProviderMessage(text, isError) {
-        if (!providerMessage) return;
-        providerMessage.textContent = text;
-        providerMessage.style.color = isError ? '#ff8787' : 'var(--text-muted)';
-    }
-
-    function setAiMessage(text, isError) {
-        if (!aiMessage) return;
-        aiMessage.textContent = text;
-        aiMessage.style.color = isError ? '#ff8787' : 'var(--text-muted)';
-    }
-
-    function getProviderById(id) {
-        return llmProviders.find(p => p.id === id) || null;
-    }
-
-    function getActiveProvider() {
-        return getProviderById(activeProviderId) || llmProviders[0] || null;
-    }
-
-    function getProviderPreset(type) {
-        return LLM_PROVIDER_PRESETS.find(p => p.type === type) || null;
-    }
-
-    function getProviderTypeFromEndpoint(endpoint) {
-        try {
-            const url = new URL(endpoint);
-            const preset = LLM_PROVIDER_PRESETS.find(p => p.hostnames.some(host =>
-                url.hostname === host || url.hostname.endsWith(`.${host}`)));
-            return preset ? preset.type : CUSTOM_LLM_PROVIDER_TYPE;
-        } catch {
-            return CUSTOM_LLM_PROVIDER_TYPE;
-        }
-    }
-
-    function getProviderType(provider) {
-        if (provider && getProviderPreset(provider.type)) return provider.type;
-        return getProviderTypeFromEndpoint(provider && provider.endpoint);
-    }
-
-    function isPresetLabel(value) {
-        return LLM_PROVIDER_PRESETS.some(p => p.label === value);
-    }
-
-    function renderProviderTypeOptions() {
-        if (!providerTypeSelect) return;
-        providerTypeSelect.innerHTML = LLM_PROVIDER_PRESETS
-            .map(p => `<option value="${escapeAttr(p.type)}">${escapeAttr(p.label)}</option>`)
-            .join('');
-    }
-
-    function renderProviderSelects() {
-        const active = getActiveProvider();
-        if (active) activeProviderId = active.id;
-        const optionHtml = llmProviders.length
-            ? llmProviders.map(p => `<option value="${escapeAttr(p.id)}" ${p.id === activeProviderId ? 'selected' : ''}>${escapeAttr(p.name || p.model || '未命名')}</option>`).join('')
-            : '<option value="">未登録</option>';
-        if (aiProviderSelect) aiProviderSelect.innerHTML = optionHtml;
-        if (providerList) providerList.innerHTML = optionHtml;
-    }
-
-    function fillProviderForm(provider) {
-        const p = provider || getEmptyProvider();
-        const providerType = getProviderType(p);
-        const endpoint = normalizeLlmEndpoint(p.endpoint, providerType);
-        editingProviderId = p.id || '';
-        if (providerTypeSelect) providerTypeSelect.value = providerType;
-        if (providerNameInput) providerNameInput.value = p.name || '';
-        if (providerEndpointInput) providerEndpointInput.value = endpoint;
-        if (providerModelInput) providerModelInput.value = p.model || '';
-        if (providerApiKeyInput) providerApiKeyInput.value = p.apiKey || '';
-        if (providerTemperatureInput) providerTemperatureInput.value = String(FIXED_LLM_TEMPERATURE);
-        if (providerList && getProviderById(p.id)) providerList.value = p.id;
-        syncProviderTypeFields(false);
-    }
-
-    function readProviderForm() {
-        const selected = editingProviderId || (providerList ? providerList.value : activeProviderId);
-        const existing = getProviderById(selected);
-        const providerType = providerTypeSelect ? providerTypeSelect.value : getProviderType(existing);
-        const rawEndpoint = providerEndpointInput ? providerEndpointInput.value.trim() : '';
-        const endpoint = normalizeLlmEndpoint(rawEndpoint, providerType);
-        const rawModel = providerModelInput ? providerModelInput.value.trim() : '';
-        return {
-            id: existing ? existing.id : selected || makeProviderId(),
-            type: getProviderPreset(providerType) ? providerType : CUSTOM_LLM_PROVIDER_TYPE,
-            name: providerNameInput ? providerNameInput.value.trim() : '',
-            endpoint,
-            model: normalizeLlmModel(rawModel || rawEndpoint, providerType),
-            apiKey: providerApiKeyInput ? providerApiKeyInput.value.trim() : '',
-            temperature: FIXED_LLM_TEMPERATURE,
-        };
-    }
-
-    function syncProviderTypeFields(isUserChange) {
-        if (!providerTypeSelect) return;
-        const preset = getProviderPreset(providerTypeSelect.value);
-        if (!preset) return;
-        if (providerEndpointInput) {
-            providerEndpointInput.readOnly = preset.type !== CUSTOM_LLM_PROVIDER_TYPE;
-            providerEndpointInput.placeholder = preset.endpoint || 'https://api.example.com/v1/chat/completions';
-            if (preset.type !== CUSTOM_LLM_PROVIDER_TYPE) {
-                providerEndpointInput.value = preset.endpoint;
-            }
-        }
-        if (providerModelInput) providerModelInput.placeholder = preset.modelPlaceholder;
-        if (providerApiKeyInput) providerApiKeyInput.placeholder = preset.keyPlaceholder;
-        if (isUserChange && providerNameInput) {
-            const currentName = providerNameInput.value.trim();
-            if (!currentName || isPresetLabel(currentName)) providerNameInput.value = preset.label;
-        }
-    }
-
-    function normalizeLlmEndpoint(endpoint, providerType) {
-        const value = String(endpoint || '').trim();
-        const preset = getProviderPreset(providerType);
-        if (preset && preset.type !== CUSTOM_LLM_PROVIDER_TYPE) return preset.endpoint;
-        if (!value) return '';
-        try {
-            const url = new URL(value);
-            const matchedPreset = getProviderPreset(getProviderTypeFromEndpoint(value));
-            if (matchedPreset && matchedPreset.type !== CUSTOM_LLM_PROVIDER_TYPE) {
-                return matchedPreset.endpoint;
-            }
-        } catch {
-            return value;
-        }
-        return value;
-    }
-
-    function normalizeLlmModel(model, providerType) {
-        const value = String(model || '').trim();
-        if (!value) return '';
-        try {
-            const url = new URL(value);
-            if (getProviderTypeFromEndpoint(value) === 'openrouter') {
-                const slug = url.pathname.replace(/^\/+|\/+$/g, '');
-                if (slug && !slug.startsWith('api/')) return slug;
-            }
-        } catch {
-            return value;
-        }
-        return providerType === 'openrouter' ? value.replace(/^\/+|\/+$/g, '') : value;
-    }
-
-    function isOpenRouterEndpoint(endpoint) {
-        try {
-            const url = new URL(endpoint);
-            return url.hostname === 'openrouter.ai' || url.hostname.endsWith('.openrouter.ai');
-        } catch {
-            return false;
-        }
-    }
-
-    function buildLlmHeaders(provider) {
-        const headers = {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${provider.apiKey}`,
-        };
-        if (isOpenRouterEndpoint(provider.endpoint)) {
-            headers['HTTP-Referer'] = window.location.href;
-            headers['X-OpenRouter-Title'] = 'StarRail Simulator';
-        }
-        return headers;
-    }
-
-    function openProviderModal() {
-        if (!providerModal) return;
-        renderProviderTypeOptions();
-        renderProviderSelects();
-        fillProviderForm(getActiveProvider());
-        setProviderMessage('', false);
-        providerModal.style.display = 'block';
-        if (providerNameInput) providerNameInput.focus();
-    }
-
-    function openAiModal() {
-        if (!aiModal) return;
-        renderProviderSelects();
-        if (aiRequestInput && !aiRequestInput.value.trim()) {
-            aiRequestInput.value = '現在の行動順を元に、必要なバフを追加して比較しやすい形に調整してください。';
-        }
-        if (aiOutput && !aiOutput.value.trim()) aiOutput.value = '';
-        setAiMessage('', false);
-        aiModal.style.display = 'block';
-        if (aiRequestInput) aiRequestInput.focus();
-    }
-
-    function initLlmProviders() {
-        renderProviderTypeOptions();
-        llmProviders = loadLlmProviders();
-        activeProviderId = localStorage.getItem(LLM_ACTIVE_PROVIDER_KEY) || (llmProviders[0] && llmProviders[0].id) || '';
-        renderProviderSelects();
-        fillProviderForm(getActiveProvider());
-    }
-
-    function saveProviderFromForm() {
-        const rawEndpoint = providerEndpointInput ? providerEndpointInput.value.trim() : '';
-        const rawModel = providerModelInput ? providerModelInput.value.trim() : '';
-        const provider = readProviderForm();
-        if (!provider.name) provider.name = provider.model || 'LLMプロバイダー';
-        if (!provider.endpoint || !provider.model || !provider.apiKey) {
-            setProviderMessage('API URL、モデル、APIキーを入力してください。', true);
-            return;
-        }
-        const normalizedMessages = [];
-        if (rawEndpoint && rawEndpoint !== provider.endpoint) normalizedMessages.push('API URLを補正');
-        if (rawModel && rawModel !== provider.model) normalizedMessages.push('モデル名を補正');
-        const idx = llmProviders.findIndex(p => p.id === provider.id);
-        if (idx === -1) llmProviders.push(provider);
-        else llmProviders[idx] = provider;
-        activeProviderId = provider.id;
-        saveLlmProviders();
-        renderProviderSelects();
-        fillProviderForm(provider);
-        setProviderMessage(normalizedMessages.length
-            ? `${normalizedMessages.join('、')}して保存しました。`
-            : '保存しました。',
-        false);
-    }
-
-    function deleteSelectedProvider() {
-        const selected = providerList ? providerList.value : activeProviderId;
-        const idx = llmProviders.findIndex(p => p.id === selected);
-        if (idx === -1) return;
-        if (!window.confirm('選択中のLLMプロバイダー設定を削除しますか？')) return;
-        llmProviders.splice(idx, 1);
-        activeProviderId = (llmProviders[0] && llmProviders[0].id) || '';
-        saveLlmProviders();
-        renderProviderSelects();
-        fillProviderForm(getActiveProvider());
-        setProviderMessage('削除しました。', false);
-    }
-
-    function getBuiltInBuffPresets() {
-        return Array.from(document.querySelectorAll('.adv-quick-add')).map(btn => ({
-            label: btn.textContent.trim(),
-            type: btn.dataset.type,
-            value: normalizeNumber(btn.dataset.value, 0),
-            name: btn.dataset.name || btn.textContent.trim(),
-        }));
-    }
-
-    function getKnownBuffPresets() {
-        const custom = customQuickPresets.map(p => ({
-            label: p.label,
-            type: p.type,
-            value: p.value,
-            name: p.name || p.label,
-        }));
-        return [...getBuiltInBuffPresets(), ...custom];
-    }
-
-    function buildAiSkillPrompt() {
-        return [
-            'あなたは崩壊スターレイルの行動順シミュレーター用JSONを編集する補助AIです。',
-            'ユーザーの自然言語指示を読み、現在のJSONを必要最小限だけ変更したJSONを返してください。',
-            '',
-            '絶対ルール:',
-            '- 返答はJSONのみ。Markdown、説明文、コードフェンスは禁止。',
-            `- schema は必ず "${ADV_STATE_SCHEMA}" を使う。`,
-            '- mode は全体置換なら "all"、単一パネル追加なら "panel"。',
-            '- panels は1件以上の配列。',
-            '- 既存パネル名、速度、閾値、既存イベントは、指示がない限り保持する。',
-            '- type は advance / speedFlat / speedPct のどれかだけ。',
-            '- timing は turn または cum。turn は offset、cum は atAV を使う。',
-            '- 数値は数値型で返す。文字列の数値は禁止。',
-            '- 不明な効果名は、最も近い意味の type/value/name に変換する。',
-            '',
-            'JSON構造:',
-            JSON.stringify({
-                schema: ADV_STATE_SCHEMA,
-                mode: 'all',
-                panels: [{
-                    name: 'キャラ名',
-                    baseSpeed: 100,
-                    preSpeed: 134,
-                    threshold: 150,
-                    turns: [{
-                        events: [{
-                            type: 'advance',
-                            value: 25,
-                            name: '表示名',
-                            timing: 'turn',
-                            offset: 0,
-                            atAV: 100,
-                        }],
-                    }],
-                }],
-            }, null, 2),
-            '',
-            '使用できる効果タイプ:',
-            JSON.stringify(EVENT_TYPES, null, 2),
-            '',
-            '登録済みバフ候補:',
-            JSON.stringify(getKnownBuffPresets(), null, 2),
-        ].join('\n');
-    }
-
-    function buildAiUserPrompt() {
-        const request = aiRequestInput ? aiRequestInput.value.trim() : '';
-        const currentState = buildAdvStateText(advPanels, 'all');
-        return [
-            'ユーザー指示:',
-            request || '現在のJSONを読み取り、破綻があれば修正してください。',
-            '',
-            '現在の行動順シミュJSON:',
-            currentState,
-            '',
-            '上記を元に、復元可能なJSONだけを返してください。',
-        ].join('\n');
-    }
-
-    function buildAiContextText() {
-        return [
-            'SYSTEM:',
-            buildAiSkillPrompt(),
-            '',
-            'USER:',
-            buildAiUserPrompt(),
-        ].join('\n');
-    }
-
-    function extractJsonText(text) {
-        const trimmed = String(text || '').trim();
-        if (!trimmed) throw new Error('AIの返答が空です。');
-        if (trimmed.startsWith('{') || trimmed.startsWith('[')) return trimmed;
-        const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-        if (fenced) return fenced[1].trim();
-        const firstObj = trimmed.indexOf('{');
-        const lastObj = trimmed.lastIndexOf('}');
-        if (firstObj !== -1 && lastObj > firstObj) return trimmed.slice(firstObj, lastObj + 1);
-        const firstArr = trimmed.indexOf('[');
-        const lastArr = trimmed.lastIndexOf(']');
-        if (firstArr !== -1 && lastArr > firstArr) return trimmed.slice(firstArr, lastArr + 1);
-        throw new Error('JSONを見つけられませんでした。');
-    }
-
-    function getApiErrorDetail(raw) {
-        const text = String(raw || '').trim();
-        if (!text) return '';
-        try {
-            const data = JSON.parse(text);
-            const message = data && data.error && data.error.message
-                ? data.error.message
-                : data.message;
-            return message ? String(message).slice(0, 220) : '';
-        } catch {
-            return text.slice(0, 220);
-        }
-    }
-
-    function buildApiErrorMessage(status, raw) {
-        const detail = getApiErrorDetail(raw);
-        let message;
-        if (status === 401 || status === 403) {
-            message = `AIサーバーに拒否されました（HTTP ${status}）。APIキーや利用権限を確認してください。`;
-        } else if (status === 404) {
-            message = `API URLが見つかりません（HTTP 404）。URLが chat/completions 用になっているか確認してください。`;
-        } else if (status === 429) {
-            message = 'AIサーバーの利用制限にかかりました（HTTP 429）。少し待ってから再実行してください。';
-        } else if (status >= 500) {
-            message = `AIサーバー側でエラーが起きています（HTTP ${status}）。時間を置くか、別のプロバイダーを試してください。`;
-        } else {
-            message = `AIサーバーがリクエストを受け付けませんでした（HTTP ${status}）。AI設定を確認してください。`;
-        }
-        return detail ? `${message} 詳細: ${detail}` : message;
-    }
-
-    function buildNetworkErrorMessage(err) {
-        if (err instanceof TypeError) {
-            return 'AIサーバーに接続できませんでした。API URL、ネットワーク接続、ブラウザからのアクセス許可を確認してください。';
-        }
-        return err.message || 'AI送信に失敗しました。原因不明のエラーです。';
-    }
-
-    async function requestAiJson() {
-        const provider = getActiveProvider();
-        if (!provider) {
-            setAiMessage('AI設定がまだありません。API URL、モデル、APIキーを登録してください。', true);
-            openProviderModal();
-            return;
-        }
-        if (!provider.endpoint || !provider.model || !provider.apiKey) {
-            setAiMessage('AI設定に未入力があります。API URL、モデル、APIキーを入力してください。', true);
-            openProviderModal();
-            return;
-        }
-        if (aiRunBtn) aiRunBtn.disabled = true;
-        setAiMessage('AIに送信しています。', false);
-        try {
-            const endpoint = normalizeLlmEndpoint(provider.endpoint, getProviderType(provider));
-            if (endpoint !== provider.endpoint) {
-                provider.endpoint = endpoint;
-                saveLlmProviders();
-                fillProviderForm(provider);
-            }
-            const res = await fetch(endpoint, {
-                method: 'POST',
-                headers: buildLlmHeaders(provider),
-                body: JSON.stringify({
-                    model: provider.model,
-                    temperature: FIXED_LLM_TEMPERATURE,
-                    messages: [
-                        { role: 'system', content: buildAiSkillPrompt() },
-                        { role: 'user', content: buildAiUserPrompt() },
-                    ],
-                }),
-            });
-            const raw = await res.text();
-            if (!res.ok) throw new Error(buildApiErrorMessage(res.status, raw));
-            let data;
-            try {
-                data = JSON.parse(raw);
-            } catch {
-                throw new Error('AIサーバーから返答はありましたが、形式が想定と違います。API URLが chat/completions 用か確認してください。');
-            }
-            const content = data && data.choices && data.choices[0] && data.choices[0].message
-                ? data.choices[0].message.content
-                : '';
-            if (!content) {
-                throw new Error('AIの返答本文が空でした。モデル名が正しいか、プロバイダーがOpenAI互換の返答形式か確認してください。');
-            }
-            let jsonText;
-            try {
-                jsonText = extractJsonText(content);
-                parseAdvStateText(jsonText);
-            } catch (parseErr) {
-                throw new Error(`AIの返答を復元用JSONとして読めませんでした。もう一度実行するか、JSON案欄の内容を確認してください。詳細: ${parseErr.message}`);
-            }
-            if (aiOutput) aiOutput.value = jsonText;
-            setAiMessage('JSON案を作成しました。内容を確認してから反映してください。', false);
-        } catch (err) {
-            console.error(err);
-            setAiMessage(buildNetworkErrorMessage(err), true);
-        } finally {
-            if (aiRunBtn) aiRunBtn.disabled = false;
-        }
-    }
-
-    function applyAiOutput() {
-        if (!aiOutput) return;
-        let imported;
-        try {
-            imported = parseAdvStateText(extractJsonText(aiOutput.value));
-        } catch (err) {
-            setAiMessage(`JSONを読み取れません: ${err.message}`, true);
-            return;
-        }
-        if (imported.mode !== 'panel' && advPanels.length > 0) {
-            const ok = window.confirm('AIのJSON案で現在の行動順シミュを置き換えますか？');
-            if (!ok) return;
-        }
-        importAdvPanels(imported);
-        setAiMessage('反映しました。', false);
     }
 
     function renderAllAdvPanels() {
@@ -1531,20 +861,22 @@ document.addEventListener('DOMContentLoaded', () => {
         panel.el.nameInput.addEventListener('input', () => {
             panel.name = panel.el.nameInput.value;
             if (modalPanelId === panel.id) buffModalPanelLabel.textContent = panel.name;
+            scheduleAdvLocalStateWrite();
         });
+        // 速度系の変更は他パネルのパネル参照バフの解決先AVにも影響しうるため、全パネルまとめて再計算する。
         panel.el.baseInput.addEventListener('input', () => {
             panel.baseSpeed = parseFloat(panel.el.baseInput.value) || 1;
-            renderPanelTable(panel);
+            renderAllAdvPanels();
         });
         panel.el.preInput.addEventListener('input', () => {
             panel.preSpeed = parseFloat(panel.el.preInput.value) || 1;
-            renderPanelTable(panel);
+            renderAllAdvPanels();
         });
         panel.el.thrInput.addEventListener('input', () => {
             panel.threshold = parseFloat(panel.el.thrInput.value) || 1;
-            renderPanelTable(panel);
+            renderAllAdvPanels();
         });
-        
+
         // No. 変更で並び替え
         panel.el.orderInput.addEventListener('change', () => {
             const cur = advPanels.findIndex(p => p.id === panel.id);
@@ -1557,6 +889,7 @@ document.addEventListener('DOMContentLoaded', () => {
             advPanels.splice(target, 0, moved);
             reorderPanelDOM();
             refreshPanelOrders();
+            renderAllAdvPanels(); // パネル参照バフは位置(パネル番号)で参照先を決めるため、並び替え後は再計算が必要
         });
 
         const shareBtn = card.querySelector('.adv-panel-share');
@@ -1588,7 +921,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!window.confirm(`「${panel.name}」の全ターンのバフを消去しますか？`)) return;
             panel.turns.forEach(t => { t.events = []; });
             if (modalPanelId === panel.id) buffModal.style.display = 'none';
-            renderPanelTable(panel);
+            renderAllAdvPanels();
         });
         card.querySelector('.adv-panel-remove').addEventListener('click', () => removeAdvPanel(panel.id));
 
@@ -1608,7 +941,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         advPanels.push(panel);
         advPanelsContainer.appendChild(buildPanelDOM(panel));
-        renderPanelTable(panel);
+        renderAllAdvPanels();
         refreshPanelOrders();
         scheduleAdvScrollButtonUpdate();
         return panel;
@@ -1632,7 +965,7 @@ document.addEventListener('DOMContentLoaded', () => {
         advPanels.splice(idx + 1, 0, copy);
         const card = buildPanelDOM(copy);
         src.el.card.after(card); // 元パネルの直後へ配置
-        renderPanelTable(copy);
+        renderAllAdvPanels(); // 挿入位置以降のパネル番号がずれるため、パネル参照バフも含めて全体を再計算
         refreshPanelOrders();
         scheduleAdvScrollButtonUpdate();
     }
@@ -1657,6 +990,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (modalPanelId === id) buffModal.style.display = 'none';
         if (advPanels.length === 0) createAdvPanel(); // 最低1枚は残す
         refreshPanelOrders();
+        renderAllAdvPanels(); // 削除でパネル番号がずれるため、パネル参照バフも含めて全体を再計算
         scheduleAdvScrollButtonUpdate();
     }
 
@@ -1706,6 +1040,24 @@ document.addEventListener('DOMContentLoaded', () => {
         buffModal.style.top = top + 'px';
     }
 
+    // パネル参照バフ (timing=panel) のプレビュー: 現在の全パネル状態から解決先AVを計算する (解決不能なら null)
+    //   自パネル自身を参照すると必ず循環参照になり null になる (自パネルのタイムラインは自分自身の計算結果に依存できないため)。
+    function computeRefPreviewAV(ev) {
+        if (!ActionOrder.computeAllTimelines || advPanels.length === 0) return null;
+        const timelines = ActionOrder.computeAllTimelines(advPanels);
+        const refTimeline = timelines[evRefPanel(ev)];
+        const row = refTimeline && refTimeline.rows[evRefTurn(ev) - 1];
+        return row ? row.cumulativeAV : null;
+    }
+
+    function refreshRefPreview(idx) {
+        const span = buffEventList.querySelector(`.adv-ev-ref-preview[data-idx="${idx}"]`);
+        if (!span) return;
+        const av = computeRefPreviewAV(modalEvents[idx]);
+        span.textContent = av === null ? '未到達/循環' : `→ ${av.toFixed(2)}AV`;
+        span.style.color = av === null ? '#ff8787' : '#c9a8ff';
+    }
+
     function renderModalEvents() {
         buffEventList.innerHTML = '';
         if (modalEvents.length === 0) {
@@ -1717,8 +1069,30 @@ document.addEventListener('DOMContentLoaded', () => {
             row.style.cssText = 'border:1px solid rgba(255,255,255,0.12); border-radius:6px; padding:5px 6px; display:flex; flex-direction:column; gap:4px;';
             const typeOpts = Object.entries(EVENT_TYPES).map(([k, v]) =>
                 `<option value="${k}" ${k === ev.type ? 'selected' : ''}>${v.label}</option>`).join('');
-            const isCum = evTiming(ev) === 'cum';
-            const timeVal = isCum ? evAtAV(ev) : evOffset(ev);
+            const timing = evTiming(ev);
+            const timeVal = timing === 'cum' ? evAtAV(ev) : evOffset(ev);
+
+            let timingControls;
+            if (timing === 'panel') {
+                const refIdx = evRefPanel(ev);
+                const refTurn = evRefTurn(ev);
+                const panelOpts = advPanels.map((p, i) =>
+                    `<option value="${i}" ${i === refIdx ? 'selected' : ''}>${escapeAttr(p.name)}(パネル${i + 1})</option>`).join('');
+                const previewAV = computeRefPreviewAV(ev);
+                const previewText = previewAV === null ? '未到達/循環' : `→ ${previewAV.toFixed(2)}AV`;
+                timingControls = `
+                    <select class="adv-ev-refpanel" data-idx="${idx}" title="参照するパネル" style="flex:1; min-width:64px; font-size:0.76em; padding:2px;">${panelOpts}</select>
+                    <input type="number" class="adv-ev-refturn" data-idx="${idx}" value="${refTurn}" min="1" step="1" style="width:40px; flex:none;" title="参照するターン番号(1始まり)">
+                    <span style="font-size:0.72em; color:var(--text-muted); flex:none;">T目</span>
+                    <span class="adv-ev-ref-preview" data-idx="${idx}" style="font-size:0.74em; font-weight:bold; color:${previewAV === null ? '#ff8787' : '#c9a8ff'}; flex:none;" title="選択したパネル・ターンが実際に到達する累計AV。相手側の設定が変わると自動で追従する。">${previewText}</span>
+                `;
+            } else {
+                timingControls = `
+                    <input type="number" class="adv-ev-time" data-idx="${idx}" value="${timeVal}" min="0" step="1" style="width:54px; flex:none;" title="${timing === 'cum' ? 'タイムライン全体の累計行動値' : 'ターン開始からの行動値オフセット'}">
+                    <span style="font-size:0.72em; color:var(--text-muted); flex:none;">${timing === 'cum' ? '累計' : 'AV後'}</span>
+                `;
+            }
+
             row.innerHTML = `
                 <div style="display:flex; gap:4px; align-items:center;">
                     <select class="adv-ev-type" data-idx="${idx}" style="flex:1; min-width:0; font-size:0.78em; padding:2px;">${typeOpts}</select>
@@ -1726,13 +1100,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <input type="text" class="adv-ev-name" data-idx="${idx}" value="${escapeAttr(ev.name || '')}" placeholder="表示名" title="表示名(任意 例: 鷹25%)" style="flex:1; min-width:0; font-size:0.76em; padding:2px 4px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:var(--text-color);">
                     <button class="secondary-btn-small adv-ev-del" data-idx="${idx}" title="削除" style="padding:2px 6px; flex:none;">✕</button>
                 </div>
-                <div style="display:flex; gap:4px; align-items:center;">
+                <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
                     <select class="adv-ev-timing" data-idx="${idx}" style="flex:1; min-width:0; font-size:0.76em; padding:2px;">
-                        <option value="turn" ${!isCum ? 'selected' : ''}>発動AV(ターン基準)</option>
-                        <option value="cum" ${isCum ? 'selected' : ''}>累計AVで発動</option>
+                        <option value="turn" ${timing === 'turn' ? 'selected' : ''}>発動AV(ターン基準)</option>
+                        <option value="cum" ${timing === 'cum' ? 'selected' : ''}>累計AVで発動</option>
+                        <option value="panel" ${timing === 'panel' ? 'selected' : ''}>他パネルのターン到達AVで発動</option>
                     </select>
-                    <input type="number" class="adv-ev-time" data-idx="${idx}" value="${timeVal}" min="0" step="1" style="width:54px; flex:none;" title="${isCum ? 'タイムライン全体の累計行動値' : 'ターン開始からの行動値オフセット'}">
-                    <span style="font-size:0.72em; color:var(--text-muted); flex:none;">${isCum ? '累計' : 'AV後'}</span>
+                    ${timingControls}
                     <button class="secondary-btn-small adv-ev-register" data-idx="${idx}" title="この効果をクイック追加に登録" style="padding:2px 6px; flex:none; margin-left:auto; font-size:0.74em;">★登録</button>
                 </div>
             `;
@@ -1750,12 +1124,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }));
         buffEventList.querySelectorAll('.adv-ev-timing').forEach(sel => sel.addEventListener('change', e => {
             modalEvents[+e.target.dataset.idx].timing = e.target.value;
-            renderModalEvents(); // 数値欄の意味(発動AV↔累計AV)を切り替えるため再描画
+            renderModalEvents(); // 発動タイミングの種類ごとに欄の構成が変わるため再描画
         }));
         buffEventList.querySelectorAll('.adv-ev-time').forEach(inp => inp.addEventListener('input', e => {
             const ev = modalEvents[+e.target.dataset.idx];
             const v = Math.max(0, parseFloat(e.target.value) || 0);
             if (evTiming(ev) === 'cum') ev.atAV = v; else ev.offset = v;
+        }));
+        buffEventList.querySelectorAll('.adv-ev-refpanel').forEach(sel => sel.addEventListener('change', e => {
+            const idx = +e.target.dataset.idx;
+            modalEvents[idx].refPanel = parseInt(e.target.value, 10) || 0;
+            refreshRefPreview(idx);
+        }));
+        buffEventList.querySelectorAll('.adv-ev-refturn').forEach(inp => inp.addEventListener('input', e => {
+            const idx = +e.target.dataset.idx;
+            modalEvents[idx].refTurn = Math.max(1, parseInt(e.target.value, 10) || 1);
+            refreshRefPreview(idx);
         }));
         buffEventList.querySelectorAll('.adv-ev-register').forEach(btn => btn.addEventListener('click', e => {
             registerQuickPreset(modalEvents[+e.currentTarget.dataset.idx]);
@@ -1773,7 +1157,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadQuickPresets() {
         try {
             const a = JSON.parse(localStorage.getItem(QUICK_PRESET_KEY));
-            return Array.isArray(a) ? a : [];
+            return ActionOrder?.normalizeQuickPresets
+                ? ActionOrder.normalizeQuickPresets(a)
+                : Array.isArray(a) ? a : [];
         } catch { return []; }
     }
     function saveQuickPresets() {
@@ -1783,7 +1169,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const label = (ev.name && ev.name.trim()) ? ev.name.trim() : evAutoLabel(ev);
         customQuickPresets.push({
             id: 'qp' + Date.now() + Math.random().toString(36).slice(2, 6),
-            type: ev.type, value: ev.value, name: ev.name || '', label,
+            type: ev.type, value: ev.value, name: ev.name || '', label, memo: '',
         });
         saveQuickPresets();
         renderQuickPresets();
@@ -1795,9 +1181,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderQuickPresets() {
         if (!quickCustomContainer) return;
         quickCustomContainer.innerHTML = customQuickPresets.map(p => `
-            <span style="display:inline-flex; align-items:center; border:1px solid rgba(255,255,255,0.2); border-radius:4px; overflow:hidden;">
-                <button class="secondary-btn-small adv-quick-add-custom" data-id="${p.id}" title="このプリセットを追加" style="border:none; border-radius:0;">${escapeAttr(p.label)}</button>
-                <button class="adv-quick-del" data-id="${p.id}" title="プリセット削除" style="border:none; background:transparent; color:#ff6b6b; cursor:pointer; padding:0 6px; font-size:0.95em;">×</button>
+            <span style="display:inline-flex; flex-direction:column; gap:3px; vertical-align:top; max-width:220px; padding:4px; border:1px solid rgba(255,255,255,0.2); border-radius:4px;">
+                <span style="display:flex; align-items:center; overflow:hidden;">
+                    <button class="secondary-btn-small adv-quick-add-custom" data-id="${p.id}" title="${escapeAttr(p.memo ? `追加: ${p.memo}` : 'このプリセットを追加')}" style="border:none; border-radius:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeAttr(p.label)}</button>
+                    <button class="adv-quick-del" data-id="${p.id}" title="プリセット削除" style="border:none; background:transparent; color:#ff6b6b; cursor:pointer; padding:0 6px; font-size:0.95em;">×</button>
+                </span>
+                <input class="adv-quick-memo" data-id="${p.id}" type="text" value="${escapeAttr(p.memo || '')}" maxlength="2000" placeholder="AI参照用メモ" aria-label="${escapeAttr(p.label)} のAI参照用メモ" style="min-width:0; width:100%; box-sizing:border-box; font-size:0.74em; padding:2px 4px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:3px; color:var(--text-color);">
             </span>
         `).join('');
         quickCustomContainer.querySelectorAll('.adv-quick-add-custom').forEach(b => b.addEventListener('click', () => {
@@ -1807,6 +1196,12 @@ document.addEventListener('DOMContentLoaded', () => {
             renderModalEvents();
         }));
         quickCustomContainer.querySelectorAll('.adv-quick-del').forEach(b => b.addEventListener('click', () => deleteQuickPreset(b.dataset.id)));
+        quickCustomContainer.querySelectorAll('.adv-quick-memo').forEach(input => input.addEventListener('input', () => {
+            const preset = customQuickPresets.find(item => item.id === input.dataset.id);
+            if (!preset) return;
+            preset.memo = input.value.slice(0, 2000);
+            saveQuickPresets();
+        }));
     }
 
     const customQuickPresets = loadQuickPresets();
@@ -1819,6 +1214,8 @@ document.addEventListener('DOMContentLoaded', () => {
             timing: 'turn',
             offset: 0,
             atAV: 100,
+            refPanel: 0,
+            refTurn: 1,
         };
     }
 
@@ -1847,7 +1244,7 @@ document.addEventListener('DOMContentLoaded', () => {
             while (panel.turns.length <= modalTurnIndex) panel.turns.push({ events: [] });
             panel.turns[modalTurnIndex].events = modalEvents.map(ev => ({ ...ev }));
             buffModal.style.display = 'none';
-            renderPanelTable(panel);
+            renderAllAdvPanels(); // 他パネルのパネル参照バフが追従できるよう全パネル再計算
         });
     }
 
@@ -1866,71 +1263,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (stateApplyBtn) {
         stateApplyBtn.addEventListener('click', applyStateInput);
     }
-    if (aiOpenBtn) {
-        aiOpenBtn.addEventListener('click', openAiModal);
-    }
-    if (aiSettingsBtn) {
-        aiSettingsBtn.addEventListener('click', openProviderModal);
-    }
-    if (aiOpenSettingsBtn) {
-        aiOpenSettingsBtn.addEventListener('click', openProviderModal);
-    }
-    if (closeAiModal) {
-        closeAiModal.addEventListener('click', () => { aiModal.style.display = 'none'; });
-    }
-    if (closeProviderModal) {
-        closeProviderModal.addEventListener('click', () => { providerModal.style.display = 'none'; });
-    }
-    if (aiProviderSelect) {
-        aiProviderSelect.addEventListener('change', () => {
-            activeProviderId = aiProviderSelect.value;
-            saveLlmProviders();
-            renderProviderSelects();
-            fillProviderForm(getActiveProvider());
-        });
-    }
-    if (providerList) {
-        providerList.addEventListener('change', () => {
-            activeProviderId = providerList.value;
-            saveLlmProviders();
-            fillProviderForm(getActiveProvider());
-            renderProviderSelects();
-        });
-    }
-    if (providerTypeSelect) {
-        providerTypeSelect.addEventListener('change', () => syncProviderTypeFields(true));
-    }
-    if (providerNewBtn) {
-        providerNewBtn.addEventListener('click', () => {
-            fillProviderForm(getEmptyProvider());
-            setProviderMessage('新しいプロバイダーを入力してください。', false);
-        });
-    }
-    if (providerSaveBtn) {
-        providerSaveBtn.addEventListener('click', saveProviderFromForm);
-    }
-    if (providerDeleteBtn) {
-        providerDeleteBtn.addEventListener('click', deleteSelectedProvider);
-    }
-    if (aiCopyContextBtn) {
-        aiCopyContextBtn.addEventListener('click', () => copyTextToClipboard(buildAiContextText())
-            .then(() => setAiMessage('AIへ渡す内容をコピーしました。', false))
-            .catch((err) => {
-                console.error(err);
-                if (aiOutput) {
-                    aiOutput.value = buildAiContextText();
-                    aiOutput.select();
-                }
-                setAiMessage('コピーできませんでした。JSON案欄に送信内容を出しました。', true);
-            }));
-    }
-    if (aiRunBtn) {
-        aiRunBtn.addEventListener('click', requestAiJson);
-    }
-    if (aiApplyBtn) {
-        aiApplyBtn.addEventListener('click', applyAiOutput);
-    }
-
     // モーダル外クリックで閉じる (削除ボタンで要素がDOMから外れた場合は isConnected で除外)
     document.addEventListener('click', (e) => {
         if (buffModal && buffModal.style.display === 'block') {
@@ -1941,21 +1273,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (stateModal && stateModal.style.display === 'block') {
             if (e.target.isConnected && !stateModal.contains(e.target) && !e.target.closest('#adv-import-state')) {
                 stateModal.style.display = 'none';
-            }
-        }
-        if (aiModal && aiModal.style.display === 'block') {
-            if (e.target.isConnected && !aiModal.contains(e.target) && !e.target.closest('#adv-ai-open')) {
-                aiModal.style.display = 'none';
-            }
-        }
-        if (providerModal && providerModal.style.display === 'block') {
-            if (
-                e.target.isConnected &&
-                !providerModal.contains(e.target) &&
-                !e.target.closest('#adv-ai-settings') &&
-                !e.target.closest('#adv-ai-open-settings')
-            ) {
-                providerModal.style.display = 'none';
             }
         }
     });
@@ -1974,19 +1291,31 @@ document.addEventListener('DOMContentLoaded', () => {
             stateModal.style.display = 'none';
             e.preventDefault();
         }
-        if (aiModal && aiModal.style.display === 'block' && e.key === 'Escape') {
-            aiModal.style.display = 'none';
-            e.preventDefault();
-        }
-        if (providerModal && providerModal.style.display === 'block' && e.key === 'Escape') {
-            providerModal.style.display = 'none';
-            e.preventDefault();
-        }
     });
 
     if (advAddPanelBtn) advAddPanelBtn.addEventListener('click', () => createAdvPanel());
     if (advCopyStateBtn) advCopyStateBtn.addEventListener('click', () => copyAdvState(advPanels, 'all', advCopyStateBtn));
     if (advImportStateBtn) advImportStateBtn.addEventListener('click', () => openStateModal());
+    if (advLoadLocalStateBtn) {
+        advLoadLocalStateBtn.addEventListener('click', () => loadAdvLocalState({ manual: true }));
+    }
+    if (advCopyLocalPathBtn) {
+        advCopyLocalPathBtn.addEventListener('click', async () => {
+            const originalText = advCopyLocalPathBtn.textContent;
+            advCopyLocalPathBtn.disabled = true;
+            try {
+                await copyTextToClipboard(advLocalStatePath);
+                advCopyLocalPathBtn.textContent = 'コピー完了!';
+            } catch (err) {
+                console.error(err);
+                advCopyLocalPathBtn.textContent = '失敗';
+            }
+            setTimeout(() => {
+                advCopyLocalPathBtn.textContent = originalText;
+                advCopyLocalPathBtn.disabled = false;
+            }, 1500);
+        });
+    }
 
     if (advScrollLeftBtn) {
         advScrollLeftBtn.addEventListener('click', () => {
@@ -2043,10 +1372,50 @@ document.addEventListener('DOMContentLoaded', () => {
     // 初期化処理
     updateUI();
     renderThresholdTable();
+    renderAhaSpeed();
     renderQuickPresets();
-    initLlmProviders();
-    if (advPanelsContainer) {
+    if (advPanelsContainer && !ActionOrder) {
+        // 計算モジュール未読込。速度タブの他機能は生かしたまま、行動順シミュだけ停止する。
+        // (この時点では下の「行動順 JSON」パネルすら登録できないため、直接表示する)
+        const moduleLoadErrorMsg = '行動順シミュの計算モジュールを読み込めませんでした。';
+        console.error(moduleLoadErrorMsg);
+        advPanelsContainer.textContent = moduleLoadErrorMsg;
+    } else if (advPanelsContainer) {
         createAdvPanel({ name: 'キャラ1' });
         createAdvPanel({ name: 'キャラ2' });
+
+        const applyAdvState = (payload) => {
+            const imported = parseAdvStateText(JSON.stringify(payload));
+            advLocalSyncPaused = true;
+            importAdvPanels(imported);
+            advLocalSyncPaused = false;
+        };
+
+        // 「行動順 JSON」パネル(js/localSave.js)を先に登録してから保存状況を流し込む。
+        // このパネルの自動保存/自動読込は使わず、下の loadAdvLocalState() 側の
+        // 常時オートセーブ経路(サーバー上の _autosave ファイルへ直接書き込む)に一本化している。
+        window.SRSIM_LOCAL?.registerTab({
+            tab: 'action-order',
+            label: '行動順',
+            mount: '#sub-speed-advanced',
+            schema: ADV_STATE_SCHEMA,
+            autosave: false,
+            autoload: false,
+            getState: () => buildAdvStatePayload(advPanels, 'all'),
+            applyState: applyAdvState,
+        });
+
+        setAdvLocalSyncStatus('ローカルJSON確認中...', false);
+        loadAdvLocalState();
+
+        // 行動順AIアシスタント用の橋渡し。
+        // AI は画面の状態をここから読み、承認された変更だけをここから書き戻す。
+        window.SRSIM_ACTION_ORDER = Object.freeze({
+            getState: () => ({
+                ...buildAdvStatePayload(advPanels, 'all'),
+                quickPresets: ActionOrder.normalizeQuickPresets(customQuickPresets),
+            }),
+            applyState: applyAdvState,
+        });
     }
 });

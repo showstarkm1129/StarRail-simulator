@@ -5,13 +5,18 @@
 // 注: バリア耐久値の専用ステータス枠は未対応。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Knight of Purity Palace',
     name: '純庭教会の聖騎士',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.SURVIVAL],
+        attribute: [],
+    },
 
     pc2: {
         stats: { [STAT.DEF_PERCENT]: 0.15 },

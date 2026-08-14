@@ -16,12 +16,26 @@ import './data/planar ornaments/_index.js';
 import { Registry } from './build/registry.js';
 import { StatComputer, countAllSets, countSetsByType } from './build/statComputer.js';
 import { Build } from './build/buildStore.js';
+import { RelicStore } from './build/relicStore.js';
 import { buildToEntity } from './build/buildToEntity.js';
 import { Diminishing } from './build/diminishing.js';
 import * as SkillUtil from './build/skillUtil.js';
+import * as AhaSpeed from './build/ahaSpeed.js';
+import * as ActionOrder from './build/actionOrder.js';
+import * as ActionEffects from './build/actionEffects.js';
+import * as ActionOrderSession from './build/actionOrderSession.js';
+import * as ActionOrderAiTools from './ai/actionOrderTools.js';
+import * as DiminishingSession from './build/diminishingSession.js';
+import * as DiminishingEngine from './build/diminishingEngine.js';
+import * as DiminishingValidator from './build/diminishingValidator.js';
+import * as DiminishingAiTools from './ai/diminishingTools.js';
 
 // UI
 import { initDiminishingUI } from './ui/diminishingUI.js';
+import { initRelicUI } from './ui/relicUI.js';
+import { initBuildUI } from './ui/buildUI.js';
+import { initDiminishingAssistantUI } from './ui/diminishingAssistantUI.js';
+import * as SmartPicker from './ui/smartPicker.js';
 
 // 定数(UI 側で select 生成等に使う)
 import {
@@ -39,9 +53,20 @@ window.SRSIM = Object.freeze({
     Registry,
     StatComputer,
     Build,
+    RelicStore,
     buildToEntity,
     Diminishing,
     SkillUtil,
+    AhaSpeed,
+    // 行動順シミュ (js/speed.js) の計算層。非モジュール側から window 経由で参照する。
+    ActionOrder,
+    ActionEffects,
+    ActionOrderSession,
+    ActionOrderAiTools,
+    DiminishingSession,
+    DiminishingEngine,
+    DiminishingValidator,
+    DiminishingAiTools,
     countAllSets,
     countSetsByType,
     Constants: Object.freeze({
@@ -56,6 +81,9 @@ window.SRSIM = Object.freeze({
         RELIC_MAIN_OPTIONS,
         getMainStatDef,
     }),
+    UI: Object.freeze({
+        SmartPicker,
+    }),
 });
 
 // 初期登録状況をログ出力(動作確認用)
@@ -67,7 +95,24 @@ console.info(
 );
 
 // UI 初期化 (DOM はモジュール実行時点で既にパース済み)
-initDiminishingUI();
+const diminishingBridge = initDiminishingUI();
+initRelicUI();
+// キャラビルドタブは保存ビルドを他タブへ渡すため、両タブの初期化後に立ち上げる。
+initBuildUI();
+
+// 統合AIアシスタントは speed.js が行動順パネルを作った後でないと繋げられない。
+// speed.js は DOMContentLoaded 内で window.SRSIM_ACTION_ORDER を用意するため、
+// このモジュール(defer)より後に走る同イベントで初期化する。
+//
+document.addEventListener('DOMContentLoaded', () => {
+    const assistant = initDiminishingAssistantUI({
+        mount: document.getElementById('dim-ai-assistant-mount'),
+        session: diminishingBridge?.session,
+        onStateChange: diminishingBridge?.refresh,
+        actionOrderBridge: window.SRSIM_ACTION_ORDER,
+    });
+    diminishingBridge?.attachAssistant(assistant);
+});
 
 // 数値入力フィールド上でのホイールイベントを「フォーカス時のみ値増減」に統一する。
 //

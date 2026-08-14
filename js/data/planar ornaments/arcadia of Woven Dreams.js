@@ -3,13 +3,18 @@
 //        超過は最大4層、不足は最大3層。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Arcadia of Woven Dreams',
     name: '夢を紡ぐ妖精の楽園',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.DMG_ALL],
+    },
 
     pc2: {
         stats: {},

@@ -1,10 +1,14 @@
 // diminishingUI.js — 限界効用逓減タブのUIロジック
 //
+// キャラクター本体(光円錐・遺物・軌跡レベル)の作成はキャラビルドタブの責務。
+// このタブは「保存ビルドを読み込んで比較する」ことに専念し、キャラ・星魂の
+// 切替だけを直接編集項目として持つ (光円錐・遺物・サブステの直接入力は持たない)。
+//
 // 構成:
-//   1. キャラ・光円錐パネル (+ 軌跡レベル指定 + 無凸MAX/凸後MAXプリセット)
-//   2. 遺物 各部位パネル (個別調整)
-//   3. セット効果プリセットパネル (4セット / 2+2 / 単一planar の一括適用)
-//   4. サブステ合計パネル
+//   1. ビルド管理 (保存/新規/読込/削除/JSON入出力)
+//   2. キャラパネル (キャラ選択 + 星魂)
+//   3. 自身バフ・デバフ設定パネル
+//   4. パーティパネル (他メンバーのバフ)
 //   5. 計算オプションパネル
 //   6. 結果パネル(スナップショット未取得時は単独表示)
 //   7. キャラ詳細アコーディオン(通常/スキル/必殺/天賦/秘技/追加能力/星魂/軌跡内訳)
@@ -16,83 +20,30 @@ import { StatComputer, countSetsByType } from '../build/statComputer.js';
 import { Diminishing } from '../build/diminishing.js';
 import { Build as BuildStore } from '../build/buildStore.js';
 import {
-    ALL_SLOTS, RELIC_SLOTS, ORNAMENT_SLOTS, SLOT, SET_TYPE,
+    ALL_SLOTS, SET_TYPE, ELEMENT_LIST, PATH,
 } from '../build/constants.js';
-import { RELIC_MAIN_OPTIONS } from '../build/relicMainTable.js';
-import { STAT } from '../build/statKeys.js';
 import {
-    getSkillMaxLevel, getSkillMultAt, clampLevel,
-    presetDefaultMaxLevels, presetEidolonMaxLevels,
+    getTraceLevelCap, getSkillMultAt,
+    presetTraceLevels,
 } from '../build/skillUtil.js';
+import { signatureLightconeForCharacter } from '../data/lightcones/signatureRelations.js';
 import {
-    SUBSTAT_TABLE, SUBSTAT_ORDER,
-} from '../build/substatTable.js';
+    DEFAULT_VISIBLE_ROWS,
+    DEFAULT_VISIBLE_STATS,
+    diminishingSession,
+} from '../build/diminishingSession.js';
 import {
-    calcManualAllocation, rollsToStatDict, excludeMainStatFromCandidates,
-} from '../build/substatRoller.js';
+    computeDiminishingState,
+    materializeDiminishingBuild,
+    rankBuildCandidates,
+} from '../build/diminishingEngine.js';
+import {
+    candidateGroupKey, candidateLabel, getBuildCandidates, isEidolonCandidate,
+} from '../build/buildCandidates.js';
 import { statLabel } from './statIcons.js';
+import { enhanceSelect, refreshSmartPickers } from './smartPicker.js';
 
-// ---- UI で扱う「サブステ合計」入力フィールド定義 -----------------------
-
-const SUB_INPUTS = [
-    { key: STAT.ATK_PERCENT,       label: '攻撃力%',   unit: '%',   asPercent: true  },
-    { key: STAT.HP_PERCENT,        label: 'HP%',       unit: '%',   asPercent: true  },
-    { key: STAT.DEF_PERCENT,       label: '防御力%',   unit: '%',   asPercent: true  },
-    { key: STAT.SPD_FLAT,          label: '速度',      unit: '',    asPercent: false },
-    { key: STAT.ATK_FLAT,          label: '攻撃力固定', unit: '',    asPercent: false },
-    { key: STAT.HP_FLAT,           label: 'HP固定',    unit: '',    asPercent: false },
-    { key: STAT.DEF_FLAT,          label: '防御力固定', unit: '',    asPercent: false },
-    { key: STAT.CRIT_RATE,         label: '会心率',    unit: '%',   asPercent: true  },
-    { key: STAT.CRIT_DMG,          label: '会心ダメ',  unit: '%',   asPercent: true  },
-    { key: STAT.EFFECT_HIT_RATE,   label: '効果命中',  unit: '%',   asPercent: true  },
-    { key: STAT.EFFECT_RES,        label: '効果抵抗',  unit: '%',   asPercent: true  },
-    { key: STAT.BREAK_EFFECT,      label: '撃破特効',  unit: '%',   asPercent: true  },
-];
-
-const SUB_LABEL_PREFIX = 'サブステ.';
 const PARTY_LABEL_PREFIX = 'パーティ.';   // envBuffs のラベル識別子
-
-// ---- 直接ステ入力モード -----------------------------------------------
-//
-// ビルド(キャラ+光円錐+遺物+バフ)を組まず、最終ステータスを直接打ち込んで
-// 火力貢献率を見るモード。値は Diminishing.directStatsToFinalStats() にそのまま渡す。
-//   pct=true の項目は UI 上は「25」と入力 → 内部 0.25 で保持。
-const DIRECT_CATEGORIES = {
-    basic:  '① 基礎ステータス',
-    crit:   '② 会心',
-    dmg:    '③ 与ダメージ・乗算',
-    debuff: '④ デバフ (敵)',
-    other:  '⑤ その他',
-};
-
-const DIRECT_FIELDS = [
-    { key: 'atk',         label: '攻撃力',                 unit: '',  pct: false, cat: 'basic'  },
-    { key: 'hp',          label: 'HP',                     unit: '',  pct: false, cat: 'basic'  },
-    { key: 'def',         label: '防御力',                 unit: '',  pct: false, cat: 'basic'  },
-    { key: 'spd',         label: '速度',                   unit: '',  pct: false, cat: 'basic'  },
-    { key: 'critRate',    label: '会心率',                 unit: '%', pct: true,  cat: 'crit'   },
-    { key: 'critDmg',     label: '会心ダメ',               unit: '%', pct: true,  cat: 'crit'   },
-    { key: 'dmgAll',      label: '与ダメージ% (共通+属性)', unit: '%', pct: true,  cat: 'dmg'    },
-    { key: 'dmgBasic',    label: '通常攻撃ダメ枠',         unit: '%', pct: true,  cat: 'dmg'    },
-    { key: 'dmgSkill',    label: '戦闘スキルダメ枠',       unit: '%', pct: true,  cat: 'dmg'    },
-    { key: 'dmgUlt',      label: '必殺ダメ枠',             unit: '%', pct: true,  cat: 'dmg'    },
-    { key: 'dmgFollowup', label: '追加攻撃ダメ枠',         unit: '%', pct: true,  cat: 'dmg'    },
-    { key: 'fixedDmg',    label: '確定ダメージ',           unit: '%', pct: true,  cat: 'dmg'    },
-    { key: 'sepMult',     label: '別枠乗算',               unit: '%', pct: true,  cat: 'dmg'    },
-    { key: 'defDown',     label: '防御Down',               unit: '%', pct: true,  cat: 'debuff' },
-    { key: 'defIgnore',   label: '防御無視',               unit: '%', pct: true,  cat: 'debuff' },
-    { key: 'resPen',      label: '耐性貫通 / 耐性Down',    unit: '%', pct: true,  cat: 'debuff' },
-    { key: 'dmgTaken',    label: '被ダメ増',               unit: '%', pct: true,  cat: 'debuff' },
-    { key: 'breakEffect', label: '撃破特効',               unit: '%', pct: true,  cat: 'other'  },
-    { key: 'energyRegen', label: 'EP回復効率',             unit: '%', pct: true,  cat: 'other'  },
-    { key: 'ehr',         label: '効果命中',               unit: '%', pct: true,  cat: 'other'  },
-    { key: 'eres',        label: '効果抵抗',               unit: '%', pct: true,  cat: 'other'  },
-];
-
-// 直接入力モードの初期値 (会心・EP回復はゲーム既定の最終値を入れておく)。
-const DIRECT_DEFAULTS = {
-    critRate: 0.05, critDmg: 0.50, energyRegen: 1.00,
-};
 
 // スキルキーの表示順 / 表示名
 // memorySkill/memoryTalent は記憶の精霊持ち (ヒアンシー等) 専用。
@@ -112,27 +63,116 @@ const SKILL_LABELS = {
     technique:    '秘技',
 };
 
-// 軌跡レベル指定対象を「キャラが実際に定義しているスキルキーのみ」動的に決定。
-//   - technique は Lv 非対応のため除外
-//   - キャラに無いスキル (例: ブローニャの memorySkill) は表示されない
-function getLevelKeysForCharacter(character) {
-    if (!character?.skills) return [];
-    return SKILL_DISPLAY_ORDER.filter(k => k !== 'technique' && character.skills[k]);
+const ELEMENT_LABELS = Object.freeze({
+    physical: '物理',
+    fire: '炎',
+    ice: '氷',
+    lightning: '雷',
+    wind: '風',
+    quantum: '量子',
+    imaginary: '虚数',
+});
+
+const PATH_LABELS = Object.freeze({
+    destruction: '壊滅',
+    hunt: '巡狩',
+    erudition: '知恵',
+    harmony: '調和',
+    nihility: '虚無',
+    preservation: '存護',
+    abundance: '豊穣',
+    remembrance: '記憶',
+    elation: '愉悦',
+});
+
+const ELEMENT_FILTER_OPTIONS = ELEMENT_LIST.map(value => ({
+    value,
+    label: ELEMENT_LABELS[value] || value,
+}));
+
+const PATH_FILTER_OPTIONS = Object.values(PATH).map(value => ({
+    value,
+    label: PATH_LABELS[value] || value,
+}));
+
+const RARITY_FILTER_OPTIONS = [
+    { value: '5', label: '★5' },
+    { value: '4', label: '★4' },
+    { value: '3', label: '★3' },
+];
+
+const CHARACTER_PICKER_FILTERS = [
+    { key: 'element', label: '属性', options: ELEMENT_FILTER_OPTIONS },
+    { key: 'path', label: '運命', options: PATH_FILTER_OPTIONS },
+    { key: 'rarity', label: 'レア', options: RARITY_FILTER_OPTIONS },
+];
+
+function selectOptionText(option) {
+    return option?.textContent?.trim() || option?.value || '(未選択)';
+}
+
+function characterPickerConfig(extra = {}) {
+    return {
+        kind: 'character',
+        placeholder: 'キャラ名 / 英名で検索',
+        noResultsText: '該当キャラなし',
+        recentKey: 'srsim.recent.characters',
+        filters: CHARACTER_PICKER_FILTERS,
+        ...extra,
+        getOptionMeta(option) {
+            const ch = Registry.character.get(option.value);
+            if (!ch) return { label: selectOptionText(option), searchText: option.value };
+            return {
+                label: selectOptionText(option),
+                subLabel: ch.id,
+                searchText: [ch.name, ch.id, ...(ch.aliases || [])].join(' '),
+                filterValues: {
+                    element: ch.element,
+                    path: ch.path,
+                    rarity: String(ch.rarity || ''),
+                },
+                chips: [
+                    ch.element ? { label: ELEMENT_LABELS[ch.element] || ch.element, tone: `element-${ch.element}` } : null,
+                    ch.path ? { label: PATH_LABELS[ch.path] || ch.path, tone: 'path' } : null,
+                    ch.rarity ? { label: `★${ch.rarity}`, tone: `rarity-${ch.rarity}` } : null,
+                ],
+            };
+        },
+    };
+}
+
+function buildPickerConfig(extra = {}) {
+    return {
+        kind: 'build',
+        placeholder: 'ビルド名 / キャラ名で検索',
+        noResultsText: '該当ビルドなし',
+        recentKey: 'srsim.recent.builds',
+        filters: CHARACTER_PICKER_FILTERS,
+        ...extra,
+        getOptionMeta(option) {
+            const build = BuildStore.get(option.value);
+            if (!build) return { label: selectOptionText(option), searchText: option.value };
+            const ch = Registry.character.get(build.characterId);
+            return {
+                label: selectOptionText(option),
+                subLabel: build.id,
+                searchText: [build.name, build.id, ch?.name, ch?.id, build.characterId].join(' '),
+                filterValues: {
+                    element: ch?.element,
+                    path: ch?.path,
+                    rarity: String(ch?.rarity || ''),
+                },
+                chips: [
+                    ch?.element ? { label: ELEMENT_LABELS[ch.element] || ch.element, tone: `element-${ch.element}` } : null,
+                    ch?.path ? { label: PATH_LABELS[ch.path] || ch.path, tone: 'path' } : null,
+                    ch?.rarity ? { label: `★${ch.rarity}`, tone: `rarity-${ch.rarity}` } : null,
+                ],
+            };
+        },
+    };
 }
 
 // ---- 状態 --------------------------------------------------------------
-
-const DEFAULT_VISIBLE_ROWS = new Set([
-    'atk', 'crit', 'def', 'res', 'taken', 'break',
-    'dmg.base',
-    'total.base',
-]);
-
-const DEFAULT_VISIBLE_STATS = new Set([
-    'atk', 'hp', 'def', 'spd',
-    'critRate', 'critDmg', 'critExpected',
-    'energyRegen', 'dmgOwnElement', 'breakEffect',
-]);
 
 // ===== 参照ステ・表示項目のショートカット (プリセット) =====
 //   1クリックで「参照ステ + 最終ステ表示項目 + 火力貢献率の表示行」を一括設定する。
@@ -144,16 +184,25 @@ const REF_PRESET_STORAGE_KEY = 'srsim.dim.refPresets';
 // アタッカー共通の最終ステ表示 (撃破特効は除外)。参照ステ(atk/hp)だけ先頭で差し替える。
 const ATTACKER_DMG_STATS = [
     'critRate', 'critDmg', 'critExpected',
+    'critRateBasic', 'critRateSkill', 'critRateUlt', 'critRateFollowup',
+    'critDmgBasic', 'critDmgSkill', 'critDmgUlt', 'critDmgFollowup',
     'dmgOwnElement', 'dmgBasic', 'dmgSkill', 'dmgUlt', 'dmgFollowup',
     'dmgTotalBasic', 'dmgTotalSkill', 'dmgTotalUlt', 'dmgTotalFollowup',
     'fixedDmg', 'sepMult',
     'defDown', 'defIgnore', 'defReductionTotal', 'resPen', 'dmgTaken',
+    'defIgnoreBasic', 'defIgnoreSkill', 'defIgnoreUlt', 'defIgnoreFollowup',
+    'resPenBasic', 'resPenSkill', 'resPenUlt', 'resPenFollowup',
+    'dmgTakenBasic', 'dmgTakenSkill', 'dmgTakenUlt', 'dmgTakenFollowup',
 ];
 // アタッカー共通の火力貢献率の表示行 (撃破係数は除外)。
 const ATTACKER_DMG_ROWS = [
     'atk', 'crit',
+    'crit.basic', 'crit.skill', 'crit.ult', 'crit.followup',
     'dmg.base', 'dmg.basic', 'dmg.skill', 'dmg.ult', 'dmg.followup',
-    'def', 'res', 'taken', 'fixedDmg', 'sepMult',
+    'def', 'def.basic', 'def.skill', 'def.ult', 'def.followup',
+    'res', 'res.basic', 'res.skill', 'res.ult', 'res.followup',
+    'taken', 'taken.basic', 'taken.skill', 'taken.ult', 'taken.followup',
+    'fixedDmg', 'sepMult',
     'total.base', 'total.basic', 'total.skill', 'total.ult', 'total.followup',
 ];
 
@@ -192,64 +241,32 @@ const FACTOR_CATEGORIES = {
     total: '⑤ 火力総合 (結果)',
 };
 
-const state = {
-    build: null,
-    snapshot: null,
-    // 入力モード: 'build' = キャラ/装備からビルドを組む / 'direct' = 最終ステ直接入力
-    inputMode: 'build',
-    // 直接入力モードの状態 (stats: 現在値の dict / snapshot: 比較基準の dict)
-    direct: { stats: { ...DIRECT_DEFAULTS }, snapshot: null },
-    options: { ...Diminishing.DEFAULT_OPTIONS },
-    // パーティ枠: focus 以外のメンバー × 3
-    //   各要素: {
-    //     characterId: string|null,           簡易モード用 (キャラ select の値)
-    //     levelPreset: 'default'|'eidolon',   簡易モード用 (無凸MAX / 凸後MAX)
-    //     buildId: string|null,                ビルドモード用 (BuildStore の id、優先)
-    //     activeEffectIds: Set<string>,        合成ID: 'char.<id>' | 'lc.<id>' | 'set:<setId>:pc2.<id>' 等
-    //     stacksByEffectId: { [ekey]: number }, stackable 効果の現在層数 (1〜ef.stackable.max)
-    //   }
-    party: [
-        { mode: 'simple', characterId: null, levelPreset: 'eidolon', buildId: null, activeEffectIds: new Set(), stacksByEffectId: {} },
-        { mode: 'simple', characterId: null, levelPreset: 'eidolon', buildId: null, activeEffectIds: new Set(), stacksByEffectId: {} },
-        { mode: 'simple', characterId: null, levelPreset: 'eidolon', buildId: null, activeEffectIds: new Set(), stacksByEffectId: {} },
-    ],
-    // サブステの 3 モード独立 state。現在選択中の mode の結果のみ envBuffs に流す。
-    //   manual : 自由入力 (stat → 値 を直接編集)
-    //   total  : 6 部位合計の手動配分 (各サブステに振り回数を指定)
-    //   perSlot: 部位ごとの手動配分 (メインステ自動除外)
-    //
-    // allocations: { [subKey]: rollCount } 各サブステに何ロール振るかの直接指定。
-    // tier: 'low'|'mid'|'high'|'random' 伸び幅。random のみ「シミュレート」が必要。
-    // lastResult: { totals: { [subKey]: 値 } } 計算済み結果。
-    //   - tier ∈ {low,mid,high} のとき: 入力即時に決定的計算で更新
-    //   - tier == 'random' のとき: シミュレートボタン押下時に都度乱数で更新
-    // 比較表の行表示フィルタ — true の行 key だけ renderComparison で描画される。
-    //   行 key の命名:
-    //     'atk' / 'crit' / 'def' / 'res' / 'taken' / 'break'
-    //     'dmg.base' / 'dmg.basic' / 'dmg.skill' / 'dmg.ult' / 'dmg.followup'
-    //     'total.base' / 'total.basic' / 'total.skill' / 'total.ult' / 'total.followup'
-    //   デフォルトは「現状の見た目」と一致するように共通行のみ ON、種別 4 つは OFF。
-    visibleRows: new Set(DEFAULT_VISIBLE_ROWS),
-    // 「表示項目」フィルタの開閉状態 (再描画で <details open> 状態を維持するため)
-    filterPanelOpen: false,
-    // 「現状の最終ステータス」(スナップショット前) のステータス行表示フィルタ。
-    // 既存 10 項目をデフォルト表示 (現状の見た目と一致)、デバフ/種別ダメは OFF。
-    visibleStats: new Set(DEFAULT_VISIBLE_STATS),
-    statsPanelOpen: false,
-    subs: {
-        mode: 'manual',
-        manual: { /* statKey → 値 (envBuffs から init 時に復元) */ },
-        total: {
-            allocations: {},   // 初期は全 0 (= 空 dict)
-            tier: 'high',
-            lastResult: null,
-        },
-        perSlot: {
-            // slot ごとに { allocations, tier, lastResult }
-            // initDiminishingUI() で各部位を初期化
-        },
-    },
-};
+// 状態本体は DOM 非依存セッションが所有する。UI は同じ参照を入力・描画に使う。
+const state = diminishingSession.getState();
+let assistantUi = null;
+let selectedBuildId = null;
+let candidateRankCacheKey = '';
+let candidateRankCache = null;
+
+const DIM_CANDIDATE_SLOT_LABELS = Object.freeze({
+    head: '頭部', hands: '手部', body: '胴体', feet: '脚部', sphere: '次元界オーブ', rope: '連結縄',
+});
+
+function activeCandidateIds() {
+    if (Array.isArray(state.activeCandidateIds) && state.activeCandidateIds.length > 0) {
+        return [...state.activeCandidateIds];
+    }
+    return state.activeCandidateId ? [state.activeCandidateId] : [];
+}
+
+function setActiveCandidateIds(ids) {
+    state.activeCandidateIds = [...new Set(ids.filter(id => typeof id === 'string' && id))];
+    state.activeCandidateId = state.activeCandidateIds.length === 1 ? state.activeCandidateIds[0] : null;
+}
+
+function clearActiveCandidates() {
+    setActiveCandidateIds([]);
+}
 
 // ---- エントリ ----------------------------------------------------------
 
@@ -264,8 +281,11 @@ export function initDiminishingUI() {
     }
     state.build = BuildStore.blank(firstCharId);
     state.build.name = '比較ビルド';
-    // 軌跡Lv は無凸MAX で初期化
-    state.build.traceLevel = presetDefaultMaxLevels(Registry.character.get(firstCharId));
+    selectedBuildId = null;
+    clearActiveCandidates();
+    invalidateCandidateRankingCache();
+    // 軌跡Lv は共通の初期値 (通常攻撃系6 / その他10) で初期化
+    state.build.traceLevel = presetTraceLevels(Registry.character.get(firstCharId));
 
     // 部位別ロールの初期 state (各部位デフォルト = 全 0 ロール / 高 / 未計算)
     for (const slot of ALL_SLOTS) {
@@ -283,6 +303,62 @@ export function initDiminishingUI() {
     refreshAllForms();
     applyInputModeVisibility();
     recompute();
+    // 他タブ (キャラビルド) がビルドを保存・削除した時に一覧を追従させる。
+    document.addEventListener('srsim:builds-changed', refreshBuildList);
+    window.SRSIM_LOCAL?.registerTab({
+        tab: 'diminishing',
+        label: '限界効用',
+        mount: '.dim-container',
+        getState: serializeDiminishingLocalState,
+        applyState: applyDiminishingLocalState,
+    });
+    return Object.freeze({
+        session: diminishingSession,
+        getState: serializeDiminishingLocalState,
+        applyState: applyDiminishingLocalState,
+        refresh: applyDiminishingSessionToUi,
+        attachAssistant(handle) {
+            assistantUi = handle;
+        },
+    });
+}
+
+function serializeDiminishingLocalState() {
+    const serialized = diminishingSession.serialize();
+    // 保存ビルドを使うパーティ枠は、DOM/LocalStorage がない計算環境でも再現できるよう実体を同梱する。
+    serialized.party = serialized.party.map(slot => ({
+        ...slot,
+        build: slot.buildId ? BuildStore.get(slot.buildId) : slot.build,
+    }));
+    return serialized;
+}
+
+function applyDiminishingLocalState(payload) {
+    diminishingSession.restore(payload);
+
+    // この画面は保存済みキャラビルドを比較対象にする。旧ローカル状態に
+    // 直接入力モードや自身効果の選択が残っていても、UIの責務へ戻す。
+    state.inputMode = 'build';
+    if (state.build?.id && BuildStore.get(state.build.id)) {
+        selectedBuildId = state.build.id;
+        state.build = sanitizeSelectedBuild(BuildStore.get(state.build.id));
+    } else {
+        selectedBuildId = null;
+    }
+    clearActiveCandidates();
+    invalidateCandidateRankingCache();
+
+    applyDiminishingSessionToUi();
+}
+
+function applyDiminishingSessionToUi() {
+
+    const nameInput = document.getElementById('dim-build-name');
+    if (nameInput) nameInput.value = state.build?.name || '';
+    refreshAllForms(false);
+    applyInputModeVisibility();
+    updateSnapshotStatus();
+    recompute();
 }
 
 // ---- HTML 骨組み -------------------------------------------------------
@@ -292,36 +368,20 @@ function renderShell() {
         <div class="dim-container">
             <h2 class="dim-title">限界効用逓減計算機</h2>
             <p class="dim-help">
-                ビルドを編集 → <b>「現状をスナップショット」</b>で比較基準を固定 →
-                ビルドの一部を変更 → 火力貢献率が自動表示されます。
+                <b>キャラビルドタブ</b>で作成した保存ビルドを選択 → 登録済みの差分候補を切り替え →
+                パーティと敵条件を調整して火力貢献率を確認します。
                 <br><span style="color: var(--text-muted)">※ SPD変化は情報表示のみ。行動回数の影響は「速度・行動回数」タブで別途確認してください。</span>
             </p>
 
             <div class="dim-build-mgr">
-                <h3 class="dim-build-mgr-title">ビルド管理</h3>
-                <div class="dim-build-mgr-row">
-                    <label>名前</label>
-                    <input id="dim-build-name" type="text" placeholder="ビルド名" value="">
-                    <button id="dim-build-save" class="btn-primary btn-mini">保存 / 上書き</button>
-                    <button id="dim-build-new" class="btn-secondary btn-mini">新規 (クリア)</button>
-                </div>
+                <h3 class="dim-build-mgr-title">キャラビルドを選択</h3>
                 <div class="dim-build-mgr-row">
                     <label>保存済み</label>
                     <select id="dim-build-list"></select>
                     <button id="dim-build-load" class="btn-secondary btn-mini">読込</button>
-                    <button id="dim-build-delete" class="btn-secondary btn-mini">削除</button>
                 </div>
-                <div class="dim-build-mgr-row">
-                    <button id="dim-build-export" class="btn-secondary btn-mini">JSON書出</button>
-                    <button id="dim-build-import" class="btn-secondary btn-mini">JSON読込</button>
-                </div>
-                <div id="dim-build-json-area" class="dim-build-json-area" style="display:none">
-                    <textarea id="dim-build-json-text" rows="6" placeholder="JSONをここに貼り付け / 書出時はここに表示"></textarea>
-                    <div class="dim-build-mgr-row">
-                        <button id="dim-build-json-apply" class="btn-primary btn-mini">適用 (merge)</button>
-                        <button id="dim-build-json-close" class="btn-secondary btn-mini">閉じる</button>
-                    </div>
-                </div>
+                <input id="dim-build-name" type="text" class="dim-selected-build-name" readonly placeholder="未選択">
+                <p class="dim-panel-hint">キャラ・装備・星魂・差分候補は、キャラビルドタブで保存した内容を使います。</p>
             </div>
 
             <div class="dim-controls">
@@ -332,107 +392,21 @@ function renderShell() {
 
             <div class="dim-main">
               <div class="dim-col-left">
-            <div class="dim-grid">
-                <div class="dim-panel" id="dim-char-panel">
-                    <h3>キャラ・光円錐・セット効果</h3>
-                    <div class="dim-char-cols">
-                      <div class="dim-char-col">
-                        <div class="dim-row">
-                            <label>キャラ</label>
-                            <select id="dim-char"></select>
-                        </div>
-                        <div class="dim-row">
-                            <label>星魂</label>
-                            <select id="dim-eidolon"></select>
-                        </div>
-                        <div class="dim-row">
-                            <label>光円錐</label>
-                            <select id="dim-lc"></select>
-                        </div>
-                        <div class="dim-row">
-                            <label>重畳</label>
-                            <select id="dim-lc-si"></select>
-                        </div>
-
-                        <h4 class="dim-subheading">軌跡レベル</h4>
-                        <div class="dim-level-presets">
-                            <button class="btn-secondary btn-mini" data-preset="default">無凸MAX</button>
-                            <button class="btn-secondary btn-mini" data-preset="eidolon">凸後MAX</button>
-                        </div>
-                        <div id="dim-level-grid" class="dim-level-grid"></div>
-                      </div>
-
-                      <div class="dim-char-col">
-                        <h4 class="dim-subheading dim-subheading-first">セット効果(一括選択)</h4>
-                        <p class="dim-panel-hint">セットを選ぶと自動で各部位に適用されます。</p>
-
-                        <div class="dim-preset-block">
-                            <div class="dim-preset-mode">
-                                <label class="dim-radio"><input type="radio" name="cav-mode" value="4set" checked> トンネル 4セット</label>
-                                <label class="dim-radio"><input type="radio" name="cav-mode" value="2+2"> トンネル 2+2</label>
-                                <label class="dim-radio"><input type="radio" name="cav-mode" value="none"> 装着なし</label>
-                            </div>
-                            <div id="dim-preset-cav4" class="dim-preset-row">
-                                <label>トンネルセット</label>
-                                <select id="dim-preset-cav-a"></select>
-                            </div>
-                            <div id="dim-preset-cav22" class="dim-preset-row" style="display:none">
-                                <label>A (頭・手)</label>
-                                <select id="dim-preset-cav-22a"></select>
-                                <label>B (胴・足)</label>
-                                <select id="dim-preset-cav-22b"></select>
-                            </div>
-                        </div>
-
-                        <div class="dim-preset-block">
-                            <div class="dim-preset-row">
-                                <label>次元界 (球・縄)</label>
-                                <select id="dim-preset-planar"></select>
-                            </div>
-                        </div>
-                      </div>
-                    </div>
-                </div>
-
-                <div class="dim-panel dim-subs-panel">
-                    <h3>ステータス入力</h3>
-                    <div id="dim-mainstat-section">
-                        <h4 class="dim-subheading-inline">遺物メインステ</h4>
-                        <div class="dim-relic-main-grid">
-                            ${ALL_SLOTS.map(slot => `
-                                <div class="dim-relic-slot">
-                                    <label>${slotLabel(slot)}</label>
-                                    <select class="dim-relic-main" data-slot="${slot}"></select>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    <p class="dim-panel-hint dim-subs-global-hint">
-                        数値入力欄はクリックでフォーカスした後、マウスホイールでも増減できます (下限 0)。
-                    </p>
-                    <div class="dim-subs-tabs" id="dim-subs-tabs">
-                        <button type="button" class="dim-subs-tab" data-mode="manual">自由入力</button>
-                        <button type="button" class="dim-subs-tab" data-mode="total">総合ロール</button>
-                        <button type="button" class="dim-subs-tab" data-mode="perSlot">部位別ロール</button>
-                        <button type="button" class="dim-subs-tab dim-subs-tab-direct" data-mode="direct">ステータス直接入力</button>
-                    </div>
-                    <div class="dim-subs-tab-body" id="dim-subs-body"></div>
-                </div>
-            </div>
-
-            <div class="dim-panel dim-self-buffs-panel" id="dim-self-buffs-panel">
-                <h3>自身バフ・デバフ設定 (本人の能力・装備効果)</h3>
+            <div class="dim-panel" id="dim-candidates-panel">
+                <h3>差分候補</h3>
                 <p class="dim-panel-hint">
-                    メイン（Focus）キャラクター本人のパーティ効果や自己バフ効果を選択し、ステータスに反映させます。
+                    キャラビルド側で登録した候補を、現在のパーティ・敵条件のまま切り替えます。
+                    候補は項目ごとに1件ずつ選択できます。別の項目は組み合わせて適用でき、
+                    同じ項目を選び直すとその項目だけ置き換わります。
                 </p>
-                <div id="dim-self-buffs-content" class="dim-self-buffs-content"></div>
+                <div id="dim-candidates"></div>
             </div>
 
             <div class="dim-panel dim-party-panel">
                 <h3>パーティ (他メンバーのバフ)</h3>
                 <p class="dim-panel-hint">
                     サポート枠のキャラを追加 → 効果のチェックボックスで、メイン火力キャラの計算に反映されます。
-                    <b>キャラのみモード</b>はキャラ + Lvプリセットのみで、そのキャラ固有のバフ(必殺・軌跡など)が対象。<b>保存ビルドモード</b>は保存済みビルドを丸ごと読み込み、光円錐・遺物セットのパーティ効果も含めて計算します。
+                    <b>キャラのみモード</b>はキャラ + Lvプリセット + モチーフ光円錐S1で、そのキャラ固有のバフとモチーフ光円錐効果が対象。モチーフが未登録のキャラは光円錐なしになります。<b>保存ビルドモード</b>は保存済みビルドを丸ごと読み込み、光円錐・遺物セットのパーティ効果も含めて計算します。
                     発動者のステに連動するバフ(例: 必殺の会心ダメ = 発動者の会心ダメ × Y% + Z%)は、サポート枠キャラの実ステ(装備込み)を使って動的計算されます。
                     <br><span style="color: var(--text-muted)">※ メイン火力キャラと同じキャラをサポート枠に入れることも可能(セルフバフ計算用)。ただし常時発動バフ(昇格6 等)はメイン側の軌跡に既に含まれているため、二重計上を避けるためサポート側で OFF にしてください。</span>
                 </p>
@@ -475,6 +449,7 @@ function renderShell() {
                         </select>
                     </div>
                 </div>
+                <div id="dim-special-refs" class="dim-special-refs"></div>
             </div>
               </div><!-- /dim-col-left -->
 
@@ -489,674 +464,69 @@ function renderShell() {
     `;
 }
 
-function slotLabel(slot) {
-    return ({ head: '頭', hands: '手', body: '胴', feet: '足', sphere: '球', rope: '縄' })[slot] || slot;
-}
-
-// 直接ステ入力フィールドを描画 (renderSubsBody から「ステータス直接入力」タブ選択時に呼ばれる)。
-//   値は state.direct.stats から読むため、他モードへ切替→再選択しても入力値が維持される。
-function renderDirectFields() {
-    const groups = Object.entries(DIRECT_CATEGORIES).map(([cat, title]) => {
-        const fields = DIRECT_FIELDS.filter(f => f.cat === cat);
-        if (fields.length === 0) return '';
-        const rows = fields.map(f => {
-            const v = state.direct.stats[f.key] ?? 0;
-            const display = f.pct ? trimNumber(v * 100) : trimNumber(v);
-            return `
-                <div class="dim-sub-row">
-                    <label>${statLabel(f.key, f.label)}</label>
-                    <input type="number" step="${f.pct ? '0.1' : '1'}" class="dim-direct-input"
-                           data-key="${f.key}" data-pct="${f.pct ? '1' : '0'}" value="${display}">
-                    <span class="dim-sub-unit">${f.unit}</span>
-                </div>
-            `;
-        }).join('');
-        return `<h4 class="dim-subheading">${title}</h4><div class="dim-subs-grid">${rows}</div>`;
-    }).join('');
-
-    return `
-        <p class="dim-panel-hint">
-            遺物ビルドの最終ステータスを直接入力します。<b>軌跡・パーティバフ・セット効果は計算に含まれません</b> (入力値がそのまま最終値)。
-            % 欄は数値で「25」と入力すると 25% 扱いです。会心率・会心ダメは基礎値 (5% / 50%) 込みの最終値を入力してください。
-        </p>
-        ${groups}
-    `;
-}
-
-// 末尾の余計な 0 を落として表示する (例: 25.00 → 25, 25.50 → 25.5)。
-function trimNumber(n) {
-    return Number(n.toFixed(2)).toString();
-}
-
 // ---- フォーム初期化 ----------------------------------------------------
 
 function refreshAllForms() {
-    fillCharacterSelect();
-    fillEidolonSelect();
-    fillLightconeSelect();
-    fillSuperimposeSelect();
-    for (const slot of ALL_SLOTS) {
-        fillRelicMainSelect(slot);
-    }
-    initSubsFromEnvBuffs();
-    renderSubsBody();
     fillOptionInputs();
-    fillLevelInputs();
-    fillPresetSelects();
     refreshBuildList();
-    applyDefaultActiveSelfEffects(true);
-    renderSelfBuffs();
+    renderCandidates();
     renderParty();
     renderCharDetail();
+    refreshSmartPickers(document.getElementById('tab-diminishing'));
 }
 
-function fillCharacterSelect() {
-    const sel = document.getElementById('dim-char');
-    sel.innerHTML = Registry.character.list()
-        .filter(c => c.id !== 'template')
-        .map(c => `<option value="${c.id}" ${c.id === state.build.characterId ? 'selected' : ''}>${c.name}</option>`)
-        .join('');
-}
-function fillEidolonSelect() {
-    const sel = document.getElementById('dim-eidolon');
-    sel.innerHTML = [0,1,2,3,4,5,6]
-        .map(n => `<option value="${n}" ${n === state.build.eidolon ? 'selected' : ''}>E${n}</option>`)
-        .join('');
-}
-function fillLightconeSelect() {
-    const sel = document.getElementById('dim-lc');
-    // 各キャラには対応する運命 (path) の光円錐のみ装備可能。
-    // ただし isTestAllEquipment = true のテストキャラは全光円錐を許容。
-    const ch = Registry.character.get(state.build.characterId);
-    const isTestAll = !!ch?.isTestAllEquipment;
-    const charPath = ch?.path;
-    const lcs = Registry.lightcone.list().filter(lc => {
-        if (isTestAll) return true;
-        if (!charPath) return true;        // キャラ未選択時は全表示 (fallback)
-        return lc.path === charPath;
-    });
-    sel.innerHTML = [`<option value="">(なし)</option>`].concat(
-        lcs.map(lc =>
-            `<option value="${lc.id}" ${lc.id === state.build.lightcone?.id ? 'selected' : ''}>${lc.name}</option>`
-        )
-    ).join('');
-}
-function fillSuperimposeSelect() {
-    const sel = document.getElementById('dim-lc-si');
-    const cur = state.build.lightcone?.superimpose ?? 1;
-    sel.innerHTML = [1,2,3,4,5]
-        .map(n => `<option value="${n}" ${n === cur ? 'selected' : ''}>S${n}</option>`)
-        .join('');
-}
-function fillRelicMainSelect(slot) {
-    const sel = document.querySelector(`.dim-relic-main[data-slot="${slot}"]`);
-    if (!sel) return;
-    const cur = state.build.relics[slot]?.mainStat ?? null;
-    const options = RELIC_MAIN_OPTIONS[slot];
-    sel.innerHTML = Object.entries(options).map(([id, def]) =>
-        `<option value="${id}" ${id === cur ? 'selected' : ''}>${def.label}</option>`
-    ).join('');
-    if (!cur) {
-        const firstId = Object.keys(options)[0];
-        state.build.relics[slot].mainStat = firstId;
-        sel.value = firstId;
-    }
-}
-// ---- サブステパネル (3 モード切替) ------------------------------------
-
-// 現モードを再描画 + イベント再バインド + envBuffs 反映 + recompute
-function renderSubsBody() {
-    const body = document.getElementById('dim-subs-body');
-    if (!body) return;
-
-    // タブの active 表示 (直接入力モード時は 'direct' タブをアクティブに)
-    const activeMode = state.inputMode === 'direct' ? 'direct' : state.subs.mode;
-    document.querySelectorAll('#dim-subs-tabs .dim-subs-tab').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === activeMode);
-    });
-
-    if (state.inputMode === 'direct')       body.innerHTML = renderDirectFields();
-    else if (state.subs.mode === 'manual')  body.innerHTML = renderSubsTab_manual();
-    else if (state.subs.mode === 'total')   body.innerHTML = renderSubsTab_total();
-    else if (state.subs.mode === 'perSlot') body.innerHTML = renderSubsTab_perSlot();
-
-    bindSubsTabBody();
-}
-
-// ── モード 1: 自由入力 ──
-function renderSubsTab_manual() {
-    return `
-        <p class="dim-panel-hint">遺物全体のサブステ集計値を直接入力 (% は数値で「25」と入力すると 25%)。</p>
-        <div class="dim-subs-grid">
-            ${SUB_INPUTS.map(s => {
-                const v = state.subs.manual[s.key] ?? 0;
-                const display = s.asPercent ? (v * 100).toFixed(2).replace(/\.?0+$/, '') : v;
-                return `
-                    <div class="dim-sub-row">
-                        <label>${statLabel(s.key, s.label)}</label>
-                        <input type="number" min="0" step="0.1" class="dim-sub-input"
-                               data-stat="${s.key}" data-unit="${s.asPercent ? 'pct' : 'flat'}"
-                               value="${display}">
-                        <span class="dim-sub-unit">${s.unit}</span>
-                    </div>
-                `;
-            }).join('')}
-        </div>
-    `;
-}
-
-// ── モード 2: 総合ロール (手動配分) ──
-function renderSubsTab_total() {
-    const t = state.subs.total;
-    const totalRolls = sumAllocations(t.allocations);
-    const allocInputs = SUBSTAT_ORDER.map(subKey => renderAllocationInput({
-        subKey,
-        scope: 'total',
-        value: t.allocations[subKey] || 0,
-        disabled: false,
-    })).join('');
-    const isRandom = t.tier === 'random';
-
-    return `
-        <p class="dim-panel-hint">
-            部位の区別なく、各サブステに振り回数を直接指定します。メインステ制約は適用されません(簡易シミュ)。
-            低/中/高 を選択時は入力即計算、ランダム時のみ「シミュレート」で都度乱数。
-        </p>
-        <div class="dim-roll-controls">
-            <div class="dim-roll-row">
-                <label>伸び幅</label>
-                ${renderTierRadios('total', t.tier)}
-            </div>
-            <div class="dim-roll-row dim-roll-row-cands">
-                <label>振り回数</label>
-                <div class="dim-alloc-grid">${allocInputs}</div>
-            </div>
-            <div class="dim-roll-row">
-                <label></label>
-                <span class="dim-roll-hint" id="dim-roll-total-sum-hint">合計 <strong>${totalRolls}</strong> ロール (HSR最大 54)</span>
-            </div>
-            <div class="dim-roll-actions">
-                ${isRandom
-                    ? `<button type="button" class="primary-btn" id="dim-roll-total-go">${t.lastResult ? '再シミュレート' : 'シミュレート'}</button>`
-                    : ''}
-                <button type="button" class="secondary-btn-small" id="dim-roll-total-clear">全部 0 にクリア</button>
-            </div>
-            <div id="dim-roll-total-result-wrap">${renderRollResult(t.lastResult)}</div>
-        </div>
-    `;
-}
-
-// ── モード 3: 部位別ロール (手動配分・メインステ除外) ──
-function renderSubsTab_perSlot() {
-    const slotHtml = ALL_SLOTS.map(slot => {
-        const cfg = state.subs.perSlot[slot];
-        const r = state.build.relics?.[slot];
-        const mainStatId = r?.mainStat;
-        const mainStatLabel = mainStatId
-            ? (RELIC_MAIN_OPTIONS[slot][mainStatId]?.label || mainStatId)
-            : '(未設定)';
-        const candKeys = excludeMainStatFromCandidates(slot, mainStatId, SUBSTAT_ORDER);
-        const allowed = new Set(candKeys);
-
-        const allocInputs = SUBSTAT_ORDER.map(subKey => {
-            const excluded = !allowed.has(subKey);
-            return renderAllocationInput({
-                subKey,
-                scope: 'perslot',
-                slot,
-                value: cfg.allocations[subKey] || 0,
-                disabled: excluded,
-            });
-        }).join('');
-
-        const totalRolls = sumAllocations(cfg.allocations);
-        const isRandom = cfg.tier === 'random';
-        const overLimit = totalRolls > 9;
-
-        return `
-            <div class="dim-perslot-card" data-slot="${slot}">
-                <div class="dim-perslot-head">
-                    <span class="dim-perslot-name">${slotLabel(slot)}</span>
-                    <span class="dim-perslot-main">メイン: ${mainStatLabel}</span>
-                </div>
-                <div class="dim-roll-row">
-                    <label>伸び幅</label>
-                    ${renderTierRadios('perslot-' + slot, cfg.tier, slot)}
-                </div>
-                <div class="dim-roll-row dim-roll-row-cands">
-                    <label>振り回数</label>
-                    <div class="dim-alloc-grid dim-alloc-grid-compact">${allocInputs}</div>
-                </div>
-                <div class="dim-roll-row">
-                    <label></label>
-                    <span class="dim-roll-hint ${overLimit ? 'dim-roll-hint-warn' : ''}">
-                        合計 <strong>${totalRolls}</strong> ロール (HSR最大 9)
-                        ${overLimit ? ' ⚠ 上限超過' : ''}
-                    </span>
-                </div>
-                <div class="dim-roll-actions">
-                    ${isRandom
-                        ? `<button type="button" class="secondary-btn-small dim-roll-perslot-go" data-slot="${slot}">${cfg.lastResult ? '再シミュ' : 'シミュ'}</button>`
-                        : ''}
-                    <button type="button" class="secondary-btn-small dim-roll-perslot-clear" data-slot="${slot}">クリア</button>
-                </div>
-                <div class="dim-roll-result-wrap">${renderRollResult(cfg.lastResult)}</div>
-            </div>
-        `;
-    }).join('');
-
-    const aggregateHtml = renderPerSlotAggregate();
-
-    // ランダム伸び幅を使っている部位があれば「全部位シミュ」ボタンを表示
-    const anyRandom = ALL_SLOTS.some(slot => state.subs.perSlot[slot].tier === 'random');
-
-    return `
-        <p class="dim-panel-hint">
-            部位ごとに各サブステの振り回数を指定。メインステに該当するサブステは入力不可。
-            低/中/高 選択時は入力即計算、ランダム時のみシミュボタン押下で都度乱数。
-        </p>
-        <div class="dim-roll-actions" style="margin-bottom: 0.6rem;">
-            ${anyRandom
-                ? `<button type="button" class="primary-btn" id="dim-roll-perslot-all">ランダムを一括シミュ</button>`
-                : ''}
-            <button type="button" class="secondary-btn-small" id="dim-roll-perslot-clear-all">全部位クリア</button>
-        </div>
-        <div class="dim-perslot-grid">${slotHtml}</div>
-        <div id="dim-perslot-summary-wrap">${aggregateHtml}</div>
-    `;
-}
-
-// 全部位合算プレビューの HTML 生成 (部分更新用に独立)
-function renderPerSlotAggregate() {
-    const agg = aggregatePerSlotResults();
-    if (!agg) {
-        return '<p class="dim-panel-hint" style="margin-top: 0.5rem;">各部位の振り回数を入力すると結果が表示されます (ランダム伸び幅時はシミュボタンが必要)。</p>';
-    }
-    return `<div class="dim-perslot-summary">
-        <h4>全部位合算</h4>
-        ${renderRollTotalsTable(agg)}
-    </div>`;
-}
-
-// allocations の合計回数
-function sumAllocations(allocations) {
-    let sum = 0;
-    for (const v of Object.values(allocations)) sum += (parseInt(v, 10) || 0);
-    return sum;
-}
-
-// 1 サブステの振り回数入力 UI
-//   scope: 'total' | 'perslot'  (perslot は slot 必須)
-//   max  : total は実質上限なし (99 まで) / perslot は HSR 仕様準拠 (6)
-function renderAllocationInput({ subKey, scope, slot = null, value, disabled }) {
-    const def = SUBSTAT_TABLE[subKey];
-    const maxVal = scope === 'total' ? 99 : 6;
-    const dataAttr = scope === 'total'
-        ? `data-scope="total" data-subkey="${subKey}"`
-        : `data-scope="perslot" data-slot="${slot}" data-subkey="${subKey}"`;
-    return `
-        <div class="dim-alloc-row ${disabled ? 'dim-alloc-row-disabled' : ''}"
-             title="${disabled ? 'メインステと重複するため除外' : ''}">
-            <span class="dim-alloc-label">${def.label}</span>
-            <input type="number" class="dim-alloc-input"
-                   min="0" max="${maxVal}" value="${value}"
-                   ${dataAttr} ${disabled ? 'disabled' : ''}>
-        </div>
-    `;
-}
-
-// 伸び幅ラジオの描画 (totalとperSlotで共用)
-function renderTierRadios(scopeKey, currentTier, slot = null) {
-    const TIERS = [
-        { value: 'low',    label: '低のみ' },
-        { value: 'mid',    label: '中のみ' },
-        { value: 'high',   label: '高のみ' },
-        { value: 'random', label: 'ランダム' },
-    ];
-    return TIERS.map(t => `
-        <label class="dim-roll-radio">
-            <input type="radio" class="dim-roll-tier" name="tier-${scopeKey}"
-                   data-scope="${scopeKey}" data-slot="${slot ?? ''}" value="${t.value}"
-                   ${currentTier === t.value ? 'checked' : ''}>
-            ${t.label}
-        </label>
-    `).join('');
-}
-
-// ロール結果プレビュー (totals: { subKey: 値 })
-function renderRollResult(lastResult) {
-    if (!lastResult) return '';
-    return `<div class="dim-roll-result">
-        <div class="dim-roll-result-head">結果</div>
-        ${renderRollTotalsTable(lastResult.totals)}
-    </div>`;
-}
-
-function renderRollTotalsTable(totals) {
-    const entries = Object.entries(totals)
-        .filter(([, v]) => v > 0)
-        .sort((a, b) => {
-            const ai = SUBSTAT_ORDER.indexOf(a[0]);
-            const bi = SUBSTAT_ORDER.indexOf(b[0]);
-            return ai - bi;
-        });
-    if (entries.length === 0) return '<div class="dim-roll-empty">(なし)</div>';
-    return `<table class="dim-roll-totals">
-        ${entries.map(([subKey, v]) => {
-            const def = SUBSTAT_TABLE[subKey];
-            if (!def) return '';
-            // SUBSTAT_TABLE は小数 3 桁 (例: 0.043) で定義しているため、×100 後は
-             // 小数 2 位が常に 0 になる。表示は小数 1 位までで十分。
-             const display = def.asPercent ? `${(v * 100).toFixed(1)}%` : v.toFixed(1);
-            return `<tr><th>${def.label}</th><td>${display}</td></tr>`;
-        }).join('')}
-    </table>`;
-}
-
-// perSlot 全結果を合算 (subKey ベース)
-function aggregatePerSlotResults() {
-    const out = {};
-    let any = false;
-    for (const slot of ALL_SLOTS) {
-        const r = state.subs.perSlot[slot]?.lastResult;
-        if (!r) continue;
-        any = true;
-        for (const [k, v] of Object.entries(r.totals)) {
-            out[k] = (out[k] || 0) + v;
-        }
-    }
-    return any ? out : null;
-}
-
-// 既存 envBuffs (BuildStore からのロード等) を state.subs.manual に取り込む
-function initSubsFromEnvBuffs() {
-    state.subs.manual = {};
-    for (const b of state.build.envBuffs || []) {
-        if (typeof b.label === 'string' && b.label.startsWith(SUB_LABEL_PREFIX)) {
-            state.subs.manual[b.stat] = b.value;
-        }
-    }
-}
-
-// ビルド切替時のリセット (mode を manual に戻し、ロール系の state を完全クリア)
-//   ロード直後は env から取り込んだ自由入力値が表示されるのが自然
-function resetSubsForBuildSwitch() {
-    state.subs.mode = 'manual';
-    state.subs.total.allocations = {};
-    state.subs.total.lastResult = null;
-    for (const slot of ALL_SLOTS) {
-        if (state.subs.perSlot[slot]) {
-            state.subs.perSlot[slot].allocations = {};
-            state.subs.perSlot[slot].lastResult = null;
-        }
-    }
-}
-
-// 総合ロール (手動配分) 計算
-//   tier=low/mid/high  : 決定的計算 — 入力即呼び出し可
-//   tier=random        : 都度乱数 — シミュボタン押下時のみ呼ぶ
-//
-// 注: 入力中のフォーカスを保つため、サブステ panel 全体は再描画しない。
-//     結果プレビュー DOM だけ部分更新する。
-function recalcTotal() {
-    const t = state.subs.total;
-    t.lastResult = calcManualAllocation({
-        allocations: t.allocations,
-        tier: t.tier,
-    });
-    updateTotalResultPreview();
-    applySubsToEnvBuffs();
-    recompute();
-}
-
-// 部位別ロール (手動配分) 計算
-//   slot 指定なし: 全部位を再計算
-function recalcPerSlot(targetSlot = null) {
-    const slots = targetSlot ? [targetSlot] : ALL_SLOTS.slice();
-    for (const slot of slots) {
-        const cfg = state.subs.perSlot[slot];
-        // メインステ除外: 念のため対象外サブステの値を 0 扱いで計算
-        const r = state.build.relics?.[slot];
-        const allowed = new Set(excludeMainStatFromCandidates(slot, r?.mainStat, SUBSTAT_ORDER));
-        const cleanAlloc = {};
-        for (const [k, v] of Object.entries(cfg.allocations)) {
-            if (allowed.has(k)) cleanAlloc[k] = v;
-        }
-        cfg.lastResult = calcManualAllocation({ allocations: cleanAlloc, tier: cfg.tier });
-        updatePerSlotResultPreview(slot);
-    }
-    updatePerSlotAggregatePreview();
-    applySubsToEnvBuffs();
-    recompute();
-}
-
-// ---- 結果プレビュー部分更新 (フォーカス維持のため renderSubsBody は使わない) ----
-
-function updateTotalResultPreview() {
-    const wrap = document.getElementById('dim-roll-total-result-wrap');
-    if (wrap) wrap.innerHTML = renderRollResult(state.subs.total.lastResult);
-}
-function updatePerSlotResultPreview(slot) {
-    const card = document.querySelector(`.dim-perslot-card[data-slot="${slot}"]`);
-    if (!card) return;
-    const wrap = card.querySelector('.dim-roll-result-wrap');
-    if (wrap) wrap.innerHTML = renderRollResult(state.subs.perSlot[slot].lastResult);
-}
-function updatePerSlotAggregatePreview() {
-    const sumEl = document.getElementById('dim-perslot-summary-wrap');
-    if (sumEl) sumEl.innerHTML = renderPerSlotAggregate();
-}
-
-// 現在描画中のサブステタブ本文内のイベントバインド (renderSubsBody から都度呼ばれる)
-function bindSubsTabBody() {
-    // ── direct (ステータス直接入力) ──
-    document.querySelectorAll('.dim-direct-input').forEach(inp => {
-        inp.addEventListener('input', () => {
-            const key = inp.dataset.key;
-            const isPct = inp.dataset.pct === '1';
-            const raw = parseFloat(inp.value);
-            const val = Number.isFinite(raw) ? raw : 0;
-            state.direct.stats[key] = isPct ? val / 100 : val;
-            recompute();
-        });
-    });
-
-    // ── manual ──
-    document.querySelectorAll('.dim-sub-input').forEach(inp => {
-        inp.addEventListener('input', () => {
-            const stat = inp.dataset.stat;
-            const isPct = inp.dataset.unit === 'pct';
-            // 直接タイプで負数が入る可能性があるため Math.max(0, ...) でクランプ
-            const raw = Math.max(0, parseFloat(inp.value) || 0);
-            state.subs.manual[stat] = isPct ? raw / 100 : raw;
-            applySubsToEnvBuffs();
-            recompute();
-        });
-    });
-
-    // ── 共通: 振り回数入力 (total / perslot) ──
-    document.querySelectorAll('.dim-alloc-input').forEach(inp => {
-        inp.addEventListener('input', () => {
-            const isTotal = inp.dataset.scope === 'total';
-            // total は実質上限なし (99) / perslot は HSR 仕様 (1サブステ最大6ロール)
-            const maxVal = isTotal ? 99 : 6;
-            const v = Math.max(0, Math.min(maxVal, parseInt(inp.value, 10) || 0));
-            const subKey = inp.dataset.subkey;
-            if (isTotal) {
-                state.subs.total.allocations[subKey] = v;
-                updateTotalHint();
-                // 確定計算 (low/mid/high) は即反映、random は次のシミュ押下まで保留
-                if (state.subs.total.tier !== 'random') recalcTotal();
-                else invalidateTotalResult();
-            } else {
-                const slot = inp.dataset.slot;
-                state.subs.perSlot[slot].allocations[subKey] = v;
-                updatePerSlotHint(slot);
-                if (state.subs.perSlot[slot].tier !== 'random') recalcPerSlot(slot);
-                else invalidatePerSlotResult(slot);
-            }
-        });
-    });
-
-    // ── total: 伸び幅・ボタン ──
-    document.querySelectorAll('.dim-roll-tier[data-scope="total"]').forEach(r => {
-        r.addEventListener('change', () => {
-            if (!r.checked) return;
-            state.subs.total.tier = r.value;
-            // 伸び幅切替: low/mid/high なら即計算、random なら結果無効化 + UI 再描画 (ボタン表示切替)
-            if (r.value === 'random') {
-                state.subs.total.lastResult = null;
-                renderSubsBody();
-                applySubsToEnvBuffs();
-                recompute();
-            } else {
-                recalcTotal();
-                renderSubsBody();
-            }
-        });
-    });
-    const totalGo = document.getElementById('dim-roll-total-go');
-    if (totalGo) totalGo.addEventListener('click', () => {
-        recalcTotal();
-        renderSubsBody();
-    });
-    const totalClear = document.getElementById('dim-roll-total-clear');
-    if (totalClear) totalClear.addEventListener('click', () => {
-        state.subs.total.allocations = {};
-        state.subs.total.lastResult = null;
-        renderSubsBody();
-        applySubsToEnvBuffs();
-        recompute();
-    });
-
-    // ── perSlot: 伸び幅・ボタン ──
-    document.querySelectorAll('.dim-roll-tier[data-scope^="perslot-"]').forEach(r => {
-        r.addEventListener('change', () => {
-            if (!r.checked) return;
-            const slot = r.dataset.slot;
-            state.subs.perSlot[slot].tier = r.value;
-            if (r.value === 'random') {
-                state.subs.perSlot[slot].lastResult = null;
-                renderSubsBody();
-                applySubsToEnvBuffs();
-                recompute();
-            } else {
-                recalcPerSlot(slot);
-                renderSubsBody();
-            }
-        });
-    });
-    document.querySelectorAll('.dim-roll-perslot-go').forEach(btn => {
-        btn.addEventListener('click', () => {
-            recalcPerSlot(btn.dataset.slot);
-            renderSubsBody();
-        });
-    });
-    document.querySelectorAll('.dim-roll-perslot-clear').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const slot = btn.dataset.slot;
-            state.subs.perSlot[slot].allocations = {};
-            state.subs.perSlot[slot].lastResult = null;
-            renderSubsBody();
-            applySubsToEnvBuffs();
-            recompute();
-        });
-    });
-    const allGo = document.getElementById('dim-roll-perslot-all');
-    if (allGo) allGo.addEventListener('click', () => {
-        // ランダム伸び幅の部位だけシミュ実行 (固定伸び幅は既にリアルタイム計算済み)
-        for (const slot of ALL_SLOTS) {
-            if (state.subs.perSlot[slot].tier === 'random') recalcPerSlot(slot);
-        }
-        renderSubsBody();
-    });
-    const allClear = document.getElementById('dim-roll-perslot-clear-all');
-    if (allClear) allClear.addEventListener('click', () => {
-        for (const slot of ALL_SLOTS) {
-            state.subs.perSlot[slot].allocations = {};
-            state.subs.perSlot[slot].lastResult = null;
-        }
-        renderSubsBody();
-        applySubsToEnvBuffs();
-        recompute();
-    });
-}
-
-// 軽量な部分更新: 入力即時の合計バーだけ更新 (フル再描画でフォーカスが飛ぶのを防ぐ)
-function updateTotalHint() {
-    const hint = document.getElementById('dim-roll-total-sum-hint');
-    if (!hint) return;
-    const total = sumAllocations(state.subs.total.allocations);
-    hint.innerHTML = `合計 <strong>${total}</strong> ロール (HSR最大 54)`;
-}
-function updatePerSlotHint(slot) {
-    const card = document.querySelector(`.dim-perslot-card[data-slot="${slot}"]`);
-    if (!card) return;
-    const hint = card.querySelector('.dim-roll-hint');
-    if (!hint) return;
-    const total = sumAllocations(state.subs.perSlot[slot].allocations);
-    const overLimit = total > 9;
-    hint.innerHTML = `合計 <strong>${total}</strong> ロール (HSR最大 9)${overLimit ? ' ⚠ 上限超過' : ''}`;
-    hint.classList.toggle('dim-roll-hint-warn', overLimit);
-}
-
-// ランダム tier の結果無効化 (前回の固定計算結果を消す)
-function invalidateTotalResult() {
-    if (state.subs.total.lastResult) {
-        state.subs.total.lastResult = null;
-        renderSubsBody();
-        applySubsToEnvBuffs();
-        recompute();
-    }
-}
-function invalidatePerSlotResult(slot) {
-    if (state.subs.perSlot[slot].lastResult) {
-        state.subs.perSlot[slot].lastResult = null;
-        renderSubsBody();
-        applySubsToEnvBuffs();
-        recompute();
-    }
-}
+// サブステ・遺物メインステの直接入力 UI は削除済み。
+//   遺物(セット/メインステ/サブステ)・光円錐はキャラビルドタブで作成した保存ビルドの読込のみで設定する。
 function fillOptionInputs() {
     document.getElementById('dim-opt-ref').value = state.options.refStat;
     document.getElementById('dim-opt-crit').value = state.options.critMode;
     document.getElementById('dim-opt-enemy-lv').value = state.options.enemyLevel;
     document.getElementById('dim-opt-enemy-res').value = (state.options.enemyBaseRes * 100);
     document.getElementById('dim-opt-break').value = state.options.breakState;
+    renderSpecialReferenceInputs();
 }
 
-// 軌跡レベル input を描画
-function fillLevelInputs() {
-    const grid = document.getElementById('dim-level-grid');
-    if (!grid) return;
-    const ch = Registry.character.get(state.build.characterId);
-    if (!ch) { grid.innerHTML = ''; return; }
-    const levelKeys = getLevelKeysForCharacter(ch);
-    grid.innerHTML = levelKeys.map(key => {
-        const max = getSkillMaxLevel(ch, key, state.build.eidolon) || 1;
-        const cur = clampLevel(state.build.traceLevel?.[key] || 1, max);
-        state.build.traceLevel = state.build.traceLevel || {};
-        state.build.traceLevel[key] = cur;
-        return `
-            <div class="dim-level-row">
-                <label>${SKILL_LABELS[key]}</label>
-                <input type="number" min="1" max="${max}" value="${cur}" class="dim-level-input" data-skill="${key}">
-                <span class="dim-level-max">/ ${max}</span>
-            </div>
-        `;
-    }).join('');
+const SPECIAL_REFERENCE_META = Object.freeze({
+    cumulativeHealing: { label: '本戦闘の累計治癒量', unit: '', hint: 'ヒアンシーの精霊スキル用' },
+    summonHp: { label: '召喚物の最大HP', unit: '', hint: 'キャストリスの死竜など。息吹モード用' },
+    gluttonyStacks: { label: '暴食の層数', unit: '層', hint: '不死途の条件付き追加攻撃用' },
+});
+
+function specialReferenceKeysForCurrentCharacter() {
+    const character = Registry.character.get(state.build?.characterId);
+    const keys = new Set();
+    for (const skill of Object.values(character?.skills || {})) {
+        for (const component of skill.damageComponents || []) {
+            if (component.referenceKey) keys.add(component.referenceKey);
+            if (component.conditionKey) keys.add(component.conditionKey);
+        }
+    }
+    return [...keys].filter(key => SPECIAL_REFERENCE_META[key]);
 }
 
-function fillPresetSelects() {
-    const cavOpts = Registry.relicSet.list();
-    const planOpts = Registry.ornament.list();
-    const optHtml = (items) =>
-        [`<option value="">(なし)</option>`]
-            .concat(items.map(s => `<option value="${s.id}">${s.name}</option>`)).join('');
-    document.getElementById('dim-preset-cav-a').innerHTML = optHtml(cavOpts);
-    document.getElementById('dim-preset-cav-22a').innerHTML = optHtml(cavOpts);
-    document.getElementById('dim-preset-cav-22b').innerHTML = optHtml(cavOpts);
-    document.getElementById('dim-preset-planar').innerHTML = optHtml(planOpts);
+function renderSpecialReferenceInputs() {
+    const wrap = document.getElementById('dim-special-refs');
+    if (!wrap) return;
+    const keys = specialReferenceKeysForCurrentCharacter();
+    if (keys.length === 0) {
+        wrap.innerHTML = '';
+        return;
+    }
+    const values = state.options.referenceValues || {};
+    wrap.innerHTML = `
+        <p class="dim-panel-hint">特殊な攻撃倍率が参照する値（未入力は0）</p>
+        <div class="dim-options-row dim-special-refs-row">
+            ${keys.map(key => {
+                const meta = SPECIAL_REFERENCE_META[key];
+                return `<div class="dim-row">
+                    <label>${escapeHtml(meta.label)}</label>
+                    <input type="number" min="0" step="any" data-dim-reference-key="${escapeHtml(key)}" value="${Number(values[key] || 0)}">
+                    ${meta.unit ? `<span class="dim-sub-unit">${escapeHtml(meta.unit)}</span>` : ''}
+                    <small class="dim-special-ref-hint">${escapeHtml(meta.hint)}</small>
+                </div>`;
+            }).join('')}
+        </div>
+    `;
 }
 
 // ---- イベントバインド --------------------------------------------------
@@ -1166,7 +536,7 @@ function bindAll() {
         if (state.inputMode === 'direct') {
             state.direct.snapshot = { ...state.direct.stats };
         } else {
-            state.snapshot = JSON.parse(JSON.stringify(state.build));
+            state.snapshot = materializeDiminishingBuild(state);
         }
         updateSnapshotStatus();
         recompute();
@@ -1176,87 +546,6 @@ function bindAll() {
         else                              state.snapshot = null;
         updateSnapshotStatus();
         recompute();
-    });
-
-    document.getElementById('dim-char').addEventListener('change', e => {
-        state.build.characterId = e.target.value;
-        // キャラ変更時はLvを無凸MAXで再初期化
-        const newCh = Registry.character.get(e.target.value);
-        state.build.traceLevel = presetDefaultMaxLevels(newCh);
-        // 運命不一致の光円錐は自動解除 (testAll は全装備許容のためスキップ)
-        const curLcId = state.build.lightcone?.id;
-        if (curLcId && newCh && !newCh.isTestAllEquipment) {
-            const curLc = Registry.lightcone.get(curLcId);
-            if (curLc && curLc.path !== newCh.path) {
-                state.build.lightcone.id = null;
-            }
-        }
-        // ※ パーティ枠に同キャラがいてもクリアしない (セルフバフ計算を許容)
-        //   常時オーラ等は二重計上になるためユーザー側で off にすること
-        fillLevelInputs();
-        fillLightconeSelect();   // キャラの運命に合わせて選択肢を絞り直す
-        renderParty();    // 選択肢の表示更新
-        applyPartyToEnvBuffs();
-        renderCharDetail();
-        onEquipmentChange(false);
-        recompute();
-    });
-    document.getElementById('dim-eidolon').addEventListener('change', e => {
-        state.build.eidolon = parseInt(e.target.value, 10);
-        // 星魂上昇でLv上限が変わる可能性があるためLv inputを再描画
-        fillLevelInputs();
-        renderCharDetail();
-        onEquipmentChange(true);
-        recompute();
-    });
-    document.getElementById('dim-lc').addEventListener('change', e => {
-        state.build.lightcone.id = e.target.value || null;
-        onEquipmentChange(true);
-        recompute();
-    });
-    document.getElementById('dim-lc-si').addEventListener('change', e => {
-        state.build.lightcone.superimpose = parseInt(e.target.value, 10);
-        onEquipmentChange(true);
-        recompute();
-    });
-
-    document.querySelectorAll('.dim-relic-main').forEach(sel => {
-        sel.addEventListener('change', e => {
-            const slot = sel.dataset.slot;
-            state.build.relics[slot].mainStat = e.target.value;
-            // 部位別ロールでメインステ変更 → 候補から外れる subKey の allocation を 0 に戻し、
-            // 当該パネルを再描画して入力欄を disable 状態に揃える
-            if (state.subs.mode === 'perSlot') {
-                const cfg = state.subs.perSlot[slot];
-                const allowed = new Set(excludeMainStatFromCandidates(slot, e.target.value, SUBSTAT_ORDER));
-                for (const k of Object.keys(cfg.allocations)) {
-                    if (!allowed.has(k)) delete cfg.allocations[k];
-                }
-                // メインステ変更で除外サブステに値が入っていたら結果も無効化
-                recalcPerSlot(slot);
-                renderSubsBody();
-            }
-            recompute();
-        });
-    });
-
-    // サブステ / 直接入力タブ切替
-    //   'direct' タブ = ステータス直接入力モード、その他 = ビルド計算モードのサブステ各方式
-    document.querySelectorAll('#dim-subs-tabs .dim-subs-tab').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const mode = btn.dataset.mode;
-            if (mode === 'direct') {
-                state.inputMode = 'direct';
-            } else {
-                state.inputMode = 'build';
-                state.subs.mode = mode;
-            }
-            applyInputModeVisibility();
-            renderSubsBody();
-            if (state.inputMode === 'build') applySubsToEnvBuffs();
-            updateSnapshotStatus();
-            recompute();
-        });
     });
 
     // オプション
@@ -1280,82 +569,13 @@ function bindAll() {
         state.options.breakState = e.target.value;
         recompute();
     });
-
-    // 軌跡レベルプリセット
-    //   無凸MAX: 星魂を E0 にリセットして Lv 上限の拡張も外す (default max)
-    //   凸後MAX: 星魂を E6 にして Lv 上限拡張を全部適用 (with-eidolon max)
-    document.querySelectorAll('.dim-level-presets button').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const ch = Registry.character.get(state.build.characterId);
-            if (!ch) return;
-            if (btn.dataset.preset === 'eidolon') {
-                state.build.eidolon = 6;
-                state.build.traceLevel = presetEidolonMaxLevels(ch);
-            } else {
-                state.build.eidolon = 0;
-                state.build.traceLevel = presetDefaultMaxLevels(ch);
-            }
-            document.getElementById('dim-eidolon').value = String(state.build.eidolon);
-            fillLevelInputs();
-            renderCharDetail();
-            recompute();
-        });
-    });
-
-    // 軌跡レベル入力 (Event Delegation: fillLevelInputs で再描画されるため)
-    document.getElementById('dim-level-grid').addEventListener('input', e => {
-        if (!e.target.matches('.dim-level-input')) return;
-        const key = e.target.dataset.skill;
-        const ch = Registry.character.get(state.build.characterId);
-        const max = getSkillMaxLevel(ch, key, state.build.eidolon) || 1;
-        const lv = clampLevel(parseInt(e.target.value, 10) || 1, max);
-        state.build.traceLevel[key] = lv;
-        if (lv !== parseInt(e.target.value, 10)) e.target.value = lv;
-        renderCharDetail();
-    });
-
-    // セット効果プリセット モード切替(可視性のみ変更。装着なしのみ即時クリア)
-    document.querySelectorAll('input[name="cav-mode"]').forEach(r => {
-        r.addEventListener('change', () => {
-            if (!r.checked) return;
-            const mode = r.value;
-            document.getElementById('dim-preset-cav4').style.display   = (mode === '4set') ? 'flex' : 'none';
-            document.getElementById('dim-preset-cav22').style.display  = (mode === '2+2')  ? 'flex' : 'none';
-            if (mode === 'none') {
-                for (const slot of RELIC_SLOTS) state.build.relics[slot].setId = null;
-                onEquipmentChange(true);
-                recompute();
-            }
-        });
-    });
-
-    // 4セット — auto-apply
-    document.getElementById('dim-preset-cav-a').addEventListener('change', e => {
-        const id = e.target.value || null;
-        for (const slot of RELIC_SLOTS) state.build.relics[slot].setId = id;
-        onEquipmentChange(true);
-        recompute();
-    });
-
-    // 2+2 — auto-apply (A=頭・手、B=胴・足)
-    const apply22 = () => {
-        const a = document.getElementById('dim-preset-cav-22a').value || null;
-        const b = document.getElementById('dim-preset-cav-22b').value || null;
-        state.build.relics[SLOT.HEAD].setId = a;
-        state.build.relics[SLOT.HANDS].setId = a;
-        state.build.relics[SLOT.BODY].setId = b;
-        state.build.relics[SLOT.FEET].setId = b;
-        onEquipmentChange(true);
-        recompute();
-    };
-    document.getElementById('dim-preset-cav-22a').addEventListener('change', apply22);
-    document.getElementById('dim-preset-cav-22b').addEventListener('change', apply22);
-
-    // Planar — auto-apply
-    document.getElementById('dim-preset-planar').addEventListener('change', e => {
-        const id = e.target.value || null;
-        for (const slot of ORNAMENT_SLOTS) state.build.relics[slot].setId = id;
-        onEquipmentChange(true);
+    document.getElementById('dim-special-refs').addEventListener('input', e => {
+        const key = e.target.dataset.dimReferenceKey;
+        if (!key) return;
+        state.options.referenceValues = {
+            ...(state.options.referenceValues || {}),
+            [key]: Math.max(0, parseFloat(e.target.value) || 0),
+        };
         recompute();
     });
 
@@ -1368,86 +588,11 @@ function bindAll() {
         head.classList.toggle('open', !!open);
     });
 
-    // ---- ビルド管理 ----------------------------------------------------
-    document.getElementById('dim-build-save').addEventListener('click', () => {
-        const name = document.getElementById('dim-build-name').value.trim();
-        if (!name) { alert('ビルド名を入力してください'); return; }
-        state.build.name = name;
-        // 同名既存があれば ID 引き継ぎ(=上書き)、なければ既存 ID で保存(=新規 or 既存上書き)
-        const existing = BuildStore.list().find(b => b.name === name);
-        if (existing && existing.id !== state.build.id) state.build.id = existing.id;
-        const saved = BuildStore.save(state.build);
-        state.build.id = saved.id;
-        refreshBuildList();
+    document.getElementById('dim-build-list').addEventListener('change', () => {
+        loadSelectedBuild();
     });
-
-    document.getElementById('dim-build-new').addEventListener('click', () => {
-        if (!confirm('現在の編集内容をクリアして新規ビルドを作成しますか?')) return;
-        const ch = Registry.character.get(state.build.characterId)
-                || Registry.character.list().find(c => c.id !== 'template');
-        state.build = BuildStore.blank(ch.id);
-        state.build.name = '';
-        state.build.traceLevel = presetDefaultMaxLevels(ch);
-        document.getElementById('dim-build-name').value = '';
-        resetSubsForBuildSwitch();
-        refreshAllForms();
-        recompute();
-    });
-
     document.getElementById('dim-build-load').addEventListener('click', () => {
-        const id = document.getElementById('dim-build-list').value;
-        if (!id) return;
-        const b = BuildStore.get(id);
-        if (!b) { alert('ビルドが見つかりません'); return; }
-        state.build = JSON.parse(JSON.stringify(b));
-        document.getElementById('dim-build-name').value = b.name || '';
-        // eidolon select 反映
-        const eSel = document.getElementById('dim-eidolon');
-        if (eSel) eSel.value = String(state.build.eidolon || 0);
-        resetSubsForBuildSwitch();
-        refreshAllForms();
-        recompute();
-    });
-
-    document.getElementById('dim-build-delete').addEventListener('click', () => {
-        const id = document.getElementById('dim-build-list').value;
-        if (!id) return;
-        const b = BuildStore.get(id);
-        if (!b) return;
-        if (!confirm(`「${b.name || id}」を削除しますか?`)) return;
-        BuildStore.delete(id);
-        refreshBuildList();
-    });
-
-    document.getElementById('dim-build-export').addEventListener('click', () => {
-        const text = BuildStore.exportJson();
-        const area = document.getElementById('dim-build-json-area');
-        area.style.display = 'block';
-        document.getElementById('dim-build-json-text').value = text;
-    });
-
-    document.getElementById('dim-build-import').addEventListener('click', () => {
-        const area = document.getElementById('dim-build-json-area');
-        area.style.display = 'block';
-        document.getElementById('dim-build-json-text').value = '';
-        document.getElementById('dim-build-json-text').focus();
-    });
-
-    document.getElementById('dim-build-json-apply').addEventListener('click', () => {
-        const text = document.getElementById('dim-build-json-text').value.trim();
-        if (!text) return;
-        try {
-            const total = BuildStore.importJson(text, 'merge');
-            alert(`読み込み完了。合計 ${total} 件のビルドが保存済みです。`);
-            refreshBuildList();
-            document.getElementById('dim-build-json-area').style.display = 'none';
-        } catch (err) {
-            alert('JSON読込エラー: ' + err.message);
-        }
-    });
-
-    document.getElementById('dim-build-json-close').addEventListener('click', () => {
-        document.getElementById('dim-build-json-area').style.display = 'none';
+        loadSelectedBuild();
     });
 }
 
@@ -1456,6 +601,7 @@ function bindAll() {
 // 各 slot に対し、計算用 teammate build を派生する。
 //   buildId 優先 (BuildStore から完全ビルド)。なければ簡易モード(char + Lv preset)で blank ビルドを構築。
 function partyBuildFor(slot) {
+    if (slot.build) return JSON.parse(JSON.stringify(slot.build));
     if (slot.buildId) {
         const b = BuildStore.get(slot.buildId);
         if (b) return JSON.parse(JSON.stringify(b));   // 防御コピー
@@ -1464,10 +610,12 @@ function partyBuildFor(slot) {
     const ch = Registry.character.get(slot.characterId);
     if (!ch) return null;
     const b = BuildStore.blank(slot.characterId);
-    b.eidolon = slot.levelPreset === 'eidolon' ? 6 : 0;
-    b.traceLevel = slot.levelPreset === 'eidolon'
-        ? presetEidolonMaxLevels(ch)
-        : presetDefaultMaxLevels(ch);
+    b.traceLevel = presetTraceLevels(ch);
+    if (slot.lightcone?.id) b.lightcone = { ...slot.lightcone };
+    if (slot.ornamentId) {
+        b.relics.sphere.setId = slot.ornamentId;
+        b.relics.rope.setId = slot.ornamentId;
+    }
     return b;
 }
 
@@ -1593,6 +741,7 @@ function resolveEffectStats(ef, teammateBuild, teammateStats) {
 // 合成 effect ID: srcKey + '.' + ef.id (チェックボックスの状態管理用)
 const effectKey = (srcKey, efId) => `${srcKey}.${efId}`;
 
+/*
 // focus キャラクターの effects (partyEffects + selfEffects) を収集
 function gatherFocusEffects(build) {
     if (!build || !build.characterId) return [];
@@ -1676,6 +825,8 @@ function gatherFocusEffects(build) {
     return out;
 }
 
+ * 自身バフ・デバフの旧UI実装は、保存ビルドの候補比較へ責務を一本化したため
+ * 画面から外している。計算エンジン側にはAI/旧状態互換のため実装を残す。
 const SELF_LABEL_PREFIX = '自身バフ.';
 
 function applySelfBuffsToEnvBuffs() {
@@ -1914,10 +1065,7 @@ function updateSelfEffectStatsDisplay(ekey) {
     }
 }
 
-function onEquipmentChange(preserveExisting = true) {
-    applyDefaultActiveSelfEffects(preserveExisting);
-    renderSelfBuffs();
-}
+*/
 
 function renderParty() {
     const grid = document.getElementById('dim-party-grid');
@@ -1932,6 +1080,8 @@ function renderParty() {
             state.party[idx].mode = r.value;
             if (state.party[idx].mode === 'simple') {
                 state.party[idx].buildId = null;
+                state.party[idx].build = null;
+                state.party[idx].lightcone = signatureLightconeForCharacter(state.party[idx].characterId);
             }
             applyDefaultActiveEffects(idx);
             renderParty();
@@ -1946,19 +1096,9 @@ function renderParty() {
             const idx = parseInt(sel.dataset.idx, 10);
             state.party[idx].characterId = e.target.value || null;
             state.party[idx].buildId = null;   // 簡易モードに切替
+            state.party[idx].build = null;
+            state.party[idx].lightcone = signatureLightconeForCharacter(state.party[idx].characterId);
             applyDefaultActiveEffects(idx);
-            renderParty();
-            applyPartyToEnvBuffs();
-            recompute();
-        });
-    });
-
-    // 凸プリセット (簡易モード)
-    grid.querySelectorAll('.dim-party-levelpreset').forEach(r => {
-        r.addEventListener('change', () => {
-            if (!r.checked) return;
-            const idx = parseInt(r.dataset.idx, 10);
-            state.party[idx].levelPreset = r.value;
             renderParty();
             applyPartyToEnvBuffs();
             recompute();
@@ -1972,7 +1112,12 @@ function renderParty() {
             state.party[idx].buildId = e.target.value || null;
             if (state.party[idx].buildId) {
                 const b = BuildStore.get(state.party[idx].buildId);
-                if (b) state.party[idx].characterId = b.characterId;
+                if (b) {
+                    state.party[idx].characterId = b.characterId;
+                    state.party[idx].build = JSON.parse(JSON.stringify(b));
+                }
+            } else {
+                state.party[idx].build = null;
             }
             applyDefaultActiveEffects(idx);
             renderParty();
@@ -2013,6 +1158,18 @@ function renderParty() {
             applyPartyToEnvBuffs();
             recompute();
         });
+    });
+
+    grid.querySelectorAll('.dim-party-char').forEach(sel => {
+        enhanceSelect(sel, characterPickerConfig({
+            placeholder: 'サポート名 / 英名で検索',
+        }));
+    });
+    grid.querySelectorAll('.dim-party-buildsel').forEach(sel => {
+        enhanceSelect(sel, buildPickerConfig({
+            placeholder: '保存ビルド名 / キャラ名で検索',
+            recentKey: 'srsim.recent.partyBuilds',
+        }));
     });
 }
 
@@ -2063,7 +1220,7 @@ function renderPartySlot(slot, idx) {
     //     サポート側でも ON にすると二重計上になるため、ユーザー側で off にすること。
     const charOptions = [`<option value="">(なし)</option>`].concat(
         Registry.character.list()
-            .filter(c => c.id !== 'template')
+            .filter(c => c.id !== 'template' && !c.isTestAllEquipment)
             .map(c => {
                 const sameAsFocus = c.id === state.build.characterId;
                 const label = sameAsFocus ? `${c.name} (メインと同キャラ)` : c.name;
@@ -2084,6 +1241,7 @@ function renderPartySlot(slot, idx) {
     const isBuildMode = slot.mode === 'build';
     const tBuild = partyBuildFor(slot);
     const ch = tBuild ? Registry.character.get(tBuild.characterId) : null;
+    const simpleLightcone = !isBuildMode && slot.lightcone?.id ? Registry.lightcone.get(slot.lightcone.id) : null;
     let tStats = null;
     try { tStats = tBuild ? StatComputer.compute(tBuild) : null; }
     catch (err) { console.error('[party] tStats compute failed', err, tBuild); }
@@ -2147,7 +1305,7 @@ function renderPartySlot(slot, idx) {
             </div>
             <div class="dim-party-slot-config">
                 <div class="dim-party-mode-row">
-                    <label class="dim-radio" title="キャラと凸プリセットだけ指定。そのキャラ固有の効果(必殺・軌跡など)のみ表示されます。">
+                    <label class="dim-radio" title="キャラと凸プリセットを指定。登録済みなら本人のモチーフ光円錐S1も自動装備します。">
                         <input type="radio" class="dim-party-mode" data-idx="${idx}" name="party-mode-${idx}" value="simple" ${!isBuildMode ? 'checked' : ''}> キャラのみ
                     </label>
                     <label class="dim-radio" title="保存ビルドを丸ごと指定。装備込みの実ステを使って、光円錐・遺物セットの効果も含めて計算します。">
@@ -2163,14 +1321,7 @@ function renderPartySlot(slot, idx) {
                     <div class="dim-party-simplemode-config">
                         <label>キャラ</label>
                         <select class="dim-party-char" data-idx="${idx}">${charOptions}</select>
-                        <span class="dim-party-lvpreset">
-                            <label class="dim-radio">
-                                <input type="radio" class="dim-party-levelpreset" data-idx="${idx}" name="party-lv-${idx}" value="default" ${slot.levelPreset === 'default' ? 'checked' : ''}> 無凸MAX
-                            </label>
-                            <label class="dim-radio">
-                                <input type="radio" class="dim-party-levelpreset" data-idx="${idx}" name="party-lv-${idx}" value="eidolon" ${slot.levelPreset === 'eidolon' ? 'checked' : ''}> 凸後MAX
-                            </label>
-                        </span>
+                        ${simpleLightcone ? `<span class="dim-ai-muted">モチーフ: ${escapeHtml(simpleLightcone.name)} S${slot.lightcone.superimpose || 1}</span>` : ''}
                     </div>
                 `}
             </div>
@@ -2262,6 +1413,10 @@ function refreshBuildList() {
     const builds = BuildStore.list();
     if (builds.length === 0) {
         sel.innerHTML = '<option value="">(保存ビルドなし)</option>';
+        selectedBuildId = null;
+        const nameInput = document.getElementById('dim-build-name');
+        if (nameInput) nameInput.value = '';
+        enhanceSelect(sel, buildPickerConfig());
         return;
     }
     sel.innerHTML = builds
@@ -2271,37 +1426,205 @@ function refreshBuildList() {
             const charName = ch?.name || b.characterId || '?';
             return `<option value="${b.id}">${escapeHtml(b.name || '(無名)')} — ${charName}</option>`;
         }).join('');
+    const currentId = selectedBuildId && builds.some(build => build.id === selectedBuildId)
+        ? selectedBuildId
+        : (BuildStore.get(state.build?.id)?.id || '');
+    sel.value = currentId;
+    selectedBuildId = currentId || null;
+    const selected = currentId ? BuildStore.get(currentId) : null;
+    const nameInput = document.getElementById('dim-build-name');
+    if (nameInput) nameInput.value = selected?.name || '';
+    enhanceSelect(sel, buildPickerConfig());
 }
 
-// 現モードのサブステ結果を envBuffs に書き込む (既存 SUB_LABEL_PREFIX を一掃して再構築)
-//   manual : state.subs.manual の入力値
-//   total  : state.subs.total.lastResult.totals
-//   perSlot: 全部位の lastResult.totals を合算
-function applySubsToEnvBuffs() {
-    state.build.envBuffs = (state.build.envBuffs || []).filter(b =>
-        !(typeof b.label === 'string' && b.label.startsWith(SUB_LABEL_PREFIX))
-    );
-    const pushStatDict = (statDict) => {
-        for (const [stat, value] of Object.entries(statDict)) {
-            if (!value) continue;
-            state.build.envBuffs.push({ stat, value, label: SUB_LABEL_PREFIX + stat });
-        }
-    };
+function loadSelectedBuild() {
+    const id = document.getElementById('dim-build-list')?.value;
+    if (!id) return;
+    const saved = BuildStore.get(id);
+    if (!saved) return;
+    state.build = sanitizeSelectedBuild(saved);
+    clearActiveCandidates();
+    state.snapshot = null;
+    selectedBuildId = saved.id;
+    invalidateCandidateRankingCache();
+    const nameInput = document.getElementById('dim-build-name');
+    if (nameInput) nameInput.value = saved.name || '';
+    refreshAllForms();
+    updateSnapshotStatus();
+    recompute();
+}
 
-    if (state.subs.mode === 'manual') {
-        pushStatDict(state.subs.manual);
+function sanitizeSelectedBuild(build) {
+    const sanitized = JSON.parse(JSON.stringify(build));
+    // 自身バフ・デバフはこのタブでは設定しない。旧バージョンで保存された
+    // 選択状態や展開済み値があっても、保存ビルドの装備・育成情報だけを使う。
+    sanitized.activeSelfEffectIds = [];
+    sanitized.selfStacksByEffectId = {};
+    sanitized.envBuffs = (sanitized.envBuffs || []).filter(buff =>
+        !(typeof buff.label === 'string' && buff.label.startsWith('自身バフ.'))
+    );
+    return sanitized;
+}
+
+function invalidateCandidateRankingCache() {
+    candidateRankCacheKey = '';
+    candidateRankCache = null;
+}
+
+function candidateRankingKey() {
+    const serialized = diminishingSession.serialize();
+    return JSON.stringify({
+        inputMode: serialized.inputMode,
+        build: serialized.build,
+        party: serialized.party,
+        subs: serialized.subs,
+        options: serialized.options,
+    });
+}
+
+function getCandidateRanking() {
+    if (!selectedBuildId || !state.build) return null;
+    const key = candidateRankingKey();
+    if (candidateRankCache && candidateRankCacheKey === key) return candidateRankCache;
+    candidateRankCache = rankBuildCandidates(state);
+    candidateRankCacheKey = key;
+    return candidateRankCache;
+}
+
+function diminishingCandidateGroupLabel(key) {
+    if (key === 'eidolon') return '星魂';
+    if (key === 'traceLevel') return '軌跡レベル';
+    if (key === 'lightcone') return '光円錐';
+    if (key === 'superimpose') return '重畳';
+    if (key === 'substats') return 'サブステ';
+    if (key.startsWith('relic:')) {
+        return key.slice('relic:'.length).split(',')
+            .map(slot => DIM_CANDIDATE_SLOT_LABELS[slot] || slot)
+            .join(' / ');
+    }
+    return key.replace(/^type:/, 'その他');
+}
+
+function candidateContributionText(value) {
+    if (value === null || value === undefined) return '—';
+    return `${value > 0 ? '+' : ''}${(value * 100).toFixed(2)}%`;
+}
+
+function candidateContributionClass(value) {
+    if (value > 0) return 'is-up';
+    if (value < 0) return 'is-down';
+    return 'cb-muted';
+}
+
+function renderCandidates() {
+    const wrap = document.getElementById('dim-candidates');
+    if (!wrap) return;
+    if (!selectedBuildId) {
+        wrap.innerHTML = '<p class="dim-panel-hint">保存済みのキャラビルドを選択してください。</p>';
         return;
     }
-    if (state.subs.mode === 'total') {
-        const t = state.subs.total.lastResult;
-        if (t) pushStatDict(rollsToStatDict(t.totals));
+    const candidates = getBuildCandidates(state.build);
+    if (candidates.length === 0) {
+        wrap.innerHTML = '<p class="dim-panel-hint">候補はありません。キャラビルドタブで候補を登録して保存してください。</p>';
         return;
     }
-    if (state.subs.mode === 'perSlot') {
-        const agg = aggregatePerSlotResults();
-        if (agg) pushStatDict(rollsToStatDict(agg));
-        return;
+    const ranking = getCandidateRanking();
+    const resultItems = ranking?.candidates || candidates.map(candidate => ({
+        ...candidate,
+        contribution: null,
+    }));
+    const groups = new Map();
+    for (const candidate of resultItems) {
+        const key = candidateGroupKey(candidate);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(candidate);
     }
+    const activeIds = activeCandidateIds();
+    const activeSet = new Set(activeIds);
+    const groupOrder = ['eidolon', 'traceLevel', 'lightcone', 'superimpose', 'substats',
+        ...Object.keys(DIM_CANDIDATE_SLOT_LABELS).map(slot => `relic:${slot}`), 'type:custom'];
+    const orderedGroups = [...groups.entries()].sort(([a], [b]) => {
+        const ai = groupOrder.indexOf(a);
+        const bi = groupOrder.indexOf(b);
+        return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi) || a.localeCompare(b);
+    });
+    wrap.innerHTML = `
+        <div class="dim-candidate-actions">
+            <button type="button" id="dim-candidate-reset" class="btn-secondary btn-mini" ${activeIds.length ? '' : 'disabled'}>すべて解除</button>
+            <span class="dim-panel-hint">項目ごとに1件を選択できます。別の項目は組み合わせて適用されます。</span>
+        </div>
+        <div class="dim-candidate-groups">
+            ${orderedGroups.map(([key, group]) => {
+                const activeInGroup = group.filter(candidate => activeSet.has(candidate.id));
+                return `
+                    <section class="dim-candidate-group" data-dim-candidate-group="${escapeHtml(key)}">
+                        <div class="dim-candidate-group-head">
+                            <span class="dim-candidate-group-title">${escapeHtml(diminishingCandidateGroupLabel(key))}</span>
+                            <span class="dim-candidate-group-count">${group.length}件</span>
+                            ${activeInGroup.length ? `<span class="dim-candidate-group-active">${escapeHtml(candidateLabel(activeInGroup[0]))} 適用中</span>` : ''}
+                        </div>
+                        <div class="dim-candidate-group-body">
+                            <div class="dim-candidate-group-actions">
+                                <button type="button" class="btn-secondary btn-mini" data-dim-candidate-clear-group="${escapeHtml(key)}" ${activeInGroup.length ? '' : 'disabled'}>この項目を解除</button>
+                            </div>
+                            <div class="dim-candidate-options" role="radiogroup" aria-label="${escapeHtml(diminishingCandidateGroupLabel(key))}">
+                                ${group.map(candidate => {
+                                    const current = activeSet.has(candidate.id);
+                                    const hideDelta = candidate.excludedReason === 'eidolon' || isEidolonCandidate(candidate);
+                                    return `
+                                        <label class="dim-candidate-option${current ? ' is-current' : ''}">
+                                            <input type="radio" name="dim-candidate-${escapeHtml(key)}" value="${escapeHtml(candidate.id)}" data-dim-candidate-radio="${escapeHtml(candidate.id)}" ${current ? 'checked' : ''}>
+                                            <span class="dim-candidate-option-copy">
+                                                <span class="dim-candidate-option-label">${escapeHtml(candidateLabel(candidate))}</span>
+                                                <span class="dim-candidate-option-meta">${hideDelta ? '能力変更のため共通火力差分なし' : '現在の条件での共通火力差分'}</span>
+                                            </span>
+                                            <span class="dim-candidate-option-delta ${hideDelta ? 'cb-muted' : candidateContributionClass(candidate.contribution)}" title="共通ダメージだけを使った目安です。通常攻撃・スキル・必殺技・追撃ごとの違いは含みません。">${hideDelta ? '—' : candidateContributionText(candidate.contribution)}</span>
+                                        </label>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </section>
+                `;
+            }).join('')}
+        </div>
+    `;
+    document.getElementById('dim-candidate-reset')?.addEventListener('click', () => {
+        clearActiveCandidates();
+        renderCandidates();
+        renderCharDetail();
+        recompute();
+    });
+    wrap.querySelectorAll('[data-dim-candidate-clear-group]').forEach(button => {
+        button.addEventListener('click', () => {
+            const groupKey = button.getAttribute('data-dim-candidate-clear-group');
+            setActiveCandidateIds(activeCandidateIds().filter(id => {
+                const candidate = getBuildCandidates(state.build).find(item => item.id === id);
+                return !candidate || candidateGroupKey(candidate) !== groupKey;
+            }));
+            renderCandidates();
+            renderCharDetail();
+            recompute();
+        });
+    });
+    wrap.querySelectorAll('[data-dim-candidate-radio]').forEach(input => {
+        input.addEventListener('change', () => {
+            const id = input.getAttribute('data-dim-candidate-radio');
+            const allCandidates = getBuildCandidates(state.build);
+            const selected = allCandidates.find(candidate => candidate.id === id);
+            if (!selected) return;
+            const groupKey = candidateGroupKey(selected);
+            const nextIds = activeCandidateIds().filter(activeId => {
+                const active = allCandidates.find(candidate => candidate.id === activeId);
+                return active && candidateGroupKey(active) !== groupKey;
+            });
+            nextIds.push(id);
+            setActiveCandidateIds(nextIds);
+            renderCandidates();
+            renderCharDetail();
+            recompute();
+        });
+    });
 }
 
 function updateSnapshotStatus() {
@@ -2319,13 +1642,10 @@ function updateSnapshotStatus() {
 
 // ---- 計算 + 結果描画 ---------------------------------------------------
 
-// 直接入力モードでもビルド系パネルは隠さない (ユーザー要望: タブ/パネルが消えないように)。
-//   モード差はサブステタブ本文 (renderSubsBody) と結果計算 (recompute) 側だけで吸収する。
-//   過去に display:none が付与されていた場合に備え、念のため全表示へ戻すだけのリセット処理。
+// 過去の表示切替処理の名残があっても、現在のパネルを隠さない。
 function applyInputModeVisibility() {
     for (const sel of [
-        '.dim-build-mgr', '#dim-char-panel', '#dim-mainstat-section',
-        '#dim-self-buffs-panel', '.dim-party-panel', '#dim-char-detail',
+        '.dim-build-mgr', '#dim-candidates-panel', '.dim-party-panel', '#dim-char-detail',
     ]) {
         const el = document.querySelector(sel);
         if (el) el.style.display = '';
@@ -2334,12 +1654,13 @@ function applyInputModeVisibility() {
 
 // 直接ステ入力モードの計算 + 結果描画 (recompute から委譲)。
 function recomputeDirect(resultEl) {
-    let nowStats;
-    try { nowStats = Diminishing.directStatsToFinalStats(state.direct.stats); }
+    let currentResult;
+    try { currentResult = computeDiminishingState(state); }
     catch (err) { resultEl.innerHTML = `<div class="dim-error">計算エラー: ${err.message}</div>`; return; }
+    const nowStats = currentResult.finalStats;
 
     if (!state.direct.snapshot) {
-        resultEl.innerHTML = renderStatsOnly(nowStats);
+        resultEl.innerHTML = renderStatsOnly(nowStats, currentResult.attacks);
         bindStatsFilter();
         return;
     }
@@ -2348,35 +1669,48 @@ function recomputeDirect(resultEl) {
         const beforeStats = Diminishing.directStatsToFinalStats(state.direct.snapshot);
         cmp = Diminishing.compareStats(beforeStats, nowStats, state.options);
     } catch (err) { resultEl.innerHTML = `<div class="dim-error">比較エラー: ${err.message}</div>`; return; }
-    resultEl.innerHTML = renderComparison(cmp);
+    resultEl.innerHTML = renderComparison(cmp, currentResult.attacks);
     bindComparisonFilter();
 }
 
 function recompute() {
+    assistantUi?.updateContext();
     const resultEl = document.getElementById('dim-result');
     if (!resultEl) return;
 
     if (state.inputMode === 'direct') {
         recomputeDirect(resultEl);
+        window.SRSIM_LOCAL?.markDirty('diminishing');
         return;
     }
 
-    applySelfBuffsToEnvBuffs();
+    renderCandidates();
+    if (!selectedBuildId) {
+        resultEl.innerHTML = '<div class="dim-empty">保存済みのキャラビルドを選択すると、最終ステータスと差分候補を表示します。</div>';
+        window.SRSIM_LOCAL?.markDirty('diminishing');
+        return;
+    }
 
-    let nowStats;
-    try { nowStats = StatComputer.compute(state.build); }
+    let currentResult;
+    try { currentResult = computeDiminishingState(state); }
     catch (err) { resultEl.innerHTML = `<div class="dim-error">計算エラー: ${err.message}</div>`; return; }
+    const nowStats = currentResult.finalStats;
 
     if (!state.snapshot) {
-        resultEl.innerHTML = renderStatsOnly(nowStats);
+        resultEl.innerHTML = renderStatsOnly(nowStats, currentResult.attacks);
         bindStatsFilter();
+        window.SRSIM_LOCAL?.markDirty('diminishing');
         return;
     }
     let cmp;
-    try { cmp = Diminishing.compareBuilds(state.snapshot, state.build, state.options); }
+    try {
+        const beforeStats = StatComputer.compute(state.snapshot);
+        cmp = Diminishing.compareStats(beforeStats, nowStats, state.options);
+    }
     catch (err) { resultEl.innerHTML = `<div class="dim-error">比較エラー: ${err.message}</div>`; return; }
-    resultEl.innerHTML = renderComparison(cmp);
+    resultEl.innerHTML = renderComparison(cmp, currentResult.attacks);
     bindComparisonFilter();
+    window.SRSIM_LOCAL?.markDirty('diminishing');
 }
 
 // ===== 参照ステ・表示項目プリセット =====
@@ -2563,6 +1897,14 @@ const STATS_ROWS = [
     { key: 'critRate',      label: '会心率',           fmt: 'pct',   num: (s) => s.derived.critRate, category: 'crit' },
     { key: 'critDmg',       label: '会心ダメ',         fmt: 'pct',   num: (s) => s.derived.critDmg, category: 'crit' },
     { key: 'critExpected',  label: '会心期待値',       fmt: 'mul',   num: (s) => s.derived.critExpected, category: 'crit' },
+    { key: 'critRateBasic',    label: '通常攻撃会心率',     fmt: 'pct', num: (s) => s.raw.critRateBasic    || 0, category: 'crit' },
+    { key: 'critRateSkill',    label: '戦闘スキル会心率',   fmt: 'pct', num: (s) => s.raw.critRateSkill    || 0, category: 'crit' },
+    { key: 'critRateUlt',      label: '必殺会心率',         fmt: 'pct', num: (s) => s.raw.critRateUlt      || 0, category: 'crit' },
+    { key: 'critRateFollowup', label: '追加攻撃会心率',     fmt: 'pct', num: (s) => s.raw.critRateFollowup || 0, category: 'crit' },
+    { key: 'critDmgBasic',     label: '通常攻撃会心ダメ',   fmt: 'pct', num: (s) => s.raw.critDmgBasic     || 0, category: 'crit' },
+    { key: 'critDmgSkill',     label: '戦闘スキル会心ダメ', fmt: 'pct', num: (s) => s.raw.critDmgSkill     || 0, category: 'crit' },
+    { key: 'critDmgUlt',       label: '必殺会心ダメ',       fmt: 'pct', num: (s) => s.raw.critDmgUlt       || 0, category: 'crit' },
+    { key: 'critDmgFollowup',  label: '追加攻撃会心ダメ',   fmt: 'pct', num: (s) => s.raw.critDmgFollowup  || 0, category: 'crit' },
     { key: 'energyRegen',   label: 'EP回復効率',       fmt: 'pct',   num: (s) => s.derived.energyRegenPct, category: 'basic' },
 
     // ===== 与ダメ枠 (個別) =====
@@ -2587,13 +1929,25 @@ const STATS_ROWS = [
     // ===== デバフ枠 (個別) =====
     { key: 'defDown',       label: '防御Down (敵)',    fmt: 'pct',   num: (s) => s.raw.defDown   || 0, category: 'debuff' },
     { key: 'defIgnore',     label: '防御無視',         fmt: 'pct',   num: (s) => s.raw.defIgnore || 0, category: 'debuff' },
+    { key: 'defIgnoreBasic',    label: '通常攻撃防御無視',     fmt: 'pct', num: (s) => s.raw.defIgnoreBasic    || 0, category: 'debuff' },
+    { key: 'defIgnoreSkill',    label: '戦闘スキル防御無視',   fmt: 'pct', num: (s) => s.raw.defIgnoreSkill    || 0, category: 'debuff' },
+    { key: 'defIgnoreUlt',      label: '必殺防御無視',         fmt: 'pct', num: (s) => s.raw.defIgnoreUlt      || 0, category: 'debuff' },
+    { key: 'defIgnoreFollowup', label: '追加攻撃防御無視',     fmt: 'pct', num: (s) => s.raw.defIgnoreFollowup || 0, category: 'debuff' },
 
     // ===== デバフ合計 =====
     { key: 'defReductionTotal', label: '防御減少 合計 (Down+無視)',
       fmt: 'pct', num: (s) => (s.raw.defDown || 0) + (s.raw.defIgnore || 0), category: 'debuff' },
     { key: 'resPen',        label: '耐性貫通 / 耐性Down (合計)',
       fmt: 'pct',   num: (s) => s.raw.resPen   || 0, category: 'debuff' },
+    { key: 'resPenBasic',    label: '通常攻撃耐性貫通',     fmt: 'pct', num: (s) => s.raw.resPenBasic    || 0, category: 'debuff' },
+    { key: 'resPenSkill',    label: '戦闘スキル耐性貫通',   fmt: 'pct', num: (s) => s.raw.resPenSkill    || 0, category: 'debuff' },
+    { key: 'resPenUlt',      label: '必殺耐性貫通',         fmt: 'pct', num: (s) => s.raw.resPenUlt      || 0, category: 'debuff' },
+    { key: 'resPenFollowup', label: '追加攻撃耐性貫通',     fmt: 'pct', num: (s) => s.raw.resPenFollowup || 0, category: 'debuff' },
     { key: 'dmgTaken',      label: '被ダメ増 (合計)',  fmt: 'pct',   num: (s) => s.raw.dmgTaken || 0, category: 'debuff' },
+    { key: 'dmgTakenBasic',    label: '通常攻撃被ダメ増',     fmt: 'pct', num: (s) => s.raw.dmgTakenBasic    || 0, category: 'debuff' },
+    { key: 'dmgTakenSkill',    label: '戦闘スキル被ダメ増',   fmt: 'pct', num: (s) => s.raw.dmgTakenSkill    || 0, category: 'debuff' },
+    { key: 'dmgTakenUlt',      label: '必殺被ダメ増',         fmt: 'pct', num: (s) => s.raw.dmgTakenUlt      || 0, category: 'debuff' },
+    { key: 'dmgTakenFollowup', label: '追加攻撃被ダメ増',     fmt: 'pct', num: (s) => s.raw.dmgTakenFollowup || 0, category: 'debuff' },
 
     // ===== その他 =====
     { key: 'breakEffect',   label: '撃破特効',         fmt: 'breakEffect', num: (s) => s.derived.breakEffectPct, category: 'other' },
@@ -2608,7 +1962,11 @@ function formatStatCell(row, s) {
         case 'flat1':       return n.toFixed(1);
         case 'pct':         return `${(n * 100).toFixed(2)}%`;
         case 'mul':         return `×${n.toFixed(4)}`;
-        case 'spd':         return `${n.toFixed(2)} (AV ${(row.av ? row.av(s) : 0).toFixed(1)})`;
+        case 'spd': {
+            const actionValue = row.av ? row.av(s) : null;
+            const actionValueLabel = Number.isFinite(actionValue) ? actionValue.toFixed(1) : '—';
+            return `${n.toFixed(2)} (AV ${actionValueLabel})`;
+        }
         case 'breakEffect': return `${((n - 1) * 100).toFixed(2)}%`;
         default:            return String(n);
     }
@@ -2627,7 +1985,7 @@ function formatStatDiff(diff, fmt) {
     }
 }
 
-function renderStatsOnly(s) {
+function renderStatsOnly(s, attacks = []) {
     const grouped = {};
     for (const catKey of Object.keys(STATS_CATEGORIES)) {
         grouped[catKey] = [];
@@ -2648,6 +2006,7 @@ function renderStatsOnly(s) {
 
     return `
         ${renderStatsFilter()}
+        ${renderAttackTable(attacks)}
         <h3>現状の最終ステータス</h3>
         <table class="dim-result-table">
             <tbody>
@@ -2658,6 +2017,38 @@ function renderStatsOnly(s) {
     `;
 }
 // 現状ステータスの行フィルタ (折りたたみチェックボックス群)
+function renderAttackTable(attacks) {
+    if (!Array.isArray(attacks) || attacks.length === 0) return '';
+    const scalingLabels = { atk: '攻撃力', hp: 'HP', def: '防御力', reference: '特殊参照値' };
+    const rows = attacks.map(row => {
+        const damage = row.active ? formatFactorValue(row.damage) : '条件未適用';
+        const total = row.active && row.totalDamage != null ? formatFactorValue(row.totalDamage) : '—';
+        const reference = row.referenceKey
+            ? `${row.referenceValue.toFixed(1)}（${escapeHtml(row.referenceKey)}）`
+            : `${(row.multiplier * 100).toFixed(1)}%`;
+        const condition = row.condition
+            ? `${escapeHtml(row.condition)}${row.active ? '' : '（未適用）'}`
+            : '—';
+        return `<tr>
+            <th>${escapeHtml(row.name)}</th>
+            <td>${escapeHtml(row.kind)}</td>
+            <td>${escapeHtml(row.target)}</td>
+            <td>${escapeHtml(scalingLabels[row.scalingStat] || row.scalingStat)} / ${reference}</td>
+            <td>${damage}</td>
+            <td>${total}${row.hitCount ? `（${row.hitCount}回）` : ''}</td>
+            <td>${condition}</td>
+        </tr>`;
+    }).join('');
+    return `
+        <h3>キャラ固有攻撃の目安</h3>
+        <p class="dim-help">共通ダメージ係数に、各攻撃の倍率・参照ステータス・条件付き要素を反映した値です。実戦の敵数や行動順は含みません。</p>
+        <table class="dim-result-table dim-attack-table">
+            <thead><tr><th>攻撃</th><th>種別</th><th>対象</th><th>倍率 / 参照</th><th>1回</th><th>合計</th><th>条件</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
 function renderStatsFilter() {
     const grouped = {};
     for (const catKey of Object.keys(STATS_CATEGORIES)) {
@@ -2763,14 +2154,30 @@ function bindStatsFilter() {
 const COMPARISON_ROWS = [
     { key: 'atk',           label: (opts) => `参照ステ (${factorLabel(opts.refStat)})`, get: (f) => f.atk, category: 'basic_crit' },
     { key: 'crit',          label: () => '会心係数',                                  get: (f) => f.crit, category: 'basic_crit' },
+    { key: 'crit.basic',    label: () => '会心係数 (通常)',                            get: (f) => f.critByType.basic, category: 'basic_crit' },
+    { key: 'crit.skill',    label: () => '会心係数 (スキル)',                          get: (f) => f.critByType.skill, category: 'basic_crit' },
+    { key: 'crit.ult',      label: () => '会心係数 (必殺)',                            get: (f) => f.critByType.ult, category: 'basic_crit' },
+    { key: 'crit.followup', label: () => '会心係数 (追撃)',                            get: (f) => f.critByType.followup, category: 'basic_crit' },
     { key: 'dmg.base',      label: () => '与ダメ枠 (共通)',                            get: (f) => f.dmgBonusByType.base, category: 'dmg' },
     { key: 'dmg.basic',     label: () => '与ダメ枠 (通常)',                            get: (f) => f.dmgBonusByType.basic, category: 'dmg' },
     { key: 'dmg.skill',     label: () => '与ダメ枠 (スキル)',                          get: (f) => f.dmgBonusByType.skill, category: 'dmg' },
     { key: 'dmg.ult',       label: () => '与ダメ枠 (必殺)',                            get: (f) => f.dmgBonusByType.ult, category: 'dmg' },
     { key: 'dmg.followup',  label: () => '与ダメ枠 (追撃)',                            get: (f) => f.dmgBonusByType.followup, category: 'dmg' },
     { key: 'def',           label: () => '防御係数',                                  get: (f) => f.def, category: 'debuff' },
+    { key: 'def.basic',     label: () => '防御係数 (通常)',                            get: (f) => f.defByType.basic, category: 'debuff' },
+    { key: 'def.skill',     label: () => '防御係数 (スキル)',                          get: (f) => f.defByType.skill, category: 'debuff' },
+    { key: 'def.ult',       label: () => '防御係数 (必殺)',                            get: (f) => f.defByType.ult, category: 'debuff' },
+    { key: 'def.followup',  label: () => '防御係数 (追撃)',                            get: (f) => f.defByType.followup, category: 'debuff' },
     { key: 'res',           label: () => '耐性係数',                                  get: (f) => f.res, category: 'debuff' },
+    { key: 'res.basic',     label: () => '耐性係数 (通常)',                            get: (f) => f.resByType.basic, category: 'debuff' },
+    { key: 'res.skill',     label: () => '耐性係数 (スキル)',                          get: (f) => f.resByType.skill, category: 'debuff' },
+    { key: 'res.ult',       label: () => '耐性係数 (必殺)',                            get: (f) => f.resByType.ult, category: 'debuff' },
+    { key: 'res.followup',  label: () => '耐性係数 (追撃)',                            get: (f) => f.resByType.followup, category: 'debuff' },
     { key: 'taken',         label: () => '被ダメ係数',                                get: (f) => f.taken, category: 'debuff' },
+    { key: 'taken.basic',    label: () => '被ダメ係数 (通常)',                         get: (f) => f.takenByType.basic, category: 'debuff' },
+    { key: 'taken.skill',    label: () => '被ダメ係数 (スキル)',                       get: (f) => f.takenByType.skill, category: 'debuff' },
+    { key: 'taken.ult',      label: () => '被ダメ係数 (必殺)',                         get: (f) => f.takenByType.ult, category: 'debuff' },
+    { key: 'taken.followup', label: () => '被ダメ係数 (追撃)',                         get: (f) => f.takenByType.followup, category: 'debuff' },
     { key: 'break',         label: () => '撃破係数',                                  get: (f) => f.break, category: 'break' },
     { key: 'fixedDmg',      label: () => '確定ダメージ係数',                          get: (f) => f.fixedDmg, category: 'dmg' },
     { key: 'sepMult',       label: () => '別枠乗算係数',                              get: (f) => f.sepMult, category: 'dmg' },
@@ -2783,7 +2190,7 @@ const TOTAL_ROWS = [
     { key: 'total.followup', label: () => '火力総合 (追撃)',   get: (f) => f.totals.followup, category: 'total' },
 ];
 
-function renderComparison(cmp) {
+function renderComparison(cmp, attacks = []) {
     const f = cmp.factors;
 
     const factorRows = [...COMPARISON_ROWS, ...TOTAL_ROWS];
@@ -2819,6 +2226,7 @@ function renderComparison(cmp) {
 
     return `
         ${renderComparisonFilter()}
+        ${renderAttackTable(attacks)}
         <h3>火力貢献率</h3>
         <table class="dim-result-table">
             <thead><tr><th>項目</th><th title="スナップショット(比較基準)">基準</th><th>現在</th><th>比率</th><th>貢献率</th></tr></thead>
@@ -2994,6 +2402,10 @@ function factorLabel(refStat) { return ({ atk: '攻撃力', hp: 'HP', def: '防�
 function renderCharDetail() {
     const wrap = document.getElementById('dim-char-detail');
     if (!wrap) return;
+    if (!selectedBuildId || !state.build) {
+        wrap.innerHTML = '<p class="dim-panel-hint">保存済みビルドを選択すると、キャラ詳細を表示します。</p>';
+        return;
+    }
     const ch = Registry.character.get(state.build.characterId);
     if (!ch) { wrap.innerHTML = ''; return; }
     const eidolon = state.build.eidolon ?? 0;
@@ -3034,7 +2446,7 @@ function renderSkillsSection(ch) {
             `;
         }
         const curLv = state.build.traceLevel?.[key] || 1;
-        const maxLv = getSkillMaxLevel(ch, key, state.build.eidolon) || 1;
+        const maxLv = getTraceLevelCap(key);
         const mult = getSkillMultAt(skill, curLv);
         const description = skill.description || '';
         const filledDesc = fillSkillTemplate(description, mult);
@@ -3172,13 +2584,24 @@ function formatStatLabel(stat) {
         defPercent: '防御力%', defFlat: '防御力固定',
         spdPercent: '速度%', spdFlat: '速度',
         critRate: '会心率', critDmg: '会心ダメ',
+        critRateBasic: '通常攻撃会心率', critRateSkill: '戦闘スキル会心率',
+        critRateUlt: '必殺会心率', critRateFollowup: '追加攻撃会心率',
+        critDmgBasic: '通常攻撃会心ダメ', critDmgSkill: '戦闘スキル会心ダメ',
+        critDmgUlt: '必殺会心ダメ', critDmgFollowup: '追加攻撃会心ダメ',
         dmgAll: '与ダメ枠', breakEffect: '撃破特効',
         dmgBasic: '通常攻撃ダメ枠', dmgSkill: '戦闘スキルダメ枠',
         dmgUlt: '必殺ダメ枠',       dmgFollowup: '追加攻撃ダメ枠',
         ehr: '効果命中', eres: '効果抵抗',
         energyRegen: 'EP回復',
         resPen: '耐性貫通', defIgnore: '防御無視', defDown: '防御ダウン',
-        dmgTaken: '被ダメ増', healBonus: '治癒量', healTaken: '被治癒量',
+        defIgnoreBasic: '通常攻撃防御無視', defIgnoreSkill: '戦闘スキル防御無視',
+        defIgnoreUlt: '必殺防御無視', defIgnoreFollowup: '追加攻撃防御無視',
+        resPenBasic: '通常攻撃耐性貫通', resPenSkill: '戦闘スキル耐性貫通',
+        resPenUlt: '必殺耐性貫通', resPenFollowup: '追加攻撃耐性貫通',
+        dmgTaken: '被ダメ増',
+        dmgTakenBasic: '通常攻撃被ダメ増', dmgTakenSkill: '戦闘スキル被ダメ増',
+        dmgTakenUlt: '必殺被ダメ増', dmgTakenFollowup: '追加攻撃被ダメ増',
+        healBonus: '治癒量', healTaken: '被治癒量',
         dmgPhysical: '物理ダメ', dmgFire: '炎ダメ', dmgIce: '氷ダメ',
         dmgLightning: '雷ダメ', dmgWind: '風ダメ', dmgQuantum: '量子ダメ', dmgImaginary: '虚数ダメ',
     };

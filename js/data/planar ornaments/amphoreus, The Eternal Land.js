@@ -8,13 +8,18 @@
 //     条件成立 (teammate が記憶の精霊持ち + 召喚済み) はユーザー判断で ON。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Amphoreus, The Eternal Land',
     name: '永遠の地オンパロス',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE, RELIC_USAGE.SUPPORT],
+        attribute: [RELIC_ATTRIBUTE.CRIT_RATE],
+    },
 
     pc2: {
         stats: { [STAT.CRIT_RATE]: 0.08 },

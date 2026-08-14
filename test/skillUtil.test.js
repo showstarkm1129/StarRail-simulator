@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     getSkillMaxLevel, getSkillMaxLevelWithEidolon, getSkillDefaultMaxLevel,
-    getSkillMultAt, clampLevel, presetDefaultMaxLevels, presetEidolonMaxLevels,
+    getSkillMultAt, clampLevel, getTraceLevelCap, getTraceLevelDefault,
+    presetDefaultMaxLevels, presetEidolonMaxLevels, presetTraceLevels,
 } from '../js/build/skillUtil.js';
 import { makeFixtureCharacter } from './fixtures.js';
 
@@ -47,6 +48,21 @@ test('clampLevel は [1, maxLevel] に収める', () => {
     assert.equal(clampLevel(5, 10), 5);
     assert.equal(clampLevel(99, 10), 10);
     assert.equal(clampLevel(5, null), 1);
+});
+
+test('サイト内の軌跡レベル上限と初期値は星魂数に依存しない', () => {
+    assert.equal(getTraceLevelCap('basic'), 7);
+    assert.equal(getTraceLevelCap('memoryTalent'), 7);
+    assert.equal(getTraceLevelCap('skill'), 12);
+    assert.equal(getTraceLevelCap('ult'), 12);
+    assert.equal(getTraceLevelDefault('basic'), 6);
+    assert.equal(getTraceLevelDefault('skill'), 10);
+    assert.deepEqual(presetTraceLevels(ch), {
+        basic: 6,
+        skill: 10,
+        ult: 10,
+        talent: 10,
+    });
 });
 
 test('preset* は全スキルキー分そろう', () => {

@@ -1,3 +1,13 @@
+function escapeSimulatorHtml(value) {
+    return String(value ?? '').replace(/[&<>'"]/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        "'": '&#39;',
+        '"': '&quot;',
+    })[char]);
+}
+
 class Entity {
     constructor(id, name, isEnemy, baseSpd, bonusSpd, maxEP, err, equipment) {
         this.id = id;
@@ -141,23 +151,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const buildLoaderAdd     = document.getElementById('build-loader-add');
     const buildLoaderRefresh = document.getElementById('build-loader-refresh');
 
+    function enhanceBuildLoaderSelect() {
+        window.SRSIM?.UI?.SmartPicker?.enhanceSelect(buildLoaderSelect, {
+            kind: 'build',
+            placeholder: 'ビルド名 / キャラ名で検索',
+            noResultsText: '該当ビルドなし',
+            recentKey: 'srsim.recent.combatBuilds',
+            getOptionMeta(option) {
+                const build = window.SRSIM?.Build?.get(option.value);
+                const ch = build ? window.SRSIM?.Registry?.character.get(build.characterId) : null;
+                return {
+                    label: option.textContent.trim() || option.value || '(未選択)',
+                    subLabel: build?.id || '',
+                    searchText: [option.textContent, option.value, build?.name, ch?.name, ch?.id].join(' '),
+                    chips: ch ? [{ label: ch.name, tone: 'character' }] : [],
+                };
+            },
+        });
+    }
+
     function refreshBuildLoaderList() {
         if (!buildLoaderSelect) return;
         if (!window.SRSIM?.Build) {
             buildLoaderSelect.innerHTML = '<option value="">(SRSIM 未初期化)</option>';
+            enhanceBuildLoaderSelect();
             return;
         }
         const builds = window.SRSIM.Build.list();
         if (!builds.length) {
             buildLoaderSelect.innerHTML = '<option value="">(保存ビルドなし — 限界効用逓減タブで保存してください)</option>';
+            enhanceBuildLoaderSelect();
             return;
         }
         buildLoaderSelect.innerHTML = builds
             .sort((a, b) => (b.meta?.updatedAt || '').localeCompare(a.meta?.updatedAt || ''))
             .map(b => {
                 const ch = window.SRSIM.Registry.character.get(b.characterId);
-                return `<option value="${b.id}">${(b.name || '(無名)')} — ${ch?.name || b.characterId}</option>`;
+                return `<option value="${escapeSimulatorHtml(b.id)}">${escapeSimulatorHtml(b.name || '(無名)')} — ${escapeSimulatorHtml(ch?.name || b.characterId)}</option>`;
             }).join('');
+        enhanceBuildLoaderSelect();
     }
 
     if (buildLoaderRefresh) {
@@ -191,6 +223,108 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 初期表示(モジュール起動を待ってから)
     setTimeout(refreshBuildLoaderList, 0);
+
+    function cloneJson(value) {
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    function serializeCombatEntity(entity) {
+        return {
+            id: entity.id,
+            name: entity.name,
+            isEnemy: entity.isEnemy,
+            isSummon: entity.isSummon,
+            baseSpd: entity.baseSpd,
+            bonusSpd: entity.bonusSpd,
+            maxEP: entity.maxEP,
+            currentEP: entity.currentEP,
+            err: entity.err,
+            equipment: cloneJson(entity.equipment || {}),
+            buffs: cloneJson(entity.buffs || []),
+            actionValue: entity.actionValue,
+            speed: entity.speed,
+            maxHP: entity.maxHP,
+            currentHP: entity.currentHP,
+            marks: cloneJson(entity.marks || {}),
+            resource: cloneJson(entity.resource || null),
+            build: entity.build ? cloneJson(entity.build) : null,
+            setCounts: cloneJson(entity.setCounts || {}),
+        };
+    }
+
+    function restoreCombatEntity(raw) {
+        let entity;
+        if (raw.build && window.SRSIM?.buildToEntity) {
+            entity = window.SRSIM.buildToEntity(raw.build, { id: raw.id });
+        } else {
+            entity = new Entity(
+                raw.id,
+                raw.name || raw.id,
+                Boolean(raw.isEnemy),
+                Number(raw.baseSpd) || 100,
+                Number(raw.bonusSpd) || 0,
+                Number(raw.maxEP) || 0,
+                (Number(raw.err) || 0) * 100,
+                raw.equipment || { lc: 'none', relic1: 'none', relic2: 'none', ornament: 'none' },
+            );
+        }
+        entity.id = raw.id || entity.id;
+        entity.name = raw.name || entity.name;
+        entity.isEnemy = Boolean(raw.isEnemy);
+        entity.isSummon = Boolean(raw.isSummon);
+        entity.currentEP = Number.isFinite(raw.currentEP) ? raw.currentEP : entity.currentEP;
+        entity.maxEP = Number.isFinite(raw.maxEP) ? raw.maxEP : entity.maxEP;
+        entity.maxHP = Number.isFinite(raw.maxHP) ? raw.maxHP : entity.maxHP;
+        entity.currentHP = Number.isFinite(raw.currentHP) ? raw.currentHP : entity.currentHP;
+        entity.buffs = Array.isArray(raw.buffs) ? raw.buffs : [];
+        entity.marks = raw.marks && typeof raw.marks === 'object' ? raw.marks : {};
+        entity.resource = raw.resource || entity.resource;
+        entity.setCounts = raw.setCounts || entity.setCounts || {};
+        entity.calculateSpeed();
+        entity.actionValue = Number.isFinite(raw.actionValue) ? raw.actionValue : entity.actionValue;
+        return entity;
+    }
+
+    function getCombatLocalState() {
+        return {
+            schema: 'srsim.combat.v1',
+            nextId,
+            state: {
+                currentAV: state.currentAV,
+                phase: state.phase,
+                activeEntityId: state.activeEntity?.id || null,
+            },
+            entities: entities.map(serializeCombatEntity),
+        };
+    }
+
+    function applyCombatLocalState(payload) {
+        const source = payload && typeof payload === 'object' && payload.state && payload.entities
+            ? payload
+            : payload?.combat || null;
+        if (!source || !Array.isArray(source.entities)) throw new Error('戦闘シミュJSONではありません。');
+        entities = source.entities.map(restoreCombatEntity);
+        nextId = Math.max(
+            Number(source.nextId) || 1,
+            ...entities.map(entity => {
+                const m = String(entity.id || '').match(/(\d+)$/);
+                return m ? Number(m[1]) + 1 : 1;
+            }),
+        );
+        state.currentAV = Number(source.state?.currentAV) || 0;
+        state.phase = source.state?.phase || 'SETUP';
+        state.activeEntity = entities.find(entity => entity.id === source.state?.activeEntityId) || null;
+        if (state.phase === 'SETUP' || !state.activeEntity) {
+            state.phase = 'SETUP';
+            combatArea.style.display = 'none';
+            combatSetupPanel.style.display = 'block';
+            updateSetupList();
+        } else {
+            combatSetupPanel.style.display = 'none';
+            combatArea.style.display = 'block';
+            window.updateUI();
+        }
+    }
 
     function updateSetupList() {
         charList.innerHTML = '';
@@ -227,10 +361,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ch = window.SRSIM.Registry.character.get(e.build.characterId);
                 const lcName = e.build.lightcone?.id ? mapName(e.build.lightcone.id) : 'なし';
                 detailHtml = `
-                    <strong>${e.name}</strong>
+                    <strong>${escapeSimulatorHtml(e.name)}</strong>
                     <span class="build-tag">ビルド</span>
                     <span style="font-size: 0.85rem; color: var(--text-muted); margin-left: 10px;">
-                        ${ch?.name || ''} | SPD ${d.spd.toFixed(1)} | ATK ${d.atk.toFixed(0)} | HP ${d.hp.toFixed(0)} | CR ${(d.critRate*100).toFixed(1)}% | CD ${(d.critDmg*100).toFixed(1)}% | 円錐:${lcName}
+                        ${escapeSimulatorHtml(ch?.name || '')} | SPD ${d.spd.toFixed(1)} | ATK ${d.atk.toFixed(0)} | HP ${d.hp.toFixed(0)} | CR ${(d.critRate*100).toFixed(1)}% | CD ${(d.critDmg*100).toFixed(1)}% | 円錐:${escapeSimulatorHtml(lcName)}
                     </span>
                 `;
             } else {
@@ -241,16 +375,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const relicName = (r1 === r2) ? (r1 === 'なし' ? 'なし' : `${r1}4`) : `${r1}2+${r2}2`;
                 const ornamentName = mapName(e.equipment.ornament);
                 detailHtml = `
-                    <strong>${e.name}</strong>
+                    <strong>${escapeSimulatorHtml(e.name)}</strong>
                     <span style="font-size: 0.85rem; color: var(--text-muted); margin-left: 10px;">
-                        合計速度:${e.speed.toFixed(1)} | 円錐:${lcName} | 遺物:${relicName} | オーナメント:${ornamentName}
+                        合計速度:${e.speed.toFixed(1)} | 円錐:${escapeSimulatorHtml(lcName)} | 遺物:${escapeSimulatorHtml(relicName)} | オーナメント:${escapeSimulatorHtml(ornamentName)}
                     </span>
                 `;
             }
 
             div.innerHTML = `
                 <div>${detailHtml}</div>
-                <button class="delete-char-btn" data-id="${e.id}" style="background: transparent; border: 1px solid #ff6b6b; color: #ff6b6b; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.backgroundColor='rgba(255,107,107,0.1)'" onmouseout="this.style.backgroundColor='transparent'">削除</button>
+                <button class="delete-char-btn" data-id="${escapeSimulatorHtml(e.id)}" style="background: transparent; border: 1px solid #ff6b6b; color: #ff6b6b; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.backgroundColor='rgba(255,107,107,0.1)'" onmouseout="this.style.backgroundColor='transparent'">削除</button>
             `;
 
             div.querySelector('.delete-char-btn').addEventListener('click', (ev) => {
@@ -261,6 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             charList.appendChild(div);
         });
+        window.SRSIM_LOCAL?.markDirty('combat');
     }
 
     // 戦闘開始
@@ -339,7 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let buffsHtml = entity.buffs.length === 0 ? '<span style="color: var(--text-muted)">なし</span>' : '';
         entity.buffs.forEach(b => {
             const buffName = b.name === 'messenger_spd' ? '速度+12% (メッセンジャー)' : b.name;
-            buffsHtml += `<span class="buff-badge" style="margin-right: 5px; margin-bottom: 5px; display: inline-block;">${buffName} (${b.duration}T)</span>`;
+            buffsHtml += `<span class="buff-badge" style="margin-right: 5px; margin-bottom: 5px; display: inline-block;">${escapeSimulatorHtml(buffName)} (${b.duration}T)</span>`;
         });
 
         // ビルド経由の場合は完全ステ、そうでなければ簡易表示
@@ -370,8 +505,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }).join(' / ') || 'なし';
             equipHtml = `
                 <div class="status-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
-                    <span style="color:var(--text-muted); font-size:0.8rem;">光円錐: ${lcName} (重畳${entity.build.lightcone?.superimpose ?? '-'})</span>
-                    <span style="color:var(--text-muted); font-size:0.8rem;">セット: ${setSummary}</span>
+                    <span style="color:var(--text-muted); font-size:0.8rem;">光円錐: ${escapeSimulatorHtml(lcName)} (重畳${entity.build.lightcone?.superimpose ?? '-'})</span>
+                    <span style="color:var(--text-muted); font-size:0.8rem;">セット: ${escapeSimulatorHtml(setSummary)}</span>
                 </div>
             `;
         } else if (entity.equipment) {
@@ -393,7 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (entity.marks && Object.keys(entity.marks).length > 0) {
             const marksList = Object.entries(entity.marks)
                 .filter(([, m]) => m.count > 0)
-                .map(([, m]) => `<span class="buff-badge" style="margin-right:5px;">${m.displayName} ${m.count}/${m.max}</span>`)
+                .map(([, m]) => `<span class="buff-badge" style="margin-right:5px;">${escapeSimulatorHtml(m.displayName)} ${m.count}/${m.max}</span>`)
                 .join('');
             if (marksList) {
                 marksHtml = `
@@ -408,7 +543,7 @@ document.addEventListener('DOMContentLoaded', () => {
         statusModalBody.innerHTML = `
             ${statsHtml}
             <div class="status-item">
-                <span>${resourceLabel}</span>
+                <span>${escapeSimulatorHtml(resourceLabel)}</span>
                 <strong>${Math.floor(entity.currentEP)} / ${entity.maxEP}</strong>
             </div>
             ${marksHtml}
@@ -462,6 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // UIの描画更新
     window.updateUI = function() {
+        window.SRSIM_LOCAL?.markDirty('combat');
         currentAvDisplay.textContent = state.currentAV.toFixed(1);
         
         // Timeline垂直描画 (AVの昇順)
@@ -475,11 +611,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 div.style.backgroundColor = 'rgba(212, 175, 55, 0.2)';
             }
             div.innerHTML = `
-                <div class="clickable-area" onclick="openStatus('${e.id}')" style="padding: 5px; border-radius: 4px;">
-                    <div>${e.name}</div>
+                <div class="clickable-area" data-action="open-status" data-entity-id="${escapeSimulatorHtml(e.id)}" style="padding: 5px; border-radius: 4px;">
+                    <div>${escapeSimulatorHtml(e.name)}</div>
                     <div class="timeline-av">${e.actionValue.toFixed(1)} AV</div>
                 </div>
             `;
+            div.querySelector('[data-action="open-status"]').addEventListener('click', () => window.openStatus(e.id));
             timeline.appendChild(div);
         });
         
@@ -532,18 +669,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 const div = document.createElement('div');
                 div.className = 'char-hud-item';
                 div.innerHTML = `
-                    <button class="char-ult-btn ${isReady ? 'ready' : ''}" onclick="triggerUlt('${e.id}')" ${!isReady ? 'disabled' : ''}>
+                    <button class="char-ult-btn ${isReady ? 'ready' : ''}" data-action="trigger-ult" data-entity-id="${escapeSimulatorHtml(e.id)}" ${!isReady ? 'disabled' : ''}>
                         必殺技
                     </button>
-                    <div class="clickable-area" onclick="openStatus('${e.id}')" style="padding: 5px; border-radius: 4px; width: 100%; text-align: center;">
-                        <div class="char-name-hud" style="color: ${e.id === actor.id ? 'var(--accent-gold)' : 'white'}; margin: 0 auto;">${e.name}</div>
-                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">${resourceText}</div>
+                    <div class="clickable-area" data-action="open-status" data-entity-id="${escapeSimulatorHtml(e.id)}" style="padding: 5px; border-radius: 4px; width: 100%; text-align: center;">
+                        <div class="char-name-hud" style="color: ${e.id === actor.id ? 'var(--accent-gold)' : 'white'}; margin: 0 auto;">${escapeSimulatorHtml(e.name)}</div>
+                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">${escapeSimulatorHtml(resourceText)}</div>
                         <div class="char-bars" style="margin: 0 auto;">
                             <div class="hp-bar"><div class="hp-fill" style="width: ${hpPercent}%"></div></div>
                             <div class="ep-bar"><div class="ep-fill" style="width: ${epPercent}%"></div></div>
                         </div>
                     </div>
                 `;
+                div.querySelector('[data-action="trigger-ult"]').addEventListener('click', () => window.triggerUlt(e.id));
+                div.querySelector('[data-action="open-status"]').addEventListener('click', () => window.openStatus(e.id));
                 partyHud.appendChild(div);
             });
         }
@@ -771,4 +910,13 @@ document.addEventListener('DOMContentLoaded', () => {
         state.phase = 'ACTION_FINISHED';
         window.updateUI(); 
     }
+
+    window.SRSIM_LOCAL?.registerTab({
+        tab: 'combat',
+        label: '戦闘シミュ',
+        mount: '#tab-combat',
+        schema: 'srsim.combat.v1',
+        getState: getCombatLocalState,
+        applyState: applyCombatLocalState,
+    });
 });

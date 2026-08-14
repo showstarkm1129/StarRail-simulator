@@ -7,14 +7,13 @@
 //   isTestAllEquipment: true
 //   testAllSuperimpose: 1
 
-import { ELEMENT, PATH } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.character.add({
     id: 'testAllS1',
     name: 'テスト全装備 (S1)',
-    element: ELEMENT.PHYSICAL,
-    path: PATH.DESTRUCTION,
+    element: null,
+    path: null,
     rarity: 5,
 
     base: { atk: 1, hp: 1, def: 1, spd: 100 },

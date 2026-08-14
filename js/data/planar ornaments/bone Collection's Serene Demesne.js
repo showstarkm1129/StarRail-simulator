@@ -2,13 +2,18 @@
 //   2pc: 最大HP +12%。最大HPが5,000以上の時、装備キャラと記憶の精霊の会心ダメージ +28%。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Bone Collection\'s Serene Demesne',
     name: '静謐な拾骨地',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.HP, RELIC_ATTRIBUTE.CRIT_DMG],
+    },
 
     pc2: {
         stats: { [STAT.HP_PERCENT]: 0.12 },

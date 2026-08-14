@@ -8,13 +8,18 @@
 //     条件成立はユーザー判断 (focus と teammate が同属性なら ON)。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Penacony, Land of the Dreams',
     name: '夢の地ピノコニー',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.SUPPORT],
+        attribute: [],
+    },
 
     pc2: {
         stats: { [STAT.ENERGY_REGEN]: 0.05 },

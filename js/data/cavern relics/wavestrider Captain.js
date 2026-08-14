@@ -4,13 +4,18 @@
 //        必殺技発動時に2層所持している場合、攻撃力 +48%、1T。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Wavestrider Captain',
     name: '荒海を越える船長',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.CRIT_DMG, RELIC_ATTRIBUTE.ATK],
+    },
 
     pc2: {
         stats: { [STAT.CRIT_DMG]: 0.16 },

@@ -39,9 +39,12 @@ function makeStatsAccumulator() {
                 console.warn('[statComputer] 不正なステ枠キー:', key, 'from', source);
                 return;
             }
-            // 未知の枠キーが来た場合も受け入れる(ただし警告)。
-            // 例: hooks 内で動的に新枠を足す等を許容するため。
-            if (!(key in raw)) raw[key] = 0;
+            // 未知の枠キーは計算結果へ混入させず警告する。
+            // 新しい枠を追加する場合は statKeys.js に定義してから使う。
+            if (!ALL_STAT_KEYS.includes(key)) {
+                console.warn('[statComputer] 未知のステータスキーを無視します:', key, 'from', source);
+                return;
+            }
             
             if (key === STAT.SEP_MULT) {
                 raw[key] = (1 + raw[key]) * (1 + value) - 1;
@@ -202,7 +205,7 @@ function finalize(acc, ctx) {
 
     const derived = {
         atk, hp, def, spd,
-        speedAV: spd > 0 ? 10000 / spd : Infinity,
+        speedAV: spd > 0 ? 10000 / spd : null,
         critRate,
         critDmg,
         critExpected: 1 + Math.min(critRate, 1.0) * critDmg,   // 期待値モード会心係数

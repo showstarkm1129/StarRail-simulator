@@ -11,14 +11,13 @@
 //   isTestAllEquipment: true        — 全装備モード ON
 //   testAllSuperimpose: 1〜5         — 光円錐の重畳 (default 5)
 
-import { ELEMENT, PATH } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.character.add({
     id: 'testAll',
     name: 'テスト全装備',
-    element: ELEMENT.PHYSICAL,
-    path: PATH.DESTRUCTION,
+    element: null,
+    path: null,
     rarity: 5,
 
     base: { atk: 1, hp: 1, def: 1, spd: 100 },

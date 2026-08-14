@@ -5,7 +5,7 @@
 import './sprightly Vonwacq.js';        // 生命のウェンワーク
 import './fleet of the Ageless.js';     // 老いぬ者の仙舟
 import './space Sealing Station.js';     // 宇宙封印ステーション
-import './talia: Kingdom of Banditry.js'; // 盗賊公国タリア
+import './talia - Kingdom of Banditry.js'; // 盗賊公国タリア
 import './pan-Cosmic Commercial Enterprise.js'; // 汎銀河商事会社
 import './celestial Differentiator.js';  // 天体階差機関
 import './belobog of the Architects.js'; // 建創者のベロブルグ
@@ -13,7 +13,7 @@ import './inert Salsotto.js';            // 自転がとまったサルソット
 import './lushaka, the Sunken Seas.js'; // 海に沈んだルサカ
 import './broken Keel.js';              // 折れた竜骨
 import './rutilant Arena.js';            // 星々の競技場
-import './firmament Frontline: Glamoth.js'; // 蒼穹戦線グラモス
+import './firmament Frontline - Glamoth.js'; // 蒼穹戦線グラモス
 import './city of Converging Stars.js';        // 千の星が集う街
 import './penacony, Land of the Dreams.js';    // 夢の地ピノコニー
 import './izumo Gensei and Takama Divine Realm.js'; // 顕世の出雲と高天の神国

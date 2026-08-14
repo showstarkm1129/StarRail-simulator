@@ -7,6 +7,18 @@
 //   - 取得後は freeze 済みで返す(誤改変防止)
 //   - 簡易な Map ラッパ。依存ゼロ。
 
+function deepFreeze(value, seen = new WeakSet()) {
+    if ((typeof value !== 'object' && typeof value !== 'function') || value === null || seen.has(value)) {
+        return value;
+    }
+    seen.add(value);
+    for (const key of Reflect.ownKeys(value)) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (descriptor?.value) deepFreeze(descriptor.value, seen);
+    }
+    return Object.freeze(value);
+}
+
 function makeStore(label) {
     const map = new Map();
     return {
@@ -18,7 +30,7 @@ function makeStore(label) {
             if (map.has(def.id)) {
                 console.warn(`[Registry.${label}] id "${def.id}" は既に登録済みです。上書きします。`);
             }
-            map.set(def.id, Object.freeze(def));
+            if (!map.has(def.id)) map.set(def.id, deepFreeze(def));
         },
         get(id) {
             return map.get(id) || null;

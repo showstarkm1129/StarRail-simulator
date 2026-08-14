@@ -2,13 +2,18 @@
 //   2pc: 会心率 +8%。会心率50%以上の場合、必殺技と追加攻撃の与ダメージ +15%。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Inert Salsotto',
     name: '自転がとまったサルソット',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.CRIT_RATE, RELIC_ATTRIBUTE.FOLLOWUP],
+    },
 
     pc2: {
         stats: { [STAT.CRIT_RATE]: 0.08 },

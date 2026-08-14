@@ -4,13 +4,18 @@
 // 注: 現在 STAT に愉悦専用枠がないため、愉悦 +8% は未反映。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Punklorde Stage Zero',
     name: 'パンクロード・ステージゼロ',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.CRIT_DMG],
+    },
 
     pc2: {
         stats: {},

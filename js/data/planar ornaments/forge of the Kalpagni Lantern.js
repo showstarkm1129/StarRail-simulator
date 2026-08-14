@@ -8,13 +8,18 @@
 //     partyEffects: pc2 は空配列。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Forge of the Kalpagni Lantern',
     name: '劫火と蓮灯の鋳煉宮',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE, RELIC_USAGE.SUPPORT],
+        attribute: [RELIC_ATTRIBUTE.BREAK_EFFECT],
+    },
 
     pc2: {
         stats: { [STAT.SPD_PERCENT]: 0.06 },

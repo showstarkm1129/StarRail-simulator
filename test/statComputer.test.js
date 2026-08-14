@@ -62,6 +62,20 @@ test('compute: contributions に内訳が記録される', () => {
     assert.ok(stats.contributions[STAT.ATK_PERCENT].length >= 2);
 });
 
+test('compute: unknown stat keys are ignored', () => {
+    const originalWarn = console.warn;
+    console.warn = () => {};
+    try {
+        const stats = StatComputer.compute(makeFixtureBuild({
+            envBuffs: [{ stat: 'unknownStatKey', value: 999 }],
+        }));
+        assert.equal(stats.raw.unknownStatKey, undefined);
+        assert.equal(stats.contributions.unknownStatKey, undefined);
+    } finally {
+        console.warn = originalWarn;
+    }
+});
+
 test('compute: 未登録キャラ / characterId 欠落は例外', () => {
     assert.throws(() => StatComputer.compute({}), /characterId/);
     assert.throws(() => StatComputer.compute({ characterId: '__nope__' }), /未登録/);

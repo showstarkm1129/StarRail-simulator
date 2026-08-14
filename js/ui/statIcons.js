@@ -107,7 +107,9 @@ const DIRECT = {
     def: 'def', defBase: 'def', defPercent: 'def', defFlat: 'def',
     spd: 'spd', spdBase: 'spd', spdPercent: 'spd', spdFlat: 'spd',
     critRate: 'crit_rate', crit: 'crit_rate', critExpected: 'crit_rate',
+    critRateBasic: 'crit_rate', critRateSkill: 'crit_rate', critRateUlt: 'crit_rate', critRateFollowup: 'crit_rate',
     critDmg: 'crit_dmg',
+    critDmgBasic: 'crit_dmg', critDmgSkill: 'crit_dmg', critDmgUlt: 'crit_dmg', critDmgFollowup: 'crit_dmg',
     ehr: 'ehr', eres: 'eres',
     breakEffect: 'break', break: 'break',
     energyRegen: 'energy',
@@ -118,8 +120,11 @@ const DIRECT = {
     sepMult: 'sep_mult',
     defDown: 'def_down', defReductionTotal: 'def_down',
     defIgnore: 'def_ignore',
+    defIgnoreBasic: 'def_ignore', defIgnoreSkill: 'def_ignore', defIgnoreUlt: 'def_ignore', defIgnoreFollowup: 'def_ignore',
     resPen: 'res_pen', res: 'res_pen', resDown: 'res_down',
+    resPenBasic: 'res_pen', resPenSkill: 'res_pen', resPenUlt: 'res_pen', resPenFollowup: 'res_pen',
     dmgTaken: 'dmg_taken', taken: 'dmg_taken',
+    dmgTakenBasic: 'dmg_taken', dmgTakenSkill: 'dmg_taken', dmgTakenUlt: 'dmg_taken', dmgTakenFollowup: 'dmg_taken',
     healBonus: 'heal_up', healTaken: 'heal_down',
 };
 
@@ -127,6 +132,10 @@ const DIRECT = {
 function iconIdFor(rawKey) {
     if (!rawKey) return '_fallback';
     const k = String(rawKey);
+    if (k.startsWith('crit.')) return 'crit_rate';
+    if (k.startsWith('def.')) return 'def_ignore';
+    if (k.startsWith('res.')) return 'res_pen';
+    if (k.startsWith('taken.')) return 'dmg_taken';
     if (k.startsWith('dmg.')) return 'dmg';
     if (k.startsWith('total.')) return 'total';
     const el = k.match(/^dmg(Physical|Fire|Ice|Lightning|Wind|Quantum|Imaginary)$/);

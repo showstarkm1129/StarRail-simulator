@@ -1,0 +1,34 @@
+# 開発メモ
+
+- 遺物タブ: 一覧カードの「編集」で作成時の全入力項目をその場で変更できる。編集時もメインと同じサブステ・重複サブステを禁止し、ID・作成日時・取得元は維持する。
+
+- AIアシスタントの共通システムプロンプトは `js/ai/prompts/workspaceSystemPrompt.md`、計算対象別のシステムプロンプトは `js/ai/prompts/diminishingSystemPrompt.md` と `js/ai/prompts/actionOrderSystemPrompt.md` に分離する。統合AI画面では選択中の対象に応じて、その専用プロンプトを共通指示へ合成して渡す。
+- AIへの依頼条件は、毎回の文章入力を避けるためAI画面で選択・記入し、`assumptions` としてサーバーへ渡す。選択肢が未確定の戦闘条件は仮の入力欄だけを用意し、推測で項目を追加しない。
+- 限界効用逓減タブは手動で試す実験場として扱う。AIへは同タブの現在の入力・パーティー・一時バフを渡さず、AI画面で明示選択した保存ビルドだけを参照させる。
+- 行動順AIが光円錐を提案する場合は、候補の光円錐・キャラ双方の運命をデータから取得し、運命一致を必須検証する。未指定の所持/許可光円錐は候補にせず確認する。行動順パネルが数値のみで装備情報を保持しない現状では、プロンプトだけでなくツール出力と提案時の検証で不一致を防ぐ。
+- 光円錐の効果検索は装備可否の根拠にしない。キャラと光円錐の組み合わせごとに `validate_lightcone_assignment` を通し、運命不一致をエラーにする。遠坂凛＋DDDを回帰テストとして固定する。
+- 行動順AIの必殺技回転は `energyEffects` に明示登録したEP供給だけを時系列計算する。説明文の自動読取りで数値を推測しない。敵被弾・撃破・秘技・確率効果は対象外として必ず明示し、追加のEP供給キャラ/光円錐は同スキーマで拡張する。
+- 行動順シミュのユーザー登録クイック追加には、効果名とは別にAI参照用メモを持たせる。メモは利用者の前提として `list_action_order_quick_presets` から読める。パネル保存を選んでAIに相談する場合でもクイック追加は現在のブラウザ登録分を渡す。効果を計算へ入れるときは発動ターン・タイミングを明示して再計算する。
+- AIアシスタントのCLI設定は、選択中の実行プリセットと最後に設定したカスタムのモデルコード・effortを分けて保存し、画面再生成後やプリセット切替後も復元する。
+- 差分候補は保存ビルドの `candidates.items` に `{id,type,label,changes:{build:{...}}}` で保持する共通形式へ移行。旧 `candidates.lightcone` は読み込み・互換出力を維持し、キャラビルド側から星魂・軌跡・光円錐・重畳・遺物メイン・遺物・サブステ設定を登録できる。
+- 限界効用逓減側は保存済みキャラビルドを選択して候補を切り替える構成にし、直接キャラ選択と本人能力・装備効果の手動設定は扱わない。候補は保存ビルド本体から毎回適用・再計算するため、切替を重ねても候補が累積しない。
+- 遺物タブでは保存・セット/部位変更時にサブステ入力を保持し、必要なときだけ明示的なリセットボタンで初期化する。サブステは表示値入力に加えて命中数入力も持たせ、既存の `calcManualAllocation` で値へ変換する。
+- 旧限界効用逓減タブの命中数UIは現行画面から削除済みだったが、`js/build/substatRoller.js` の計算部品は再利用できた。UIを移す際は、遺物単位の再編集用に入力方式・伸び幅・命中数を保存する。
+- Damage preview policy: Eidolons (E1-E6) are excluded from the single-number firepower preview by default. Eidolons often modify or add abilities and cannot be represented reliably as one scalar; handle them as separate qualitative/detail effects rather than forcing a misleading percentage.
+- 2026-08-13 攻撃ダメージ共通化: 単一倍率だけでなく `skill.damageComponents` で複数対象・追加攻撃・外部参照値・条件付き要素を表現する。外部参照値は限界効用逓減タブの `options.referenceValues` から入力し、未成立条件は「条件未適用」として表示する。説明文の文言から参照ステータスを推測する処理は最後のフォールバックに留め、倍率キーを優先する。
+- 2026-08-13 スキル分類: 味方対象への付与や弱点撃破時に別タイミングで発生するダメージは通常攻撃の行へ混ぜず `support` として扱う。強化通常攻撃のように実際に攻撃行へ含めるものだけ、元の通常攻撃に複合要素として登録する。
+- Damage preview audit: the build-tab percentage is the common/base damage ratio; skill-type-only stats (basic/skill/ult/follow-up) are available in the diminishing tab's type breakdown but must not be presented as a universal percentage.
+- Candidate UI policy: saved replacement candidates are grouped by mutually exclusive slot (lightcone, superimpose, eidolon, trace, substats, or each relic slot). The diminishing tab allows one candidate per group and combines selections across groups; the build tab shows the same groups with apply feedback and removal controls.
+- 軌跡レベル入力は星魂数に依存させず、通常攻撃系を Lv7 (初期 Lv6)、その他を Lv12 (初期 Lv10) とする。無凸MAX／凸後MAXの切替UIは設けない。
+- 2026-08-13 UI review: inspect the running screen before changing styles; prioritize clear next actions and information hierarchy across the speed, build, diminishing-return, relic, and AI tabs.
+- 2026-08-13 UI feedback: メインタブの横スクロールは狭い画面用に機能を残しつつ、スクロール範囲がないときにバーが見えないようにする。AIタブは狭い画面でグリッドの最小幅がページ全体を横にはみ出さないよう、bodyの列をminmax(0, 1fr)に固定する。
+- 2026-08-13 UI feedback: In the character build tab, Eidolon and Superimposition should be selected only from their dropdown lists; remove duplicate candidate chip selectors. Final stats should use compact responsive grids and keep HP/DEF visible for HP/DEF-scaling characters.
+- 2026-08-13 リファクタリング調査: 登録データの重複上書き・浅い凍結、未知ステータスの混入、速度下限、無効な必殺技ローテーション、旧保存データ移行時の入力変更、表示値のHTML混入を簡単な防御修正として対応した。候補比較の評価基準、テスト用データの本番登録、保存破損時の復旧、サーバー公開範囲、AIセッションの扱いは方針確認後に対応する。
+- 2026-08-13 UI feedback: Diminishing-return replacement candidates should be shown as a card/tab-like group per item category, with one radio-button choice per group; keep group clear and combined selections.
+- 2026-08-13 UI feedback: Keep the emphasized HP card as the single HP summary in the character build final stats; use compact multi-column set-effect cards and cap long replacement-candidate lists with internal scrolling.
+- 2026-08-13 UI feedback: Keep diminishing-return comparison tables within the result panel at snapshot time, and make character-only party character pickers occupy the available slot width without wrapping out of the card.
+- 2026-08-13 方針確認: 候補表示は共通ダメージだけを使った目安であることをツールチップで示す。保存データ破損時は原文を退避して保存を停止し、確認後の明示リセットで復旧する。サーバーはlocalhost待受を標準とし、LAN公開はSRSIM_HOSTで明示する。簡易パーティー設定には薄い注意書きを添える。testAll系は属性・運命を持たせず通常一覧から隠すが、内部テスト用途では利用可能なままにする。AIはタブ単位のセッション、同一セッションの同時実行制限、期限付き整理を採用する。キャラクターは全員の正確な実装を目標にし、未確認部分は別途監査する。
+- 2026-08-13 キャラクター監査: 登録と基本ビルド計算は全キャラで通るが、攻撃倍率を共通のダメージ行へ解決できない技能が残る。例としてヒアンシー/キャストリスの記憶スキル、黄泉の必殺、千冶・刃の強化通常/強化必殺、不死途・ギルガメッシュ等の固有処理がある。値を推測せず、公式倍率と固有ギミックを確認しながら個別に対応する。
+- 2026-08-14 推定倍率の補完: 既知レベルの末尾だけが欠落しており、共通の倍率系列または同一系列の既存データから推定できる値を補完した。対象は Anaxa / Clara / Dan Heng Permansor Terrae / Gepard / Jiaoqiu / Jing Yuan / Lingsha / Saber / The Herta / Yanqing / Yao Guang。補完値は正式な出典確認前の推定値として扱う。
+- 2026-08-14 倍率補完: ユーザー提示の終点と既存の均等上昇ルールに基づき、Seele のスキル (Lv10 360%)・必殺技 (Lv10 720%)、Black Swan の通常攻撃 (Lv6 100%) を補完した。Seele のスキルは攻撃力倍率として `atk` に統一。Cyrene / Feixiao / Phainon の `maxEnergy` は未確定のため推定しない。Yunli 必殺技はユーザー提供の倍率表で確認済み。
+- 2026-08-14 追加確認: Silver Wolf LV.999 の `maxEnergy` も未確定のため推定しない。testAll / testAllS1 の属性・運命が `null` なのは、通常一覧から目立たせない方針による意図的な値である。

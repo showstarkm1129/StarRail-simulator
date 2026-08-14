@@ -3,13 +3,18 @@
 //   4pc: 追加攻撃のヒットごとに攻撃力 +6%。最大8層、3T。次の追加攻撃で解除。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'The Ashblazing Grand Duke',
     name: '灰燼を燃やし尽くす大公',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.FOLLOWUP, RELIC_ATTRIBUTE.ATK],
+    },
 
     pc2: {
         stats: { [STAT.DMG_FOLLOWUP]: 0.20 },

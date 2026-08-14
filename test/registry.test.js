@@ -22,10 +22,26 @@ test('id を持たない定義は登録されない', () => {
 });
 
 test('取得した定義は freeze されている (誤改変防止)', () => {
-    Registry.relicSet.add({ id: '__reg_test_frozen__', n: 1 });
+    Registry.relicSet.add({ id: '__reg_test_frozen__', n: 1, nested: { value: 2 }, list: [{ value: 3 }] });
     const got = Registry.relicSet.get('__reg_test_frozen__');
     assert.equal(Object.isFrozen(got), true);
+    assert.equal(Object.isFrozen(got.nested), true);
+    assert.equal(Object.isFrozen(got.list[0]), true);
     assert.throws(() => { got.n = 999; }, TypeError);
+    assert.throws(() => { got.nested.value = 999; }, TypeError);
+    assert.throws(() => { got.list[0].value = 999; }, TypeError);
+});
+
+test('duplicate ids keep the first registered definition', () => {
+    const originalWarn = console.warn;
+    console.warn = () => {};
+    try {
+        Registry.ornament.add({ id: '__reg_test_duplicate__', value: 1 });
+        Registry.ornament.add({ id: '__reg_test_duplicate__', value: 2 });
+    } finally {
+        console.warn = originalWarn;
+    }
+    assert.equal(Registry.ornament.get('__reg_test_duplicate__').value, 1);
 });
 
 test('ids() / list() / size() が整合する', () => {

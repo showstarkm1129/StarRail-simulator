@@ -2,13 +2,18 @@
 //   2pc: 効果命中 +10%。現在の効果命中25%分、攻撃力アップ。最大 +25%。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Pan-Cosmic Commercial Enterprise',
     name: '汎銀河商事会社',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.ATK],
+    },
 
     pc2: {
         stats: { [STAT.EFFECT_HIT_RATE]: 0.10 },

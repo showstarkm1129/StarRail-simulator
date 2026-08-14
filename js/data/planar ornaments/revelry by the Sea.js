@@ -2,13 +2,18 @@
 //   2pc: 攻撃力 +12%。攻撃力2,400/3,600以上の場合、持続ダメージ +12%/+24%。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Revelry by the Sea',
     name: '酩酊の海域',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.ATK],
+    },
 
     pc2: {
         stats: { [STAT.ATK_PERCENT]: 0.12 },

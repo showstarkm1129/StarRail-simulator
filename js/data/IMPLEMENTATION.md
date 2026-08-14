@@ -51,7 +51,22 @@
 |---|---|
 | **自分(と自分の召喚物)だけ**に乗る常時ステ | キャラ: `eidolons.<n>.stats` / 装備: 装備者自己枠(`stats` / `pc2.stats`) |
 | **味方全体に配る**常時ステ・オーラ | `partyEffects`(eidolons や自己枠には書かない) |
-| **火力に効かせたい敵デバフ**(`DMG_TAKEN` / `RES_PEN` / `DEF_DOWN` / `DEF_IGNORE`) | ★ `partyEffects`(`target:'all'`)に書く |
+| **火力に効かせたい敵デバフ**(`DMG_TAKEN` / `RES_PEN` / `DEF_DOWN` / `DEF_IGNORE` とその種別別枠) | ★ `partyEffects`(`target:'all'`)に書く |
+
+### 攻撃種類ごとの枠
+
+通常 / 戦闘スキル / 必殺 / 追加攻撃だけに効く補正は、全攻撃へ乗る汎用枠に入れず、種別別キーを使う。
+
+| 種類 | キー例 |
+|---|---|
+| 与ダメージ | `DMG_BASIC` / `DMG_SKILL` / `DMG_ULT` / `DMG_FOLLOWUP` |
+| 会心率 | `CRIT_RATE_BASIC` / `CRIT_RATE_SKILL` / `CRIT_RATE_ULT` / `CRIT_RATE_FOLLOWUP` |
+| 会心ダメージ | `CRIT_DMG_BASIC` / `CRIT_DMG_SKILL` / `CRIT_DMG_ULT` / `CRIT_DMG_FOLLOWUP` |
+| 防御無視 | `DEF_IGNORE_BASIC` / `DEF_IGNORE_SKILL` / `DEF_IGNORE_ULT` / `DEF_IGNORE_FOLLOWUP` |
+| 耐性貫通/耐性Down | `RES_PEN_BASIC` / `RES_PEN_SKILL` / `RES_PEN_ULT` / `RES_PEN_FOLLOWUP` |
+| 被ダメージアップ | `DMG_TAKEN_BASIC` / `DMG_TAKEN_SKILL` / `DMG_TAKEN_ULT` / `DMG_TAKEN_FOLLOWUP` |
+
+例: 「追加攻撃の会心ダメージ+25%」は `CRIT_DMG_FOLLOWUP`、「敵が受ける必殺技ダメージ+15%」は `DMG_TAKEN_ULT`。
 
 ### enemyEffects の位置づけ(重要)
 - **火力計算(限界効用逓減)も戦闘シミュも、現状 `enemyEffects` は読まない**(未配線)。
@@ -60,6 +75,12 @@
 - **火力に効かせたい敵デバフは必ず `partyEffects` にミラーする**。
   `enemyEffects` だけに書くと火力計算に反映されない。
   ミラー漏れは `dataSchema.test.js` の「火力枠デバフは enemyEffects だけに置かない」が検知する。
+
+### キャラクター効果の棚卸し補助
+
+- `npm run audit:characters -- --character robin` で、Wiki説明文から数値化できそうな未登録効果と、現状未対応の能力メモを確認できる。
+- `npm run upsert:character-effect -- --character robin --group selfEffects --effect '{...}'` で、生成キャラファイルの効果をID基準で追加/差し替えできる。
+- 判定ルールは [`characters/effectRules.js`](characters/effectRules.js) に集約する。愉悦度・超撃破・移動速度など、まだ専用形式がないものはここに未対応ルールとして残す。
 
 ---
 

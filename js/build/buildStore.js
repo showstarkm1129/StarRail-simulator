@@ -6,8 +6,15 @@
 // スキーマ更新時はキー自体を v2 にして共存・段階移行する想定。
 // migrate() は内部で1段ずつ schemaVersion を上げる方式に拡張可能。
 
+import { normalizeBuildCandidates } from './buildCandidates.js';
+
 const KEY = 'srsim_builds_v1';
+const CORRUPT_BACKUP_KEY = `${KEY}_corrupt_backup`;
 const SCHEMA = 1;
+// 限界効用逓減タブではパーティー効果を envBuffs へ一時展開する。
+// 保存ビルドは本人の装備・育成情報だけを表すため、ここへは残さない。
+const DIMINISHING_PARTY_BUFF_PREFIX = 'パーティ.';
+const corruptedStorages = new WeakSet();
 
 const SET_ID_ALIASES = Object.freeze({
     // 旧ローマ字/短縮ID → 公式英名ID。保存済みビルドの互換用。
@@ -33,14 +40,46 @@ const SET_ID_ALIASES = Object.freeze({
 // ---- 内部 ---------------------------------------------------------------
 
 function readRaw() {
+    let text = null;
     try {
-        const text = localStorage.getItem(KEY);
+        text = localStorage.getItem(KEY);
         if (!text) return { schemaVersion: SCHEMA, builds: [] };
         const parsed = JSON.parse(text);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !Array.isArray(parsed.builds)) {
+            throw new Error('保存形式に builds 配列がありません');
+        }
         return migrate(parsed);
     } catch (err) {
-        console.warn('[buildStore] localStorage 読み込み失敗。空状態で復帰します。', err);
+        const alreadyCorrupt = corruptedStorages.has(localStorage) || readCorruptBackup() !== null;
+        corruptedStorages.add(localStorage);
+        if (typeof text === 'string' && readCorruptBackup() === null) {
+            try {
+                localStorage.setItem(CORRUPT_BACKUP_KEY, text);
+            } catch (backupError) {
+                console.error('[buildStore] 破損した保存データの退避にも失敗しました。', backupError);
+            }
+        }
+        if (!alreadyCorrupt) {
+            console.warn('[buildStore] localStorage の保存データが壊れています。バックアップを退避し、読み取り専用にします。', err);
+        }
         return { schemaVersion: SCHEMA, builds: [] };
+    }
+}
+
+function readCorruptBackup() {
+    try {
+        return localStorage.getItem(CORRUPT_BACKUP_KEY);
+    } catch {
+        return null;
+    }
+}
+
+function assertStorageWritable() {
+    if (corruptedStorages.has(localStorage) || readCorruptBackup() !== null) {
+        throw Object.assign(
+            new Error('保存データが壊れているため保存を停止しています。退避データを確認してから「保存データをリセット」してください。'),
+            { code: 'BUILD_STORAGE_CORRUPT' },
+        );
     }
 }
 
@@ -57,22 +96,39 @@ function migrate(data) {
     // 将来 v2/v3 への移行ロジックをここに集約
     if (!data || typeof data !== 'object') return { schemaVersion: SCHEMA, builds: [] };
     if (!Array.isArray(data.builds)) data.builds = [];
-    data.builds = data.builds.map(normalizeLegacySetIds);
+    data.builds = data.builds.map(build => normalizeCandidates(stripDiminishingPartyBuffs(normalizeLegacySetIds(build))));
     if (data.schemaVersion === SCHEMA) return data;
     // 未知バージョン → 警告のみ。互換可能な範囲でそのまま使う。
     console.warn(`[buildStore] schemaVersion ${data.schemaVersion} は未知です。現バージョン ${SCHEMA} で扱います。`);
     return { ...data, schemaVersion: SCHEMA };
 }
 
+function stripDiminishingPartyBuffs(build) {
+    if (!build || typeof build !== 'object' || !Array.isArray(build.envBuffs)) return build;
+    return {
+        ...build,
+        envBuffs: build.envBuffs.filter(buff => !(
+            typeof buff?.label === 'string'
+            && buff.label.startsWith(DIMINISHING_PARTY_BUFF_PREFIX)
+        )),
+    };
+}
+
 function normalizeLegacySetIds(build) {
     if (!build || typeof build !== 'object' || !build.relics) return build;
-    for (const relic of Object.values(build.relics)) {
-        if (!relic || typeof relic !== 'object') continue;
-        if (SET_ID_ALIASES[relic.setId]) {
-            relic.setId = SET_ID_ALIASES[relic.setId];
+    const relics = Object.fromEntries(Object.entries(build.relics).map(([slot, relic]) => {
+        if (!relic || typeof relic !== 'object' || !SET_ID_ALIASES[relic.setId]) {
+            return [slot, relic];
         }
-    }
-    return build;
+        return [slot, { ...relic, setId: SET_ID_ALIASES[relic.setId] }];
+    }));
+    return { ...build, relics };
+}
+
+// 差し替え候補を共通形式へ正規化する。
+//   normalizeBuildCandidates は旧 candidates.lightcone も items へ移行する。
+function normalizeCandidates(build) {
+    return normalizeBuildCandidates(build);
 }
 
 function nowIso() {
@@ -86,7 +142,7 @@ function genId() {
 function normalize(build) {
     if (!build) throw new Error('[buildStore] build が空です');
     if (!build.characterId) throw new Error('[buildStore] build.characterId が必要です');
-    build = normalizeLegacySetIds(build);
+    build = normalizeCandidates(stripDiminishingPartyBuffs(normalizeLegacySetIds(build)));
     const meta = build.meta || {};
     return {
         schemaVersion: SCHEMA,
@@ -115,6 +171,7 @@ export const Build = Object.freeze({
 
     save(build) {
         const data = readRaw();
+        assertStorageWritable();
         const norm = normalize(build);
         const idx = data.builds.findIndex(b => b.id === norm.id);
         if (idx >= 0) {
@@ -130,6 +187,7 @@ export const Build = Object.freeze({
 
     delete(id) {
         const data = readRaw();
+        assertStorageWritable();
         const before = data.builds.length;
         data.builds = data.builds.filter(b => b.id !== id);
         writeRaw(data);
@@ -138,6 +196,24 @@ export const Build = Object.freeze({
 
     clear() {
         localStorage.removeItem(KEY);
+        localStorage.removeItem(CORRUPT_BACKUP_KEY);
+        corruptedStorages.delete(localStorage);
+    },
+
+    getStorageStatus() {
+        const backup = readCorruptBackup();
+        const corrupted = corruptedStorages.has(localStorage) || backup !== null;
+        return {
+            ok: !corrupted,
+            corrupted,
+            backupAvailable: backup !== null,
+        };
+    },
+
+    exportCorruptBackup() {
+        const backup = readCorruptBackup();
+        if (backup === null) throw new Error('退避された破損データはありません。');
+        return backup;
     },
 
     // 全ビルドを1つの JSON 文字列として書き出す
@@ -179,6 +255,7 @@ export const Build = Object.freeze({
         }
 
         const data = readRaw();
+        assertStorageWritable();
         if (mode === 'replace') {
             data.builds = incoming.map(normalize);
         } else {
@@ -201,8 +278,9 @@ export const Build = Object.freeze({
             name: '',
             characterId,
             eidolon: 0,
-            traceLevel: { basic: 1, skill: 10, ult: 10, talent: 10 },
+            traceLevel: { basic: 6, skill: 10, ult: 10, talent: 10 },
             lightcone: { id: null, superimpose: 1 },
+            candidates: { lightcone: [] },
             relics: {
                 head:   { setId: null, mainStat: 'hp_flat',   subs: {} },
                 hands:  { setId: null, mainStat: 'atk_flat',  subs: {} },

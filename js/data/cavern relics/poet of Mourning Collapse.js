@@ -3,13 +3,18 @@
 //   4pc: 速度 -8%。戦闘前速度が110/95未満の場合、会心率 +20%/+32%。
 
 import { STAT, ELEMENT_DMG_KEYS } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Poet of Mourning Collapse',
     name: '亡国の悲哀を詠う詩人',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.QUANTUM, RELIC_ATTRIBUTE.CRIT_RATE],
+    },
 
     pc2: {
         stats: { [ELEMENT_DMG_KEYS.quantum]: 0.10 },

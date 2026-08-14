@@ -1,4 +1,4 @@
-// 遺物セット: ナビゲーター・アイシーの見たままに
+// 遺物セット: 星巡るナビゲーター「シケン」
 //   2pc: 攻撃力 +12%
 //   4pc: 戦闘開始時と戦闘スキル発動時にスタックを獲得。
 //        1層につき戦闘スキルと必殺技の与ダメージ +18%、最大3層。
@@ -6,13 +6,18 @@
 // 注: 日本語名は公式表記未確認の仮訳。memo.txt に記録。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'As Navigator Isee Sees It',
-    name: 'ナビゲーター・アイシーの見たままに',
+    name: '星巡るナビゲーター「シケン」',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.ATK],
+    },
 
     pc2: {
         stats: { [STAT.ATK_PERCENT]: 0.12 },

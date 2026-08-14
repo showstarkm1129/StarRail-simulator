@@ -3,13 +3,18 @@
 //   4pc: 敵の持続ダメージ系デバフ1つにつき、防御力を6%無視。最大3つ。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Prisoner in Deep Confinement',
     name: '深い牢獄の囚人',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.ATK],
+    },
 
     pc2: {
         stats: { [STAT.ATK_PERCENT]: 0.12 },

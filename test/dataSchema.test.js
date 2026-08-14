@@ -17,6 +17,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { STAT, ALL_STAT_KEYS } from '../js/build/statKeys.js';
 import { Registry } from '../js/build/registry.js';
+import { getSkillMaxLevel } from '../js/build/skillUtil.js';
 
 import '../js/data/characters/_index.js';
 import '../js/data/lightcones/_index.js';
@@ -33,7 +34,12 @@ const VALID_STAT_KEYS = new Set(ALL_STAT_KEYS);
 // 火力計算 (限界効用逓減) が参照する「敵デバフ枠」。これらが enemyEffects だけにあると
 // 火力に反映されないため、partyEffects にもミラーされている必要がある。
 /** @type {Set<string>} */
-const FIRE_DEBUFF_KEYS = new Set([STAT.DMG_TAKEN, STAT.RES_PEN, STAT.DEF_DOWN, STAT.DEF_IGNORE]);
+const FIRE_DEBUFF_KEYS = new Set([
+    STAT.DMG_TAKEN, STAT.RES_PEN, STAT.DEF_DOWN, STAT.DEF_IGNORE,
+    STAT.DMG_TAKEN_BASIC, STAT.DMG_TAKEN_SKILL, STAT.DMG_TAKEN_ULT, STAT.DMG_TAKEN_FOLLOWUP,
+    STAT.RES_PEN_BASIC, STAT.RES_PEN_SKILL, STAT.RES_PEN_ULT, STAT.RES_PEN_FOLLOWUP,
+    STAT.DEF_IGNORE_BASIC, STAT.DEF_IGNORE_SKILL, STAT.DEF_IGNORE_ULT, STAT.DEF_IGNORE_FOLLOWUP,
+]);
 
 // --- 効果の収集 -------------------------------------------------------------
 // 光円錐は (superimpose) => [] の関数形があるため評価する。重畳は代表値 5 で展開。
@@ -291,6 +297,39 @@ test('キャラの base は atk/hp/def/spd が数値', () => {
                 typeof ch.base?.[f] === 'number',
                 `character:${ch.id} base.${f} が数値でない`
             );
+        }
+    }
+});
+
+test('Lv連動効果が参照する全レベルに倍率データがある', () => {
+    for (const ch of Registry.character.list()) {
+        for (const group of ['partyEffects', 'selfEffects', 'enemyEffects']) {
+            for (const effect of ch[group] || []) {
+                if (!effect.fromLevel) continue;
+                const skill = ch.skills?.[effect.fromLevel];
+                const maxLevel = getSkillMaxLevel(ch, effect.fromLevel, 6);
+                assert.ok(Array.isArray(skill?.levels),
+                    `character:${ch.id} effect:${effect.id} の参照スキル '${effect.fromLevel}' に levels がない`);
+                assert.ok(typeof maxLevel === 'number',
+                    `character:${ch.id} effect:${effect.id} の参照スキル '${effect.fromLevel}' の最大Lvを取得できない`);
+                for (let level = 1; level <= maxLevel; level++) {
+                    assert.ok(skill.levels[level - 1],
+                        `character:${ch.id} effect:${effect.id} が参照する ${effect.fromLevel} Lv${level} の倍率が未設定`);
+                }
+            }
+        }
+    }
+});
+
+test('星魂で到達できる全スキルLvに倍率データがある', () => {
+    for (const ch of Registry.character.list()) {
+        for (const [skillKey, skill] of Object.entries(ch.skills || {})) {
+            if (!Array.isArray(skill.levels)) continue;
+            const maxLevel = getSkillMaxLevel(ch, skillKey, 6);
+            for (let level = 1; level <= maxLevel; level++) {
+                assert.ok(skill.levels[level - 1],
+                    `character:${ch.id} skills.${skillKey} Lv${level} の倍率が未設定`);
+            }
         }
     }
 });

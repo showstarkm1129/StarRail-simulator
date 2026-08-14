@@ -32,5 +32,5 @@ import './poet of Mourning Collapse.js';        // 亡国の悲哀を詠う詩�
 import './wavestrider Captain.js';              // 荒海を越える船長
 import './ever-Glorious Magical Girl.js';       // 永遠に輝く魔法少女
 import './diviner of Distant Reach.js';         // 遠方を占う者
-import './as Navigator Isee Sees It.js';        // ナビゲーター・アイシーの見たままに
+import './as Navigator Isee Sees It.js';        // 星巡るナビゲーター「シケン」
 import './divine-Querying Master Smith.js';     // 神業を探求する名匠

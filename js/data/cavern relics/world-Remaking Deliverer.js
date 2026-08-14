@@ -14,13 +14,18 @@
 //     ほぼ常時取得可能な前提で運用。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'World-Remaking Deliverer',
     name: '天地再創の救世主',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE, RELIC_USAGE.SUPPORT],
+        attribute: [RELIC_ATTRIBUTE.CRIT_RATE, RELIC_ATTRIBUTE.HP],
+    },
 
     pc2: {
         stats: { [STAT.CRIT_RATE]: 0.08 },

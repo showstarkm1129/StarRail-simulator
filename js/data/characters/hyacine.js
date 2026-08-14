@@ -160,6 +160,16 @@ Registry.character.add({
         memorySkill: {
             name: '黒雲退散！',
             type: 'attack', target: 'all',
+            damageComponents: [
+                {
+                    id: 'cumulative-healing',
+                    label: '累計治癒量を参照',
+                    scalingStat: 'reference',
+                    referenceKey: 'cumulativeHealing',
+                    multiplierKey: 'healDmgRatio',
+                    target: 'all',
+                },
+            ],
             element: ELEMENT.WIND,
             spCost: 0, energyGain: 0, toughness: 20, hitSplit: [1.0],
             description: '敵全体に、ヒアンシーとイカルンの本戦闘における累計治癒量のX%分の風属性ダメージを与える。発動後、累計治癒量の50%がクリア (E6で12%)。',

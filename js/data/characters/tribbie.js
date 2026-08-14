@@ -120,6 +120,7 @@ Registry.character.add({
             source: 'extra',
             name: '昇格4 羽の生えたガラス玉！',
             description: '結界が展開されている間、トリビーの最大HPが味方全体の最大HP合計値9%分アップする。',
+            stats: {},
             defaultActive: true,
             target: 'single',
             duration: 2,

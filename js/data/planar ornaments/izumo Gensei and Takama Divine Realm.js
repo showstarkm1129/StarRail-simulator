@@ -2,13 +2,18 @@
 //   2pc: 攻撃力 +12%。同じ運命の味方が他に存在する場合、会心率 +12%。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Izumo Gensei and Takama Divine Realm',
     name: '顕世の出雲と高天の神国',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.ATK, RELIC_ATTRIBUTE.CRIT_RATE],
+    },
 
     pc2: {
         stats: { [STAT.ATK_PERCENT]: 0.12 },

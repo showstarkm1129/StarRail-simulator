@@ -7,13 +7,18 @@
 //     partyEffects に登録、条件成立はユーザー判断 (UI チェックボックス)
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Broken Keel',
     name: '折れた竜骨',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.SURVIVAL, RELIC_USAGE.SUPPORT],
+        attribute: [],
+    },
 
     pc2: {
         stats: { [STAT.EFFECT_RES]: 0.10 },

@@ -56,3 +56,38 @@ export const SLOT_TO_SET_TYPE = Object.freeze({
     [SLOT.SPHERE]: SET_TYPE.PLANAR,
     [SLOT.ROPE]: SET_TYPE.PLANAR,
 });
+
+// 遺物(トンネル遺物・次元界オーナメント)セットの用途ラベル。フィルタ用。
+// セット定義の `tags.usage` に配列で持たせる(複数可)。
+//   - OFFENSE : 装備キャラ自身の火力関連ステータス(属性ダメ/ATK/HP/会心等)を伸ばす
+//   - SURVIVAL: HP/防御力/被ダメ軽減/効果抵抗/バリアなど耐久面が主目的
+//   - SUPPORT : 速度・行動順加速、またはパーティ内の他メンバーの火力/資源を伸ばす
+export const RELIC_USAGE = Object.freeze({
+    OFFENSE: 'offense',
+    SURVIVAL: 'survival',
+    SUPPORT: 'support',
+});
+
+export const RELIC_USAGE_LIST = Object.freeze([
+    RELIC_USAGE.OFFENSE, RELIC_USAGE.SURVIVAL, RELIC_USAGE.SUPPORT,
+]);
+
+// 火力系(RELIC_USAGE.OFFENSE)セットの属性ラベル。どのステで火力を伸ばすかを表す。
+// 属性ダメ系は ELEMENT の値をそのまま使う。tags.attribute は配列(複数可)。
+// OFFENSE を含まないセットには付与しない。
+export const RELIC_ATTRIBUTE = Object.freeze({
+    PHYSICAL: ELEMENT.PHYSICAL,
+    FIRE: ELEMENT.FIRE,
+    ICE: ELEMENT.ICE,
+    LIGHTNING: ELEMENT.LIGHTNING,
+    WIND: ELEMENT.WIND,
+    QUANTUM: ELEMENT.QUANTUM,
+    IMAGINARY: ELEMENT.IMAGINARY,
+    ATK: 'atk',
+    HP: 'hp',
+    CRIT_RATE: 'critRate',
+    CRIT_DMG: 'critDmg',
+    BREAK_EFFECT: 'breakEffect',
+    FOLLOWUP: 'followup',   // 追加攻撃ダメージ系
+    DMG_ALL: 'dmgAll',      // 属性を問わない汎用与ダメージ増加
+});

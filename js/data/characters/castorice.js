@@ -147,6 +147,25 @@ Registry.character.add({
         memorySkill: {
             name: '冥茫裂く爪痕 / 晦冥焼き払う息吹',
             type: 'attack', target: 'all',
+            damageComponents: [
+                {
+                    id: 'claw-castorice-hp',
+                    label: 'キャストリス最大HP（爪痕）',
+                    scalingStat: 'hp',
+                    multiplierKey: 'clawHpPct',
+                    target: 'all',
+                    condition: '爪痕モード',
+                },
+                {
+                    id: 'breath-summon-hp',
+                    label: '死竜最大HP（息吹）',
+                    scalingStat: 'reference',
+                    referenceKey: 'summonHp',
+                    multiplierKey: 'breathHpPct',
+                    target: 'all',
+                    condition: '息吹モード。死竜最大HPを入力',
+                },
+            ],
             element: ELEMENT.QUANTUM,
             spCost: 0, energyGain: 0, toughness: 20, hitSplit: [1.0],
             description: '敵全体にキャストリスの最大HPX%分の量子属性ダメージを与える。または、死竜の最大HP25%分を消費し、敵全体に最大HPY%分の量子属性ダメージを与える（重複発動可能、最大Z%/W%までダメージアップ）。',

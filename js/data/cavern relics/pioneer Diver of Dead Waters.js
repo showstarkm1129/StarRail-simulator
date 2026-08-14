@@ -4,13 +4,18 @@
 //        装備キャラが敵にデバフを付与した後、上記効果が2倍、1T。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Pioneer Diver of Dead Waters',
     name: '死水に潜る先駆者',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.CRIT_RATE, RELIC_ATTRIBUTE.CRIT_DMG, RELIC_ATTRIBUTE.DMG_ALL],
+    },
 
     pc2: {
         stats: {},

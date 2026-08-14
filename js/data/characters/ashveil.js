@@ -88,6 +88,17 @@ Registry.character.add({
             type: 'attack', target: 'single',
             element: ELEMENT.LIGHTNING,
             spCost: 1, energyGain: 30, toughness: 20, hitSplit: [1.0],
+            damageComponents: [
+                {
+                    id: 'skill-main', label: '通常攻撃分',
+                    scalingStat: 'atk', multiplierKey: 'atk', target: 'single',
+                },
+                {
+                    id: 'skill-prey-extra', label: '餌食への追加分',
+                    scalingStat: 'atk', multiplierKey: 'extraAtk', target: 'single',
+                    condition: '対象が餌食状態',
+                },
+            ],
             description: '指定した敵単体を「餌食」にし、不死途の攻撃力X%分の雷属性ダメージを与える。ターゲットが「餌食」の場合、さらに不死途の攻撃力Y%分の雷属性ダメージを与え、SPを1回復する。フィールド上に「餌食」が存在する時、敵全体の防御力-Z%。\nフィールド上に「餌食」が存在しない場合、不死途は即座にフィールド上にいる残りHPが最も低い敵単体を「餌食」にする。「餌食」状態は最後に付与したターゲットにのみ有効。',
             maxLevel: { default: 10, withEidolon: 12 },
             levels: [
@@ -110,6 +121,22 @@ Registry.character.add({
             type: 'attack', target: 'single',
             element: ELEMENT.LIGHTNING,
             energyCost: 150, energyGain: 5, spCost: 0, toughness: 30, hitSplit: [1.0],
+            damageComponents: [
+                {
+                    id: 'ult-main', label: '初回攻撃分',
+                    scalingStat: 'atk', multiplierKey: 'atk', target: 'single',
+                },
+                {
+                    id: 'ult-talent-extra', label: '天賦による追加分',
+                    scalingStat: 'atk', multiplierKey: 'extraAtk', target: 'single',
+                    condition: '餌食への追加攻撃',
+                },
+                {
+                    id: 'ult-gluttony-extra', label: '暴食4層以上の追加分',
+                    scalingStat: 'atk', multiplierKey: 'extraAtk', target: 'single',
+                    condition: '暴食4層以上', conditionKey: 'gluttonyStacks', conditionMin: 4,
+                },
+            ],
             description: '指定した敵単体を「餌食」にし、不死途の攻撃力X%分の雷属性ダメージを与える。その後、「餌食」に対し、即座に強化された天賦による追加攻撃を1回行い、不死途はチャージを3獲得する。この回の強化された天賦による追加攻撃はチャージを消費しない。\nこの時、所持している「暴食」が4層以上である限り、「暴食」を4層消費し、追加で不死途の攻撃力Y%分の雷属性ダメージを1回与える。\nまた、この回の追加攻撃の発動中、ターゲットにHPが0になるダメージを与えた時、所持している「暴食」が4層未満になるまで、不死途は新しく「餌食」となった敵に、引き続きダメージを与える。フィールド上にいるすべての敵がHPが0になる攻撃を受けた後、強化された天賦による追加攻撃は即座に終了する。',
             maxLevel: { default: 10, withEidolon: 12 },
             levels: [

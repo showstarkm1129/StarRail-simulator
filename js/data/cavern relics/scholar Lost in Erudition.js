@@ -3,13 +3,18 @@
 //   4pc: 戦闘スキルおよび必殺技の与ダメージ +20%。必殺技後、次の戦闘スキル与ダメージ +25%。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Scholar Lost in Erudition',
     name: '知識の海に溺れる学者',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.CRIT_RATE],
+    },
 
     pc2: {
         stats: { [STAT.CRIT_RATE]: 0.08 },

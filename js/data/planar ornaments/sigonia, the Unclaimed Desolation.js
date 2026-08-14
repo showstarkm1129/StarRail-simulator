@@ -2,13 +2,18 @@
 //   2pc: 会心率 +4%。敵撃破時、会心ダメージ +4%。最大10層。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Sigonia, the Unclaimed Desolation',
     name: '荒涼の惑星ツガンニヤ',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.CRIT_RATE, RELIC_ATTRIBUTE.CRIT_DMG],
+    },
 
     pc2: {
         stats: { [STAT.CRIT_RATE]: 0.04 },

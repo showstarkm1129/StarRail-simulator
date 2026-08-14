@@ -3,13 +3,18 @@
 //   4pc: 会心率 +6%。追加攻撃を行う時、必殺技ダメージ +36%、1T。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'The Wind-Soaring Valorous',
     name: '風雲を薙ぎ払う勇烈',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.ATK, RELIC_ATTRIBUTE.CRIT_RATE],
+    },
 
     pc2: {
         stats: { [STAT.ATK_PERCENT]: 0.12 },

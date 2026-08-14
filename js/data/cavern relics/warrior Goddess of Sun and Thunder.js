@@ -11,13 +11,18 @@
 //     治癒イベント後の条件付き発動だが、ヒーラー teammate の通常運用ではほぼ常時。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Warrior Goddess of Sun and Thunder',
     name: '烈陽と雷鳴の武神',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.SUPPORT],
+        attribute: [],
+    },
 
     pc2: {
         stats: { [STAT.SPD_PERCENT]: 0.06 },

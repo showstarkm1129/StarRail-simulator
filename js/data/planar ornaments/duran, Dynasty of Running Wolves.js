@@ -3,13 +3,18 @@
 //        1層につき追加攻撃ダメージ +5%。5層時、さらに会心ダメージ +25%。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Duran, Dynasty of Running Wolves',
     name: '奔狼の都藍王朝',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.FOLLOWUP, RELIC_ATTRIBUTE.CRIT_DMG],
+    },
 
     pc2: {
         stats: {},

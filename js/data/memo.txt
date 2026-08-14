@@ -24,7 +24,7 @@ ver4.3時点で追加できた最新セットの目安
 - v4.0以降の一部日本語名は添付資料に公式日本語が無かったため、UI用に仮訳を置いた。
   - Ever-Glorious Magical Girl: 永遠に輝く魔法少女
   - Diviner of Distant Reach: 遠方を占う者
-  - As Navigator Isee Sees It: ナビゲーター・アイシーの見たままに
+  - As Navigator Isee Sees It: 星巡るナビゲーター「シケン」
   - Punklorde Stage Zero: パンクロード・ステージゼロ
 - 愉悦(Elation)専用ステータス枠は未実装。
   - Punklorde Stage Zero の「愉悦+8%」は未反映。

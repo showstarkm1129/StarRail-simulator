@@ -9,13 +9,18 @@
 //     partyEffects: pc2 は空配列。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Giant Tree of Rapt Brooding',
     name: '深慮に浸る巨樹',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.SUPPORT],
+        attribute: [],
+    },
 
     pc2: {
         stats: { [STAT.SPD_PERCENT]: 0.06 },

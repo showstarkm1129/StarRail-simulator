@@ -2,13 +2,18 @@
 //   2pc: 攻撃力 +12%。速度135/160以上で与ダメージ +12%/+18%。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Firmament Frontline: Glamoth',
     name: '蒼穹戦線グラモス',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.ATK, RELIC_ATTRIBUTE.DMG_ALL],
+    },
 
     pc2: {
         stats: { [STAT.ATK_PERCENT]: 0.12 },

@@ -46,13 +46,27 @@ Unconverted numeric clauses:
 - Multiplication: var1 not converted (their next action will be Advanced Forward by (var1)%)
 - Passkey: var1 not converted (additionally regenerates (var1) Energy)
 
-Latest implemented light cones by path (through Version 4.3):
-- Destruction: Thus Burns the Dawn (Version 3.4)
+Latest implemented light cones by path (through Version 4.4):
+- Destruction: I Am As You Behold (Version 4.4)
 - The Hunt: The Finale of a Lie (Version 4.1)
-- Erudition: A Dream Scented in Wheat (Version 3.4)
+- Erudition: A Star That Lights the Night / Flickering Stars (Version 4.4)
 - Harmony: Epoch Etched in Golden Blood (Version 3.5)
 - Nihility: Reforged in Hellfire (Version 4.3)
 - Preservation: Though Worlds Apart (Version 3.6)
 - Abundance: Unto Tomorrow's Morrow (Version 3.4)
 - Remembrance: This Love, Forever (Version 3.7)
 - Elation: Welcome to the Cosmic City (Version 4.2)
+
+Ver.4.4 追加（2026-08-06）
+------------------------
+- A Star That Lights the Night（夜を照らす導きの星、★5・知恵）
+- I Am As You Behold（在るがままの我、★5・壊滅）
+- Flickering Stars（静かに瞬く小さな火、★5・知恵）
+- 既存取りこぼし: The Great Cosmic Enterprise（宇宙一の大商い！、★4・知恵、Ver.3.2）
+- 光円錐はVer.4.4まで追加済み。
+
+未変換・手動切替の項目
+------------------------
+- 夜を照らす導きの星の支援スキルダメージは、専用の火力枠がないため未変換。必殺技ダメージ分のみ「出航」層数として手動切替可能。
+- 在るがままの我の必殺技与ダメージは消費EPに比例するため、最大360EPを消費した場合の値を手動切替用に登録。
+- 静かに瞬く小さな火のSP4消費条件、宇宙一の大商い！の敵弱点数は、実戦条件に応じてUIでON/OFF・層数を選択する。

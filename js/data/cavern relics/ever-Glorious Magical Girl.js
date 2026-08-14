@@ -6,13 +6,18 @@
 // 注: 日本語名は公式表記未確認の仮訳。memo.txt に記録。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Ever-Glorious Magical Girl',
     name: '永遠に輝く魔法少女',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.CRIT_DMG],
+    },
 
     pc2: {
         stats: { [STAT.CRIT_DMG]: 0.16 },

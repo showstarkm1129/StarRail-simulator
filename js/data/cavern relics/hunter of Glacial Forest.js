@@ -3,13 +3,18 @@
 //   4pc: 必殺技を発動した時、会心ダメージ +25%、2T。
 
 import { STAT, ELEMENT_DMG_KEYS } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Hunter of Glacial Forest',
     name: '雪の密林の狩人',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.ICE, RELIC_ATTRIBUTE.CRIT_DMG],
+    },
 
     pc2: {
         stats: { [ELEMENT_DMG_KEYS.ice]: 0.10 },

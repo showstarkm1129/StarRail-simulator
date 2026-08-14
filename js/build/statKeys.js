@@ -31,6 +31,15 @@ export const STAT = Object.freeze({
     // 会心 (会心率はゲーム既定 5%、会心ダメは既定 50% を derived で加算)
     CRIT_RATE: 'critRate',
     CRIT_DMG: 'critDmg',
+    // スキル種別会心枠 (該当スキル種別で攻撃した時のみ加算)
+    CRIT_RATE_BASIC:    'critRateBasic',
+    CRIT_RATE_SKILL:    'critRateSkill',
+    CRIT_RATE_ULT:      'critRateUlt',
+    CRIT_RATE_FOLLOWUP: 'critRateFollowup',
+    CRIT_DMG_BASIC:     'critDmgBasic',
+    CRIT_DMG_SKILL:     'critDmgSkill',
+    CRIT_DMG_ULT:       'critDmgUlt',
+    CRIT_DMG_FOLLOWUP:  'critDmgFollowup',
     // 与ダメ枠
     DMG_ALL: 'dmgAll',                  // 全属性共通
     // スキル種別ダメ枠 (該当スキル種別で攻撃した時のみ加算される独立枠)
@@ -42,10 +51,22 @@ export const STAT = Object.freeze({
     // 防御係数枠
     DEF_DOWN: 'defDown',
     DEF_IGNORE: 'defIgnore',
+    DEF_IGNORE_BASIC:    'defIgnoreBasic',
+    DEF_IGNORE_SKILL:    'defIgnoreSkill',
+    DEF_IGNORE_ULT:      'defIgnoreUlt',
+    DEF_IGNORE_FOLLOWUP: 'defIgnoreFollowup',
     // 属性耐性係数枠
     RES_PEN: 'resPen',
+    RES_PEN_BASIC:    'resPenBasic',
+    RES_PEN_SKILL:    'resPenSkill',
+    RES_PEN_ULT:      'resPenUlt',
+    RES_PEN_FOLLOWUP: 'resPenFollowup',
     // 被ダメ係数枠
     DMG_TAKEN: 'dmgTaken',
+    DMG_TAKEN_BASIC:    'dmgTakenBasic',
+    DMG_TAKEN_SKILL:    'dmgTakenSkill',
+    DMG_TAKEN_ULT:      'dmgTakenUlt',
+    DMG_TAKEN_FOLLOWUP: 'dmgTakenFollowup',
     // 確定ダメージ
     FIXED_DMG: 'fixedDmg',
     // 別枠乗算

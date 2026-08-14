@@ -46,6 +46,22 @@ test('computeDamageFactors: スキル種別 breakdown が共通枠 + 種別枠',
     approx(f.dmgBonusByType.basic, 1.4888); // basic 枠は無いので base と同じ
 });
 
+test('computeDamageFactors: スキル種別の会心/被ダメ枠は該当種別だけに乗る', () => {
+    const build = makeFixtureBuild({
+        envBuffs: [
+            { stat: STAT.CRIT_DMG_FOLLOWUP, value: 0.50, label: 'followup cd+' },
+            { stat: STAT.DMG_TAKEN_FOLLOWUP, value: 0.25, label: 'followup taken+' },
+        ],
+    });
+    const stats = StatComputer.compute(build);
+    const f = Diminishing.computeDamageFactors(stats, { ...Diminishing.DEFAULT_OPTIONS, critMode: 'crit' });
+
+    approx(f.critByType.base, 2.0);
+    approx(f.critByType.followup, 2.5);
+    approx(f.takenByType.base, 1.0);
+    approx(f.takenByType.followup, 1.25);
+});
+
 test('compareBuilds: 会心ダメ追加で crit 枠だけ比率>1、atk 枠は不変', () => {
     const before = makeFixtureBuild();
     const after = Diminishing.addEnvBuff(before, STAT.CRIT_DMG, 0.20, 'CD+');
@@ -74,6 +90,50 @@ test('compareBuilds: info に火力換算しない SPD デルタを情報表示'
     approx(res.info.spdDelta, 12);
     // SPD は火力係数に影響しない
     assert.equal(res.factors.total.ratio, 1);
+});
+
+test('rankCandidates: 貢献率の降順にソートし、計算に失敗した候補は contribution=null で末尾に回す', () => {
+    const before = makeFixtureBuild();
+    const baseStats = StatComputer.compute(before);
+    const candidates = [
+        { id: 'no-change' },
+        { id: 'atk-up' },
+        { id: 'broken', shouldThrow: true },
+    ];
+    const ranked = Diminishing.rankCandidates(baseStats, candidates, candidate => {
+        if (candidate.shouldThrow) throw new Error('boom');
+        const build = candidate.id === 'atk-up'
+            ? Diminishing.addEnvBuff(before, STAT.ATK_PERCENT, 0.50, 'ATK+')
+            : before;
+        return StatComputer.compute(build);
+    });
+
+    assert.equal(ranked.length, 3);
+    assert.equal(ranked[0].id, 'atk-up');
+    assert.ok(ranked[0].contribution > 0);
+    assert.equal(ranked[1].id, 'no-change');
+    approx(ranked[1].contribution, 0);
+    assert.equal(ranked[2].id, 'broken');
+    assert.equal(ranked[2].contribution, null);
+    assert.ok(ranked[2].error instanceof Error);
+});
+
+test('rankCandidates: 星魂候補は火力率を計算しない', () => {
+    const before = makeFixtureBuild();
+    const baseStats = StatComputer.compute(before);
+    let callbackCalled = false;
+    const ranked = Diminishing.rankCandidates(baseStats, [
+        { id: 'e2', type: 'eidolon', changes: { build: { eidolon: 2 } } },
+        { id: 'atk-up' },
+    ], candidate => {
+        callbackCalled = true;
+        return StatComputer.compute(Diminishing.addEnvBuff(before, STAT.ATK_PERCENT, 0.10, candidate.id));
+    });
+
+    const eidolon = ranked.find(item => item.id === 'e2');
+    assert.equal(eidolon.contribution, null);
+    assert.equal(eidolon.excludedReason, 'eidolon');
+    assert.equal(callbackCalled, true);
 });
 
 test('swapRelicMain / setEidolon は存在しないスロット/範囲を安全に扱う', () => {
@@ -131,6 +191,7 @@ test('directStatsToFinalStats: 入力値が最終ステ/各乗算枠にそのま
 test('directStatsToFinalStats: 未指定キーは 0、EP回復は既定100%扱い', () => {
     const stats = Diminishing.directStatsToFinalStats({});
     approx(stats.derived.atk, 0);
+    assert.equal(stats.derived.speedAV, null);
     approx(stats.derived.critRate, 0);                  // 入力 0 → そのまま (基礎は足さない)
     approx(stats.derived.energyRegenPct, 0);
     // raw 側は基礎分を引いた加算値 (CRIT_RATE_BASE=0.05)

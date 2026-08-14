@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
+    "audit:characters": "node scripts/audit-character-effects.mjs",
+    "upsert:character-effect": "node scripts/upsert-character-effect.mjs",
     "check": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

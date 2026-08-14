@@ -3,13 +3,18 @@
 //   4pc: 必殺技を発動した後、自身の行動値を 25% 短縮
 
 import { ELEMENT_DMG_KEYS } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Eagle of Twilight Line',
     name: '昼夜の狭間を翔ける鷹',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE, RELIC_USAGE.SUPPORT],
+        attribute: [RELIC_ATTRIBUTE.WIND],
+    },
 
     pc2: {
         stats: { [ELEMENT_DMG_KEYS.wind]: 0.10 },

@@ -3,13 +3,18 @@
 //   4pc: 攻撃する、または攻撃を受けた後、攻撃力 +5%。最大5層。
 
 import { STAT, ELEMENT_DMG_KEYS } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Champion of Streetwise Boxing',
     name: '成り上がりチャンピオン',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.PHYSICAL, RELIC_ATTRIBUTE.ATK],
+    },
 
     pc2: {
         stats: { [ELEMENT_DMG_KEYS.physical]: 0.10 },

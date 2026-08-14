@@ -54,6 +54,31 @@ export function clampLevel(level, maxLevel) {
     return Math.max(1, Math.min(maxLevel, level || 1));
 }
 
+// サイト内で入力する軌跡レベルの共通仕様。
+// 星魂数とは切り離し、通常攻撃系は Lv7、その他は Lv12 まで許可する。
+export function getTraceLevelCap(skillKey) {
+    const key = String(skillKey || '').toLowerCase();
+    return key.includes('basic') || key.includes('memoryskill') || key.includes('memorytalent')
+        ? 7
+        : 12;
+}
+
+export function getTraceLevelDefault(skillKey) {
+    return getTraceLevelCap(skillKey) === 7 ? 6 : 10;
+}
+
+export function presetTraceLevels(character) {
+    const out = {};
+    for (const key of Object.keys(character?.skills || {})) {
+        const lowerKey = key.toLowerCase();
+        if (lowerKey.includes('basic') || lowerKey.includes('skill')
+            || lowerKey.includes('ult') || lowerKey.includes('talent')) {
+            out[key] = getTraceLevelDefault(key);
+        }
+    }
+    return out;
+}
+
 // すべてのスキルキーで「無凸MAX」を返す { basic, skill, ult, talent }
 export function presetDefaultMaxLevels(character) {
     const out = {};

@@ -4,6 +4,8 @@ import { Registry } from '../../build/registry.js';
 
 Registry.character.add({
     id: 'mortenax_blade',
+    englishName: 'Mortenax Blade',
+    aliases: ['千冶・刃'],
     name: '千冶・刃',
     element: ELEMENT.FIRE,
     path: PATH.NIHILITY,
@@ -57,7 +59,7 @@ Registry.character.add({
         3: {
             name: '彼岸に渡り、忿怒の本相を現さん',
             description: '必殺技のLv.+2、最大Lv.15まで。天賦のLv.+2、最大Lv.15まで。',
-            levelBoost: { ult: 2, talent: 2 }
+            levelBoost: { ult: 2, enhancedUlt: 2, talent: 2 }
         },
         4: {
             name: '遺恨に鍛えられ、剣骨自ずと形を成す',
@@ -66,7 +68,7 @@ Registry.character.add({
         5: {
             name: '己が苦を断ち、死より生を知る',
             description: '戦闘スキルのLv.+2、最大Lv.15まで。通常攻撃のLv.+1、最大Lv.10まで。',
-            levelBoost: { skill: 2, basic: 1 }
+            levelBoost: { skill: 2, basic: 1, enhancedBasic: 1 }
         },
         6: {
             name: '神が殞落するならば、寿瘟を討つと誓わん',
@@ -96,6 +98,16 @@ Registry.character.add({
             ]
         },
         enhancedBasic: {
+            maxLevel: { default: 6, withEidolon: 7 },
+            levels: [
+                { hpPct: 0.50 },
+                { hpPct: 0.60 },
+                { hpPct: 0.70 },
+                { hpPct: 0.80 },
+                { hpPct: 0.90 },
+                { hpPct: 1.00 },
+                { hpPct: 1.10 },
+            ],
             name: '魂魄を断つ鋭刃',
             type: 'attack', 
             target: 'single', 
@@ -114,6 +126,10 @@ Registry.character.add({
             energyGain: 30, 
             toughness: 20, 
             hitSplit: [0.2, 0.2, 0.2, 0.2, 0.2], 
+            damageComponents: [
+                { stat: 'hp', multiplierKey: 'hpPctAll', label: '全体攻撃' },
+                { stat: 'hp', multiplierKey: 'hpPctBounce', hits: 4, label: 'ランダム4ヒット' },
+            ],
             maxLevel: { default: 10, withEidolon: 12 },
             levels: [
                 { hpPctAll: 0.360, hpPctBounce: 0.120 },
@@ -156,6 +172,21 @@ Registry.character.add({
             ]
         },
         enhancedUlt: {
+            maxLevel: { default: 10, withEidolon: 12 },
+            levels: [
+                { hpPct: 2.10 },
+                { hpPct: 2.24 },
+                { hpPct: 2.38 },
+                { hpPct: 2.52 },
+                { hpPct: 2.66 },
+                { hpPct: 2.80 },
+                { hpPct: 2.975 },
+                { hpPct: 3.15 },
+                { hpPct: 3.325 },
+                { hpPct: 3.50 },
+                { hpPct: 3.675 },
+                { hpPct: 3.85 },
+            ],
             name: '千冶は一を鋳り、万劫を燼滅す',
             type: 'attack',
             target: 'all',

@@ -113,7 +113,7 @@ function assertComparisonFinite(label, comparison) {
     };
 
     for (const [key, value] of Object.entries(comparison.factors || {})) {
-        if (key === 'dmgBonusByType' || key === 'totals') {
+        if (key.endsWith('ByType') || key === 'totals') {
             for (const [subKey, row] of Object.entries(value)) {
                 assertRow(`${label}: factors.${key}.${subKey}`, row);
             }

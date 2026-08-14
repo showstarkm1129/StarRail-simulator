@@ -159,6 +159,22 @@ Registry.character.add({
         ult: {
             name: '残夢染める繚乱の一太刀',
             type: 'attack', target: 'all',
+            damageComponents: [
+                {
+                    id: 'ultimate-main-target',
+                    label: '主対象への必殺技合計',
+                    scalingStat: 'atk',
+                    multiplierKey: 'singleMax',
+                    target: 'single',
+                },
+                {
+                    id: 'ultimate-other-targets',
+                    label: 'その他の敵への必殺技合計',
+                    scalingStat: 'atk',
+                    multiplierKey: 'otherMax',
+                    target: 'all',
+                },
+            ],
             element: ELEMENT.LIGHTNING,
             energyCost: 9, // 残夢 9 層消費 (= maxEnergy)
             energyGain: 0, spCost: 0, toughness: 60, hitSplit: [1.0],

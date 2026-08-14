@@ -8,13 +8,18 @@
 //     条件は常に成立 → partyEffects に登録 (デフォルト ON)。target: 'single' (focus指定)
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Lushaka, the Sunken Seas',
     name: '海に沈んだルサカ',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.SUPPORT],
+        attribute: [],
+    },
 
     pc2: {
         stats: { [STAT.ENERGY_REGEN]: 0.05 },

@@ -5,6 +5,9 @@
 node_modules/
 coverage/
 *.tsbuildinfo
+.tmp/
+local/
+*.log
 
 # OS / エディタ系
 .DS_Store

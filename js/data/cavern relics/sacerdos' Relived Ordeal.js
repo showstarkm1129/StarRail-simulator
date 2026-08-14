@@ -13,13 +13,18 @@
 //   - 4pc CD+18% は stackable な partyEffect (target='single' = focus)
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Sacerdos\' Relived Ordeal',
     name: '再び苦難の道を歩む司祭',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.SUPPORT],
+        attribute: [],
+    },
 
     pc2: {
         stats: { [STAT.SPD_PERCENT]: 0.06 },

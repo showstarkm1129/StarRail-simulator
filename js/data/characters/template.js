@@ -6,7 +6,6 @@
 // 条件付きの効果は hooks (onBuildResolved 等) かトリガー型 hook で扱う。
 
 import { ELEMENT, PATH } from '../../build/constants.js';
-import { STAT } from '../../build/statKeys.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.character.add({

@@ -11,13 +11,18 @@
 //     focus が装備 teammate のバリアを受けている前提でON。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Self-Enshrouded Recluse',
     name: '星の光を隠した隠者',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.SURVIVAL, RELIC_USAGE.SUPPORT],
+        attribute: [],
+    },
 
     pc2: {
         stats: {},   // バリア耐久+10% は専用枠未対応のため未反映

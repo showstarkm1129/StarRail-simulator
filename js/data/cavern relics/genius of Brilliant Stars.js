@@ -3,13 +3,18 @@
 //   4pc: 敵にダメージを与えた時、防御力を10%無視。量子弱点がある場合、さらに10%無視。
 
 import { STAT, ELEMENT_DMG_KEYS } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Genius of Brilliant Stars',
     name: '星の如く輝く天才',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE],
+        attribute: [RELIC_ATTRIBUTE.QUANTUM],
+    },
 
     pc2: {
         stats: { [ELEMENT_DMG_KEYS.quantum]: 0.10 },

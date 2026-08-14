@@ -4,13 +4,18 @@
 //        記憶の精霊が攻撃を行う時、装備キャラと記憶の精霊の会心ダメージ +30%、2T。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.relicSet.add({
     id: 'Hero of Triumphant Song',
     name: '凱歌を揚げる英雄',
     type: SET_TYPE.CAVERN,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE, RELIC_USAGE.SUPPORT],
+        attribute: [RELIC_ATTRIBUTE.ATK, RELIC_ATTRIBUTE.CRIT_DMG],
+    },
 
     pc2: {
         stats: { [STAT.ATK_PERCENT]: 0.12 },

@@ -10,13 +10,18 @@
 //     その戦闘中持続 (≒常時扱い) なのでスナップショット計算でON/OFFトグル可。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'City of Converging Stars',
     name: '千の星が集う街',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE, RELIC_USAGE.SUPPORT],
+        attribute: [RELIC_ATTRIBUTE.ATK],
+    },
 
     pc2: {
         stats: {},

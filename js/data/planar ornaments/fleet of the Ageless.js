@@ -8,13 +8,18 @@
 //     description で条件を明示する。
 
 import { STAT } from '../../build/statKeys.js';
-import { SET_TYPE } from '../../build/constants.js';
+import { SET_TYPE, RELIC_USAGE, RELIC_ATTRIBUTE } from '../../build/constants.js';
 import { Registry } from '../../build/registry.js';
 
 Registry.ornament.add({
     id: 'Fleet of the Ageless',
     name: '老いぬ者の仙舟',
     type: SET_TYPE.PLANAR,
+
+    tags: {
+        usage: [RELIC_USAGE.OFFENSE, RELIC_USAGE.SUPPORT],
+        attribute: [RELIC_ATTRIBUTE.HP],
+    },
 
     pc2: {
         stats: { [STAT.HP_PERCENT]: 0.12 },
