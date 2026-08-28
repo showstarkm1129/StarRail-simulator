@@ -24,6 +24,7 @@
 
 import { StatComputer } from './statComputer.js';
 import { STAT, STAT_DEFAULTS, ALL_STAT_KEYS, makeElementDmgKey } from './statKeys.js';
+import { DAMAGE_SCALE, DAMAGE_SCALE_LIST } from './constants.js';
 import { isEidolonCandidate } from './buildCandidates.js';
 
 // ---- デフォルト前提 -----------------------------------------------------
@@ -31,29 +32,54 @@ import { isEidolonCandidate } from './buildCandidates.js';
 /**
  * ダメージ係数算出オプション。
  * @typedef {Object} DamageOptions
- * @property {'atk'|'hp'|'def'|'spd'} refStat   スキル倍率の参照ステータス
+ * @property {'atk'|'hp'|'def'|'spd'} refStat   スキル倍率の参照ステータス (分類指定時は主分類を優先)
+ * @property {'atk'|'hp'|'break'|'elation'|null} damageScale キャラクターの主な火力計算系統
  * @property {number} enemyLevel                防御係数算出用の敵レベル
  * @property {number} enemyBaseRes              属性耐性係数算出用の敵基礎耐性
  * @property {'expected'|'crit'} critMode       期待値 or 確定会心
  * @property {'normal'|'broken'} breakState     靭性残 (0.9) or 撃破中 (1.0)
  * @property {string|null} elementOverride      null なら character.element を使用
+ * @property {Object} referenceValues            スキル固有の参照値
  */
 
 /** @type {DamageOptions} */
 const DEFAULT_OPTIONS = Object.freeze({
-    refStat: 'atk',         // 'atk' | 'hp' | 'def' | 'spd' (どれをスキル倍率の参照に使うか)
+    refStat: 'atk',         // 'atk' | 'hp' | 'def' | 'spd' (手動指定時の参照ステータス)
     enemyLevel: 80,         // 防御係数算出用
     enemyBaseRes: 0,        // 属性耐性係数算出用 (0 = 弱点扱い、0.2 = 非弱点等)
     critMode: 'expected',   // 'expected' | 'crit' (期待値 or 確定会心)
     breakState: 'normal',   // 'normal' (靭性残: 0.9) | 'broken' (撃破中: 1.0)
     elementOverride: null,  // null なら character.element を使う
+    damageScale: null,
     // スキル固有の参照値。未入力値は 0 として扱い、通常攻撃の計算には影響しない。
     referenceValues: Object.freeze({
         cumulativeHealing: 0,
         summonHp: 0,
         gluttonyStacks: 0,
+        elationDegree: 0,
+        elationStacks: 0,
+        elationUplift: 0,
     }),
 });
+
+const ELATION_LEVEL_BASE = 1;
+
+function resolveDamageScale(finalStats, opts) {
+    if (DAMAGE_SCALE_LIST.includes(opts.damageScale)) return opts.damageScale;
+    if (DAMAGE_SCALE_LIST.includes(finalStats?.meta?.damageScale)) {
+        return finalStats.meta.damageScale;
+    }
+    if (opts.refStat === 'hp') return DAMAGE_SCALE.HP;
+    return DAMAGE_SCALE.ATK;
+}
+
+function elationFactor(referenceValues = {}) {
+    const degree = Math.max(0, Number(referenceValues.elationDegree) || 0);
+    const stacks = Math.max(0, Number(referenceValues.elationStacks) || 0);
+    const uplift = Math.max(0, Number(referenceValues.elationUplift) || 0);
+    const tokenFactor = 1 + (5 * stacks) / (240 + stacks);
+    return ELATION_LEVEL_BASE * (1 + degree) * (1 + uplift) * tokenFactor;
+}
 
 // スキル種別 breakdown 用の key 一覧。base = 共通枠のみ。
 const DMG_TYPE_KEYS = ['base', 'basic', 'skill', 'ult', 'followup'];
@@ -193,6 +219,9 @@ function compareStats(beforeStats, afterStats, opts = {}) {
     factors.defByType = makeFactorRows(beforeFactors.defByType, afterFactors.defByType);
     factors.resByType = makeFactorRows(beforeFactors.resByType, afterFactors.resByType);
     factors.takenByType = makeFactorRows(beforeFactors.takenByType, afterFactors.takenByType);
+    factors.damageScale = beforeFactors.damageScale;
+    factors.breakEffect = makeFactor(beforeFactors.breakEffect, afterFactors.breakEffect);
+    factors.elation = makeFactor(beforeFactors.elation, afterFactors.elation);
 
     // 火力総合 (種別別) = atk × critByType[t] × dmgBonusByType[t] × defByType[t]
     //                     × resByType[t] × takenByType[t] × break × fixedDmg × sepMult
@@ -224,7 +253,17 @@ function compareStats(beforeStats, afterStats, opts = {}) {
             defDelta:     afterStats.derived.def - beforeStats.derived.def,
             epRegenDelta: afterStats.derived.energyRegenPct - beforeStats.derived.energyRegenPct,
         },
-        options,
+        options: { ...options, damageScale: beforeFactors.damageScale },
+    };
+}
+
+function makeFactor(before, after) {
+    const ratio = before > 0 ? after / before : 0;
+    return {
+        before,
+        after,
+        ratio,
+        contribution: ratio - 1,
     };
 }
 
@@ -278,9 +317,16 @@ function computeDamageFactors(finalStats, opts = DEFAULT_OPTIONS) {
     const r = finalStats.raw;
     const d = finalStats.derived;
     const element = opts.elementOverride || finalStats.meta.element;
+    const damageScale = resolveDamageScale(finalStats, opts);
+    const isBreakScale = damageScale === DAMAGE_SCALE.BREAK;
+    const isElationScale = damageScale === DAMAGE_SCALE.ELATION;
+    const isHpScale = damageScale === DAMAGE_SCALE.HP;
 
     // ref_stat: スキルの参照ステータス
     const refStatValue = (() => {
+        if (isBreakScale) return 1 + (r[STAT.BREAK_EFFECT] || 0);
+        if (isElationScale) return elationFactor(opts.referenceValues);
+        if (isHpScale) return d.hp;
         switch (opts.refStat) {
             case 'hp':  return d.hp;
             case 'def': return d.def;
@@ -294,6 +340,7 @@ function computeDamageFactors(finalStats, opts = DEFAULT_OPTIONS) {
     const baseCr = STAT_DEFAULTS.CRIT_RATE_BASE + r[STAT.CRIT_RATE];
     const baseCd = STAT_DEFAULTS.CRIT_DMG_BASE  + r[STAT.CRIT_DMG];
     const critFactorForType = (type) => {
+        if (isBreakScale) return 1;
         const cr = baseCr + typeStat(r, 'critRate', type);
         const cd = baseCd + typeStat(r, 'critDmg', type);
         return opts.critMode === 'crit'
@@ -308,14 +355,16 @@ function computeDamageFactors(finalStats, opts = DEFAULT_OPTIONS) {
     //   種別別の dmgBonusByType を別途算出する。
     const elementKey = element ? makeElementDmgKey(element) : null;
     const baseBonus = r[STAT.DMG_ALL] + (elementKey ? (r[elementKey] || 0) : 0);
-    const dmgFactor = 1 + baseBonus;
-    const dmgBonusByType = {
-        base:     1 + baseBonus,
-        basic:    1 + baseBonus + (r[STAT.DMG_BASIC]    || 0),
-        skill:    1 + baseBonus + (r[STAT.DMG_SKILL]    || 0),
-        ult:      1 + baseBonus + (r[STAT.DMG_ULT]      || 0),
-        followup: 1 + baseBonus + (r[STAT.DMG_FOLLOWUP] || 0),
-    };
+    const dmgFactor = isBreakScale || isElationScale ? 1 : 1 + baseBonus;
+    const dmgBonusByType = isBreakScale || isElationScale
+        ? Object.fromEntries(DMG_TYPE_KEYS.map(type => [type, 1]))
+        : {
+            base:     1 + baseBonus,
+            basic:    1 + baseBonus + (r[STAT.DMG_BASIC]    || 0),
+            skill:    1 + baseBonus + (r[STAT.DMG_SKILL]    || 0),
+            ult:      1 + baseBonus + (r[STAT.DMG_ULT]      || 0),
+            followup: 1 + baseBonus + (r[STAT.DMG_FOLLOWUP] || 0),
+        };
 
     // 防御係数 (Lv80固定: 100 / ((20 + 敵Lv) × (1 - 防御Down - 防御無視) + 100))
     const defFactorForType = (type) => {
@@ -342,16 +391,22 @@ function computeDamageFactors(finalStats, opts = DEFAULT_OPTIONS) {
     const takenFactor = takenByType.base;
 
     // 確定ダメージ
-    const fixedDmgFactor = 1 + (r[STAT.FIXED_DMG] || 0);
+    const fixedDmgFactor = isBreakScale || isElationScale ? 1 : 1 + (r[STAT.FIXED_DMG] || 0);
 
     // 別枠乗算
-    const sepMultFactor = 1 + (r[STAT.SEP_MULT] || 0);
+    const sepMultFactor = isBreakScale || isElationScale ? 1 : 1 + (r[STAT.SEP_MULT] || 0);
 
     // 撃破係数 (靭性が残ってるなら 0.9、撃破中なら 1.0)
     const breakFactor = opts.breakState === 'broken' ? 1.0 : 0.9;
 
     return {
-        atk: refStatValue,        // ref_stat そのもの (skill_mult はキャンセルされるので不要)
+        // 既存UIとの互換のためキー名は atk のまま返す。値は分類に応じた
+        // 主係数であり、HP/撃破/愉悦では攻撃力そのものではない。
+        atk: refStatValue,
+        scaling: refStatValue,
+        damageScale,
+        breakEffect: 1 + (r[STAT.BREAK_EFFECT] || 0),
+        elation: isElationScale ? refStatValue : 1,
         crit: critFactor,
         critByType,
         dmgBonus: dmgFactor,      // = dmgBonusByType.base (後方互換)

@@ -2,7 +2,7 @@
 
 import { ELEMENT, PATH } from '../../build/constants.js';
 import { STAT, ELEMENT_DMG_KEYS } from '../../build/statKeys.js';
-import { Registry } from '../../build/registry.js';
+import { addCharacterDefinition } from './_characterRegistry.js';
 
 const SKILL = [
     [0.15, 1.40, 0.70], [0.16, 1.54, 0.77], [0.18, 1.68, 0.84], [0.19, 1.82, 0.91], [0.21, 1.96, 0.98],
@@ -20,7 +20,7 @@ const TALENT = [
     [0.44, 4.40, 6.60, 2.20], [0.48, 4.80, 7.20, 2.40],
 ];
 
-Registry.character.add({
+addCharacterDefinition({
     id: 'gilgamesh',
     name: 'ギルガメッシュ',
     element: ELEMENT.LIGHTNING,

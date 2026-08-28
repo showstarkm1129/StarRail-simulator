@@ -22,6 +22,29 @@
         </nav>
     </header>
 
+    <section id="app-context-bar" class="app-context-bar" aria-label="現在の検証コンテキスト">
+        <div class="app-context-primary">
+            <span class="app-context-eyebrow">検証コンテキスト</span>
+            <strong id="app-context-character" class="app-context-character">未選択</strong>
+            <span id="app-context-build" class="app-context-build">保存ビルド未選択</span>
+        </div>
+        <div class="app-context-facts">
+            <div class="app-context-fact">
+                <span>モード</span>
+                <strong id="app-context-mode">速度・行動回数</strong>
+            </div>
+            <div class="app-context-fact">
+                <span>比較基準</span>
+                <strong id="app-context-baseline">入力値</strong>
+            </div>
+            <div class="app-context-fact">
+                <span>状態</span>
+                <strong id="app-context-save-status" aria-live="polite">保存済み</strong>
+            </div>
+        </div>
+        <button id="app-context-action" class="app-context-action btn-secondary" type="button">キャラビルドを開く →</button>
+    </section>
+
     <main class="app-content">
         <!-- 速度・行動回数タブ -->
         <section id="tab-speed" class="tab-pane active">

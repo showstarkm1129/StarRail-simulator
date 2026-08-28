@@ -20,7 +20,7 @@ import { StatComputer, countSetsByType } from '../build/statComputer.js';
 import { Diminishing } from '../build/diminishing.js';
 import { Build as BuildStore } from '../build/buildStore.js';
 import {
-    ALL_SLOTS, SET_TYPE, ELEMENT_LIST, PATH,
+    ALL_SLOTS, SET_TYPE, ELEMENT_LIST, PATH, DAMAGE_SCALE,
 } from '../build/constants.js';
 import {
     getTraceLevelCap, getSkillMultAt,
@@ -305,6 +305,9 @@ export function initDiminishingUI() {
     recompute();
     // 他タブ (キャラビルド) がビルドを保存・削除した時に一覧を追従させる。
     document.addEventListener('srsim:builds-changed', refreshBuildList);
+    document.addEventListener('srsim:tab-change', event => {
+        if (event.detail?.targetId === 'tab-diminishing') updateSnapshotStatus();
+    });
     window.SRSIM_LOCAL?.registerTab({
         tab: 'diminishing',
         label: '限界効用',
@@ -419,6 +422,7 @@ function renderShell() {
                     <div class="dim-row">
                         <label>参照ステ</label>
                         <select id="dim-opt-ref">
+                            <option value="auto">キャラ分類に合わせる</option>
                             <option value="atk">攻撃力</option>
                             <option value="hp">HP</option>
                             <option value="def">防御力</option>
@@ -454,8 +458,8 @@ function renderShell() {
               </div><!-- /dim-col-left -->
 
               <div class="dim-col-right">
-            <div id="dim-presets" class="dim-presets"></div>
             <div id="dim-result" class="dim-result"></div>
+            <div id="dim-presets" class="dim-presets"></div>
 
             <div id="dim-char-detail" class="dim-char-detail"></div>
               </div><!-- /dim-col-right -->
@@ -478,7 +482,10 @@ function refreshAllForms() {
 // サブステ・遺物メインステの直接入力 UI は削除済み。
 //   遺物(セット/メインステ/サブステ)・光円錐はキャラビルドタブで作成した保存ビルドの読込のみで設定する。
 function fillOptionInputs() {
-    document.getElementById('dim-opt-ref').value = state.options.refStat;
+    const character = Registry.character.get(state.build?.characterId);
+    const isAutoScale = state.options.damageScale === null && character?.damageScale;
+    const refSelect = document.getElementById('dim-opt-ref');
+    if (refSelect) refSelect.value = isAutoScale ? 'auto' : state.options.refStat;
     document.getElementById('dim-opt-crit').value = state.options.critMode;
     document.getElementById('dim-opt-enemy-lv').value = state.options.enemyLevel;
     document.getElementById('dim-opt-enemy-res').value = (state.options.enemyBaseRes * 100);
@@ -487,6 +494,9 @@ function fillOptionInputs() {
 }
 
 const SPECIAL_REFERENCE_META = Object.freeze({
+    elationDegree: { label: '愉悦度', unit: '%', asPercent: true, hint: '愉悦ダメージの愉悦度係数' },
+    elationStacks: { label: '爆笑ネタ / 爆笑の褒美', unit: '層', hint: '愉悦ダメージの飽和係数' },
+    elationUplift: { label: '上笑', unit: '%', asPercent: true, hint: '愉悦ダメージにかかる上笑係数' },
     cumulativeHealing: { label: '本戦闘の累計治癒量', unit: '', hint: 'ヒアンシーの精霊スキル用' },
     summonHp: { label: '召喚物の最大HP', unit: '', hint: 'キャストリスの死竜など。息吹モード用' },
     gluttonyStacks: { label: '暴食の層数', unit: '層', hint: '不死途の条件付き追加攻撃用' },
@@ -495,6 +505,11 @@ const SPECIAL_REFERENCE_META = Object.freeze({
 function specialReferenceKeysForCurrentCharacter() {
     const character = Registry.character.get(state.build?.characterId);
     const keys = new Set();
+    if (character?.damageScale === DAMAGE_SCALE.ELATION) {
+        keys.add('elationDegree');
+        keys.add('elationStacks');
+        keys.add('elationUplift');
+    }
     for (const skill of Object.values(character?.skills || {})) {
         for (const component of skill.damageComponents || []) {
             if (component.referenceKey) keys.add(component.referenceKey);
@@ -520,7 +535,7 @@ function renderSpecialReferenceInputs() {
                 const meta = SPECIAL_REFERENCE_META[key];
                 return `<div class="dim-row">
                     <label>${escapeHtml(meta.label)}</label>
-                    <input type="number" min="0" step="any" data-dim-reference-key="${escapeHtml(key)}" value="${Number(values[key] || 0)}">
+                    <input type="number" min="0" step="any" data-dim-reference-key="${escapeHtml(key)}" value="${meta.asPercent ? Number(values[key] || 0) * 100 : Number(values[key] || 0)}">
                     ${meta.unit ? `<span class="dim-sub-unit">${escapeHtml(meta.unit)}</span>` : ''}
                     <small class="dim-special-ref-hint">${escapeHtml(meta.hint)}</small>
                 </div>`;
@@ -550,7 +565,15 @@ function bindAll() {
 
     // オプション
     document.getElementById('dim-opt-ref').addEventListener('change', e => {
-        state.options.refStat = e.target.value;
+        if (e.target.value === 'auto') {
+            state.options.refStat = 'atk';
+            state.options.damageScale = null;
+        } else {
+            state.options.refStat = e.target.value;
+            // 明示選択時だけキャラクター分類を上書きする。ATK系統を
+            // 選んでも refStat は下の switch で hp/def/spd を反映する。
+            state.options.damageScale = DAMAGE_SCALE.ATK;
+        }
         recompute();
     });
     document.getElementById('dim-opt-crit').addEventListener('change', e => {
@@ -572,9 +595,11 @@ function bindAll() {
     document.getElementById('dim-special-refs').addEventListener('input', e => {
         const key = e.target.dataset.dimReferenceKey;
         if (!key) return;
+        const meta = SPECIAL_REFERENCE_META[key];
+        const rawValue = Math.max(0, parseFloat(e.target.value) || 0);
         state.options.referenceValues = {
             ...(state.options.referenceValues || {}),
-            [key]: Math.max(0, parseFloat(e.target.value) || 0),
+            [key]: meta?.asPercent ? rawValue / 100 : rawValue,
         };
         recompute();
     });
@@ -1638,6 +1663,15 @@ function updateSnapshotStatus() {
         el.textContent = `スナップショット: 保存済み (${label} / 比較中)`;
         el.style.color = 'var(--accent-gold)';
     }
+    const character = state.build?.characterId ? Registry.character.get(state.build.characterId) : null;
+    window.dispatchEvent(new CustomEvent('srsim:context-update', {
+        detail: {
+            character: character?.name || '未選択',
+            build: state.build?.name || '比較対象未選択',
+            status: snap ? 'スナップショット比較中' : '未比較',
+            baseline: snap ? 'スナップショット' : '未設定',
+        },
+    }));
 }
 
 // ---- 計算 + 結果描画 ---------------------------------------------------
@@ -1734,6 +1768,7 @@ function applyRefPreset(preset) {
     if (!preset) return;
     if (preset.refStat) {
         state.options.refStat = preset.refStat;
+        state.options.damageScale = DAMAGE_SCALE.ATK;
         const sel = document.getElementById('dim-opt-ref');
         if (sel) sel.value = preset.refStat;
     }
@@ -2152,7 +2187,7 @@ function bindStatsFilter() {
 // 比較表の全行定義 (rowKey + 表示ラベル + factor 取得関数)
 //   visibleRows フィルタと共有するためトップレベルに定数化
 const COMPARISON_ROWS = [
-    { key: 'atk',           label: (opts) => `参照ステ (${factorLabel(opts.refStat)})`, get: (f) => f.atk, category: 'basic_crit' },
+    { key: 'atk',           label: (opts) => `参照ステ (${factorLabel(opts.refStat, opts.damageScale)})`, get: (f) => f.atk, category: 'basic_crit' },
     { key: 'crit',          label: () => '会心係数',                                  get: (f) => f.crit, category: 'basic_crit' },
     { key: 'crit.basic',    label: () => '会心係数 (通常)',                            get: (f) => f.critByType.basic, category: 'basic_crit' },
     { key: 'crit.skill',    label: () => '会心係数 (スキル)',                          get: (f) => f.critByType.skill, category: 'basic_crit' },
@@ -2298,7 +2333,7 @@ function renderComparisonFilter() {
         const checkboxes = rows.map(r => `
             <label class="dim-filter-item">
                 <input type="checkbox" data-row-key="${r.key}" ${state.visibleRows.has(r.key) ? 'checked' : ''}>
-                <span>${statLabel(r.key, r.label({ refStat: state.options.refStat }))}</span>
+                <span>${statLabel(r.key, r.label(currentLabelOptions()))}</span>
             </label>
         `).join('');
         return `
@@ -2395,7 +2430,18 @@ const renderFactorRow = (row) => `
 function formatFactorValue(v) { return Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(4); }
 function formatContrib(c) { return `${c >= 0 ? '+' : ''}${(c * 100).toFixed(2)}%`; }
 function contribClass(c) { return c > 0 ? 'dim-contrib-pos' : c < 0 ? 'dim-contrib-neg' : 'dim-contrib-zero'; }
-function factorLabel(refStat) { return ({ atk: '攻撃力', hp: 'HP', def: '防御力', spd: '速度' })[refStat] || refStat; }
+function currentLabelOptions() {
+    const character = Registry.character.get(state.build?.characterId);
+    return {
+        refStat: state.options.refStat,
+        damageScale: state.options.damageScale || character?.damageScale,
+    };
+}
+function factorLabel(refStat, damageScale) {
+    if (damageScale === DAMAGE_SCALE.BREAK) return '撃破特効係数';
+    if (damageScale === DAMAGE_SCALE.ELATION) return '愉悦係数';
+    return ({ atk: '攻撃力', hp: 'HP', def: '防御力', spd: '速度' })[refStat] || refStat;
+}
 
 // ---- キャラ詳細パネル(アコーディオン) -------------------------------
 

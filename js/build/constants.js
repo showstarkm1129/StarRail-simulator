@@ -28,6 +28,18 @@ export const PATH = Object.freeze({
     ELATION: 'elation',
 });
 
+// キャラクターの主な火力計算系統。
+// `def` のように、この4系統に直接対応しないキャラクターは、
+// キャラクター分類表側で最も近いビルド系統へ割り当てる。
+export const DAMAGE_SCALE = Object.freeze({
+    ATK: 'atk',
+    HP: 'hp',
+    BREAK: 'break',
+    ELATION: 'elation',
+});
+
+export const DAMAGE_SCALE_LIST = Object.freeze(Object.values(DAMAGE_SCALE));
+
 export const SLOT = Object.freeze({
     HEAD: 'head',
     HANDS: 'hands',

@@ -11,9 +11,9 @@
 //   isTestAllEquipment: true        — 全装備モード ON
 //   testAllSuperimpose: 1〜5         — 光円錐の重畳 (default 5)
 
-import { Registry } from '../../build/registry.js';
+import { addCharacterDefinition } from './_characterRegistry.js';
 
-Registry.character.add({
+addCharacterDefinition({
     id: 'testAll',
     name: 'テスト全装備',
     element: null,

@@ -41,7 +41,7 @@ import {
     applyBuildCandidate,
 } from '../build/buildCandidates.js';
 import { RelicStore } from '../build/relicStore.js';
-import { ALL_SLOTS, SLOT_TO_SET_TYPE, SET_TYPE } from '../build/constants.js';
+import { ALL_SLOTS, DAMAGE_SCALE, SLOT_TO_SET_TYPE, SET_TYPE } from '../build/constants.js';
 import { RELIC_MAIN_OPTIONS, getMainStatDef } from '../build/relicMainTable.js';
 import { STAT } from '../build/statKeys.js';
 import { SUBSTAT_TABLE, SUBSTAT_ORDER, STAT_TO_SUB_KEY } from '../build/substatTable.js';
@@ -79,6 +79,13 @@ const ELEMENT_LABELS = Object.freeze({
 const PATH_LABELS = Object.freeze({
     destruction: '壊滅', hunt: '巡狩', erudition: '知恵', harmony: '調和', nihility: '虚無',
     preservation: '存護', abundance: '豊穣', remembrance: '記憶', elation: '愉悦',
+});
+
+const DAMAGE_SCALE_LABELS = Object.freeze({
+    [DAMAGE_SCALE.ATK]: 'ATKスケール',
+    [DAMAGE_SCALE.HP]: 'HPスケール',
+    [DAMAGE_SCALE.BREAK]: '撃破スケール',
+    [DAMAGE_SCALE.ELATION]: '愉悦スケール',
 });
 
 const SUBS_MODES = Object.freeze([
@@ -138,11 +145,13 @@ const state = {
     baseline: null,
     /** @type {string|null} 遺物ピッカーを開いている部位 */
     pickerSlot: null,
+    /** @type {'pick'|'edit'|null} 遺物ポップオーバーを開いた操作 */
+    pickerAction: null,
     /** @type {any} 仮想遺物エディタの下書き (null = 閉じている) */
     editor: null,
     pickerFilters: { setId: '', mainStat: '', kind: '' },
     /** 火力差分の参照ステ (攻撃力参照キャラ以外は切り替える) */
-    refStat: 'atk',
+    refStat: 'auto',
     showZeroStats: false,
     /** @type {Object<string, boolean>} 遺物メインステの差し替え候補チップを展開中の部位 */
     mainStatCandsOpen: {},
@@ -168,6 +177,9 @@ export function initBuildUI() {
     bindStaticEvents();
     // 他タブ (限界効用逓減 / AI) がビルドを保存・削除した時も一覧を追従させる。
     document.addEventListener('srsim:builds-changed', refreshBuildList);
+    document.addEventListener('srsim:tab-change', event => {
+        if (event.detail?.targetId === 'tab-build') notifyContextBar();
+    });
     refreshAll();
 }
 
@@ -297,23 +309,32 @@ function computeStats(build = state.build) {
 }
 
 function damageOptions() {
-    return { ...Diminishing.DEFAULT_OPTIONS, refStat: state.refStat };
+    const character = Registry.character.get(state.build?.characterId);
+    const damageScale = state.refStat === 'auto'
+        ? (character?.damageScale || null)
+        : DAMAGE_SCALE.ATK;
+    return {
+        ...Diminishing.DEFAULT_OPTIONS,
+        ...(state.refStat === 'auto' ? {} : { refStat: state.refStat }),
+        damageScale,
+    };
 }
 
 // ---- HTML 骨組み -------------------------------------------------------
 
 function renderShell() {
     return `
-        <div class="cb-container">
-            <h2 class="cb-title">キャラビルド</h2>
-            <p class="cb-hint">
-                キャラ・星魂・軌跡レベル・光円錐・遺物を確定させ、ビルドとして保存するタブです。
-                保存したビルドは<b>限界効用逓減</b>タブ・<b>AIアシスタント</b>へ渡せます
-                (バフの ON/OFF と比較はそちらで行います)。
-                <br>遺物は<b>遺物タブの倉庫から装備</b>するのが基本で、セットは装備した遺物で決まります。
-            </p>
+        <div class="cb-container cb-mock-shell">
+            <div class="cb-intro">
+                <div>
+                    <span class="cb-section-kicker">01 — BUILD</span>
+                    <h2 class="cb-title">キャラビルド</h2>
+                    <p class="cb-intro-help">設定は必要なときだけ開き、右側で結果を確認しながら調整します。</p>
+                </div>
+                <span class="cb-intro-status">● 計算可能 / 実データ</span>
+            </div>
 
-            <div class="cb-mgr">
+            <div class="cb-mgr cb-build-toolbar">
                 <label class="cb-lbl">ビルド名</label>
                 <input id="cb-name" type="text" placeholder="例: 花火 速度160">
                 <button id="cb-save" class="btn-primary btn-mini">保存 / 上書き</button>
@@ -338,97 +359,134 @@ function renderShell() {
                 </div>
             </div>
 
-            <div class="cb-cols">
-                <div class="cb-col-left">
-                    <div class="cb-panel">
-                        <h3>キャラクター</h3>
-                        <div id="cb-char-meta" class="cb-char-meta"></div>
-                        <div class="cb-row"><label>キャラ</label><select id="cb-char"></select></div>
-                        <div class="cb-row"><label>星魂</label><select id="cb-eidolon"></select></div>
-                        <button type="button" id="cb-eidolon-cand-add" class="btn-secondary btn-mini">＋ 現在の星魂を差分候補に追加</button>
-                        <h4>軌跡レベル</h4>
-                        <div class="cb-presets">
-                            <button class="btn-secondary btn-mini" id="cb-trace-cand-add">＋ 現在の軌跡を差分候補に追加</button>
+            <div class="cb-workspace">
+                <section class="cb-flow-stack" aria-label="ビルド設定">
+                    <article class="cb-card cb-flow-card">
+                        <span class="cb-section-kicker">01 — BUILD</span>
+                        <h2>ビルド設定</h2>
+                        <p class="cb-section-help">上から順に決めれば、保存・比較まで迷わず進められます。</p>
+
+                        <details class="cb-flow-step" open>
+                            <summary>キャラクター・光円錐 <span id="cb-flow-char-meta" class="cb-summary-meta">基本設定</span></summary>
+                            <div class="cb-step-body">
+                                <div class="cb-field-grid">
+                                    <div class="cb-field cb-field-control">
+                                        <span class="cb-field-label">キャラクター</span>
+                                        <div id="cb-char-meta" class="cb-char-meta"></div>
+                                        <select id="cb-char"></select>
+                                    </div>
+                                    <div class="cb-field cb-field-control">
+                                        <span class="cb-field-label">星魂</span>
+                                        <select id="cb-eidolon"></select>
+                                        <button type="button" id="cb-eidolon-cand-add" class="btn-secondary btn-mini">＋ 星魂を候補登録</button>
+                                    </div>
+                                    <div class="cb-field cb-field-control">
+                                        <span class="cb-field-label">光円錐</span>
+                                        <select id="cb-lc"></select>
+                                        <select id="cb-lc-si"></select>
+                                        <div id="cb-lc-note" class="cb-hint cb-hint-tight"></div>
+                                        <div class="cb-actions cb-actions-inline">
+                                            <button type="button" id="cb-lc-si-cand-add" class="btn-secondary btn-mini">＋ 重畳を候補登録</button>
+                                            <button type="button" id="cb-lc-cand-add" class="btn-secondary btn-mini">＋ 光円錐を候補登録</button>
+                                        </div>
+                                        <div id="cb-lc-cands" class="cb-lc-cands"></div>
+                                    </div>
+                                    <div class="cb-field cb-field-control">
+                                        <span class="cb-field-label">軌跡レベル</span>
+                                        <button class="btn-secondary btn-mini" id="cb-trace-cand-add">＋ 軌跡を候補登録</button>
+                                        <div id="cb-level-grid" class="cb-level-grid"></div>
+                                        <span class="cb-field-label cb-field-label-sub">常時加算</span>
+                                        <div id="cb-trace-bonus" class="cb-trace-bonus"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="cb-flow-step" open>
+                            <summary>遺物・サブステータス <span id="cb-flow-relic-meta" class="cb-summary-meta">6部位 / SPD —</span></summary>
+                            <div class="cb-step-body">
+                                <div class="cb-mode-tabs" id="cb-mode-tabs">
+                                    ${SUBS_MODES.map(m => `
+                                        <button type="button" class="cb-mode-tab" data-cb-mode="${m.mode}">
+                                            ${m.label}${m.badge ? `<span class="cb-badge">${m.badge}</span>` : ''}
+                                        </button>
+                                    `).join('')}
+                                    <span class="cb-spacer"></span>
+                                    <button id="cb-clear-relics" class="btn-secondary btn-mini">全部外す</button>
+                                </div>
+                                <div id="cb-slots" class="cb-slots"></div>
+                                <div id="cb-subs-input" class="cb-subs-input"></div>
+                                <button type="button" id="cb-subs-cand-add" class="btn-secondary btn-mini">＋ サブステ設定を候補登録</button>
+                                <p class="cb-hint cb-hint-tight">
+                                    候補の「共通火力 ±%」は今のビルドと入れ替えた時の差分です。条件付きバフは含まない素の数値で比較します。
+                                </p>
+                            </div>
+                        </details>
+
+                        <details class="cb-flow-step" id="candidate-section" open>
+                            <summary>差分候補 <span id="cb-flow-candidate-meta" class="cb-summary-meta">候補を登録できます</span></summary>
+                            <div class="cb-step-body">
+                                <p class="cb-section-help">候補を選ぶと、このビルドへ反映した状態を右側の結果に即時反映します。</p>
+                                <div id="cb-candidates" class="cb-candidate-list"></div>
+                            </div>
+                        </details>
+
+                        <details class="cb-flow-step">
+                            <summary>パーティ・敵条件 <span class="cb-summary-meta">限界効用逓減で設定</span></summary>
+                            <div class="cb-step-body">
+                                <p class="cb-section-help cb-flow-note">パーティバフ、敵レベル、会心モードは限界効用逓減タブで設定します。ここではビルドの素の数値を素早く調整します。</p>
+                            </div>
+                        </details>
+
+                        <details class="cb-flow-step">
+                            <summary>詳細設定・計算根拠 <span class="cb-summary-meta">必要なときだけ開く</span></summary>
+                            <div class="cb-step-body">
+                                <p class="cb-section-help cb-flow-note">計算式・条件付きバフのON/OFF・攻撃別の比較は、限界効用逓減タブと戦闘シミュタブで確認できます。</p>
+                            </div>
+                        </details>
+                    </article>
+                </section>
+
+                <aside class="cb-result-wrap" id="cb-result-panel" aria-label="現在のビルド結果">
+                    <article class="cb-card cb-result-card">
+                        <div class="cb-result-header">
+                            <div><span class="cb-section-kicker">02 — RESULT</span><h2>現在のビルド結果</h2></div>
+                            <span class="cb-result-state" id="cb-result-state">● 即時反映</span>
                         </div>
-                        <div id="cb-level-grid" class="cb-level-grid"></div>
-                        <h4>軌跡ボーナス (常時加算)</h4>
-                        <div id="cb-trace-bonus" class="cb-trace-bonus"></div>
-                    </div>
-
-                    <div class="cb-panel">
-                        <h3>光円錐</h3>
-                        <div class="cb-row"><label>光円錐</label><select id="cb-lc"></select></div>
-                        <div class="cb-row"><label>重畳</label><select id="cb-lc-si"></select></div>
-                        <button type="button" id="cb-lc-si-cand-add" class="btn-secondary btn-mini">＋ 現在の重畳を差分候補に追加</button>
-                        <div id="cb-lc-note" class="cb-hint cb-hint-tight"></div>
-                        <div class="cb-lc-cand-mgr">
-                            <button type="button" id="cb-lc-cand-add" class="btn-secondary btn-mini">＋ 現在の光円錐を差分候補に追加</button>
-                            <div id="cb-lc-cands"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="cb-col-center">
-                    <div class="cb-panel">
-                        <h3>遺物</h3>
-                        <div class="cb-mode-tabs" id="cb-mode-tabs">
-                            ${SUBS_MODES.map(m => `
-                                <button type="button" class="cb-mode-tab" data-cb-mode="${m.mode}">
-                                    ${m.label}${m.badge ? `<span class="cb-badge">${m.badge}</span>` : ''}
-                                </button>
-                            `).join('')}
-                            <span class="cb-spacer"></span>
-                            <button id="cb-clear-relics" class="btn-secondary btn-mini">全部外す</button>
-                        </div>
-
-                        <div id="cb-slots" class="cb-slots"></div>
-                        <div id="cb-subs-input" class="cb-subs-input"></div>
-                        <button type="button" id="cb-subs-cand-add" class="btn-secondary btn-mini">＋ 現在のサブステ設定を差分候補に追加</button>
-                        <div id="cb-picker" class="cb-picker" style="display:none"></div>
-                        <p class="cb-hint cb-hint-tight">
-                            候補の「共通火力 ±%」は今のビルドと入れ替えた時の差分です (限界効用逓減エンジンで計算)。
-                            条件付きバフは含まない素の数値で比較しています。
-                        </p>
-                    </div>
-                </div>
-
-                <div class="cb-col-right">
-                    <div class="cb-panel">
-                        <h3>最終ステータス <span class="cb-panel-sub">(条件付きバフなし / 保存時との差分)</span></h3>
+                        <p class="cb-result-target">対象: <strong id="cb-result-target">現在のビルド</strong> 条件: <strong>バフなし / 保存時との差分</strong></p>
                         <div id="cb-stats"></div>
                         <label class="cb-check-inline">
                             <input type="checkbox" id="cb-show-zero"> 0 の項目も表示
                         </label>
-                    </div>
-                    <div class="cb-panel">
+                        <div class="cb-result-divider"></div>
                         <h3>有効セット効果</h3>
                         <div id="cb-sets"></div>
-                    </div>
-                    <div class="cb-panel">
-                        <h3>登録済み差分候補</h3>
-                        <p class="cb-hint cb-hint-tight">
-                            登録した候補は項目ごとに整理されます。候補を押すとこのビルドへ反映され、
-                            × で削除できます。保存後は限界効用逓減タブで項目別に組み合わせて比較できます。
-                        </p>
-                        <div id="cb-candidates"></div>
-                    </div>
-                    <div class="cb-panel">
-                        <h3>次のアクション</h3>
-                        <div class="cb-row"><label>参照ステ</label><select id="cb-ref-stat">
+                    </article>
+
+                    <article class="cb-next-action">
+                        <span class="cb-section-kicker">03 — NEXT ACTION</span>
+                        <h3>この結果で次にすること</h3>
+                        <p>比較対象を決めたら保存し、限界効用逓減または戦闘シミュへ送れます。</p>
+                        <div class="cb-row cb-next-ref"><label>参照ステ</label><select id="cb-ref-stat">
+                            <option value="auto">キャラ分類に合わせる</option>
                             <option value="atk">攻撃力</option>
                             <option value="hp">HP</option>
                             <option value="def">防御力</option>
                             <option value="spd">速度</option>
                         </select></div>
-                        <div class="cb-actions">
-                            <button id="cb-send-dim" class="btn-secondary">保存して限界効用逓減タブへ送る</button>
-                            <button id="cb-send-combat" class="btn-secondary">保存して戦闘シミュに追加</button>
+                        <div class="cb-actions cb-actions-inline">
+                            <button id="cb-send-dim" class="btn-primary">保存して比較へ</button>
+                            <button id="cb-send-combat" class="btn-secondary">戦闘シミュへ送る</button>
                         </div>
-                        <p class="cb-hint cb-hint-tight">
-                            参照ステはこのタブの火力差分表示にだけ使います。
-                        </p>
+                        <p class="cb-hint cb-hint-tight">参照ステは候補の火力差分表示にだけ使います。</p>
+                    </article>
+
+                    <div class="cb-stepper" aria-label="検証の進行状況">
+                        <div class="cb-step done">✓ 01<br>ビルド</div>
+                        <div class="cb-step active">● 02<br>比較</div>
+                        <div class="cb-step">03<br>検証</div>
                     </div>
-                </div>
+                </aside>
             </div>
         </div>
     `;
@@ -452,9 +510,13 @@ function refreshAll() {
     renderSubsInput();
     renderPicker();
     renderRightPanel();
+    const refSelect = document.getElementById('cb-ref-stat');
+    if (refSelect) refSelect.value = state.refStat;
     refreshBuildList();
     const nameInput = document.getElementById('cb-name');
     if (nameInput) nameInput.value = state.build.name || '';
+    renderFlowSummary();
+    notifyContextBar();
 }
 
 // 装備・入力が変わった時の軽量な再描画 (select の作り直しはしない)
@@ -465,6 +527,54 @@ function refreshAfterEdit() {
     renderRightPanel();
     renderLightconeCandidates();
     renderRegisteredCandidates();
+    renderFlowSummary();
+    notifyContextBar();
+}
+
+function renderFlowSummary() {
+    if (!state.build) return;
+    const character = Registry.character.get(state.build.characterId);
+    const lightcone = state.build.lightcone?.id ? Registry.lightcone.get(state.build.lightcone.id) : null;
+    const stats = computeStats();
+    const equippedCount = ALL_SLOTS.filter(slot => (
+        state.build.relicIds?.[slot] || state.build.relics?.[slot]?.setId
+    )).length;
+    const candidates = getBuildCandidates(state.build);
+
+    const charMeta = document.getElementById('cb-flow-char-meta');
+    if (charMeta) {
+        const lcText = lightcone ? `${lightcone.name || state.build.lightcone.id} S${state.build.lightcone.superimpose || 1}` : '光円錐なし';
+        charMeta.textContent = `${character?.name || state.build.characterId} / ${lcText}`;
+    }
+    const relicMeta = document.getElementById('cb-flow-relic-meta');
+    if (relicMeta) relicMeta.textContent = `${equippedCount}/6部位 / SPD ${stats ? formatByKind(stats.derived.spd, 'num1') : '—'}`;
+    const candidateMeta = document.getElementById('cb-flow-candidate-meta');
+    if (candidateMeta) {
+        candidateMeta.textContent = state.activeCandidateId
+            ? `${candidates.length}件 / 1件を選択中`
+            : candidates.length ? `${candidates.length}件を登録済み` : '候補を登録できます';
+    }
+}
+
+function notifyContextBar() {
+    if (!state.build) return;
+    const character = Registry.character.get(state.build.characterId);
+    const resultState = document.getElementById('cb-result-state');
+    if (resultState) {
+        resultState.textContent = state.activeCandidateId
+            ? '● 候補を比較中'
+            : state.baseline ? '● 基準値' : '● 即時反映';
+    }
+    const resultTarget = document.getElementById('cb-result-target');
+    if (resultTarget) resultTarget.textContent = `${character?.name || state.build.characterId} / ${state.build.name || '新規ビルド'}`;
+    window.dispatchEvent(new CustomEvent('srsim:context-update', {
+        detail: {
+            character: character?.name || state.build.characterId || '未選択',
+            build: state.build.name?.trim() || (state.savedId ? '保存ビルドを編集中' : '新規ビルド'),
+            status: state.savedId ? '保存済み / 編集中' : '未保存の変更',
+            baseline: state.baseline ? '保存時' : '比較基準なし',
+        },
+    }));
 }
 
 // ---- キャラ / 光円錐 ---------------------------------------------------
@@ -559,6 +669,7 @@ function renderCharacterMeta() {
         <span class="cb-chip">★${ch.rarity || '?'}</span>
         <span class="cb-chip">基礎速度 ${ch.base?.spd ?? '?'}</span>
     `;
+    wrap.insertAdjacentHTML('beforeend', `<span class="cb-chip">${escapeHtml(DAMAGE_SCALE_LABELS[ch.damageScale] || 'ATKスケール')}</span>`);
 }
 
 function renderLevelGrid() {
@@ -888,8 +999,14 @@ function renderSlots() {
                         `).join('')}
                 </div>
                 <div class="cb-slot-acts">
-                    <button class="btn-secondary btn-mini" data-cb-pick="${slot}">倉庫から選ぶ</button>
-                    <button class="btn-secondary btn-mini" data-cb-edit="${slot}">数値を編集</button>
+                    <span class="cb-slot-action-anchor">
+                        <button class="btn-secondary btn-mini" data-cb-pick="${slot}">倉庫から選ぶ</button>
+                        <div class="cb-picker cb-slot-popover" data-cb-picker-slot="${slot}" data-cb-picker-action="pick" hidden></div>
+                    </span>
+                    <span class="cb-slot-action-anchor">
+                        <button class="btn-secondary btn-mini" data-cb-edit="${slot}">数値を編集</button>
+                        <div class="cb-picker cb-slot-popover" data-cb-picker-slot="${slot}" data-cb-picker-action="edit" hidden></div>
+                    </span>
                     <button class="btn-secondary btn-mini" data-cb-main-cand-add="${slot}">＋ メインステを候補登録</button>
                     <button class="btn-secondary btn-mini" data-cb-relic-cand-add="${slot}">＋ この遺物を候補登録</button>
                     <button class="btn-secondary btn-mini" data-cb-unequip="${slot}">外す</button>
@@ -1061,6 +1178,7 @@ function updateRollResultCells() {
 
 function openPicker(slot) {
     state.pickerSlot = slot;
+    state.pickerAction = 'pick';
     state.editor = null;
     state.pickerFilters = { setId: '', mainStat: '', kind: '' };
     renderSlots();
@@ -1069,6 +1187,7 @@ function openPicker(slot) {
 
 function closePicker() {
     state.pickerSlot = null;
+    state.pickerAction = null;
     state.editor = null;
     renderSlots();
     renderPicker();
@@ -1093,14 +1212,11 @@ function buildWithRelic(slot, relic) {
 }
 
 function renderPicker() {
-    const wrap = document.getElementById('cb-picker');
+    if (!state.pickerSlot) return;
+    const action = state.pickerAction || 'pick';
+    const wrap = document.querySelector(`[data-cb-picker-slot="${state.pickerSlot}"][data-cb-picker-action="${action}"]`);
     if (!wrap) return;
-    if (!state.pickerSlot) {
-        wrap.style.display = 'none';
-        wrap.innerHTML = '';
-        return;
-    }
-    wrap.style.display = '';
+    wrap.hidden = false;
 
     if (state.editor) {
         renderEditor(wrap);
@@ -1254,6 +1370,7 @@ function openEditor(slot, { blank = false } = {}) {
     while (entries.length < 4) entries.push(['', 0]);
 
     state.pickerSlot = slot;
+    state.pickerAction = 'edit';
     state.editor = {
         slot,
         // 実物 (owned) を編集する場合は複製 = 新規仮想遺物として保存する
@@ -1390,6 +1507,7 @@ function saveEditor({ toStore }) {
         state.build.relicIds[slot] = null;
         state.editor = null;
         state.pickerSlot = null;
+        state.pickerAction = null;
         refreshAfterEdit();
         setStatus('この部位に反映しました (倉庫には保存していません)。');
         return;
@@ -1413,6 +1531,7 @@ function saveEditor({ toStore }) {
         state.editor = null;
         equipRelic(slot, result.relic.id);
         state.pickerSlot = null;
+        state.pickerAction = null;
         renderPicker();
         setStatus(result.duplicate
             ? '同じ性能の遺物が既にあったので、そちらを装備しました。'
@@ -1593,6 +1712,7 @@ function loadBuild(id) {
     state.savedId = build.id;
     state.activeCandidateId = null;
     state.pickerSlot = null;
+    state.pickerAction = null;
     state.editor = null;
     state.baseline = computeStats();
     refreshAll();
@@ -1603,6 +1723,7 @@ function bindStaticEvents() {
     document.getElementById('cb-char')?.addEventListener('change', event => {
         const characterId = event.target.value;
         state.build.characterId = characterId;
+        state.refStat = 'auto';
         state.build.traceLevel = presetTraceLevels(Registry.character.get(characterId));
         state.build.lightcone = signatureLightconeForCharacter(characterId) || { id: null, superimpose: 1 };
         refreshAll();
@@ -1686,6 +1807,7 @@ function bindStaticEvents() {
             state.build.relicIds[slot] = null;
         }
         state.pickerSlot = null;
+        state.pickerAction = null;
         state.editor = null;
         refreshAfterEdit();
     });
@@ -1706,6 +1828,7 @@ function bindStaticEvents() {
         state.baseline = null;
         state.activeCandidateId = null;
         state.pickerSlot = null;
+        state.pickerAction = null;
         state.editor = null;
         refreshAll();
         setStatus('新規ビルドを作りました。');
@@ -1812,6 +1935,7 @@ function setStatus(message, isError = false) {
     if (!el) return;
     el.textContent = message;
     el.classList.toggle('is-error', isError);
+    notifyContextBar();
 }
 
 function selectValue(id) {

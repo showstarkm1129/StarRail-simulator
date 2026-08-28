@@ -13,9 +13,9 @@
 
 import { ELEMENT, PATH } from '../../build/constants.js';
 import { STAT } from '../../build/statKeys.js';
-import { Registry } from '../../build/registry.js';
+import { addCharacterDefinition } from './_characterRegistry.js';
 
-Registry.character.add({
+addCharacterDefinition({
     id: 'evernight',
     name: '長夜月',
     element: ELEMENT.ICE,

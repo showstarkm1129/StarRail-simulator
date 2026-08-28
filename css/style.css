@@ -4157,7 +4157,6 @@ body:has(#tab-ai.active) {
 .cb-warn-tight { margin: 0.15rem 0 0; }
 .cb-spacer { flex: 1; }
 .cb-lbl { color: var(--text-muted); font-size: 0.78rem; white-space: nowrap; }
-.cb-panel-sub { font-size: 0.7rem; color: var(--text-muted); font-weight: 400; }
 
 /* --- ビルド管理バー --- */
 .cb-mgr {
@@ -4189,32 +4188,6 @@ body:has(#tab-ai.active) {
     resize: vertical;
 }
 
-/* --- 3カラム --- */
-.cb-cols {
-    display: grid;
-    grid-template-columns: 250px minmax(0, 1fr) 320px;
-    gap: 0.8rem;
-    align-items: start;
-}
-/* grid の子は既定で min-width:auto のため、中身の長い行がカラムを押し広げてしまう。 */
-.cb-cols > div { min-width: 0; }
-.cb-col-right {
-    position: sticky;
-    top: 0.6rem;
-    max-height: calc(100vh - 1.2rem);
-    overflow-y: auto;
-}
-.cb-panel {
-    background-color: var(--bg-panel);
-    border: 1px solid var(--border-color);
-    border-radius: 7px;
-    padding: 0.7rem 0.75rem;
-}
-.cb-panel + .cb-panel { margin-top: 0.8rem; }
-.cb-panel h3 { font-size: 0.88rem; color: var(--accent-gold); margin-bottom: 0.5rem; }
-.cb-panel h4 { font-size: 0.76rem; color: var(--text-muted); margin: 0.65rem 0 0.3rem; }
-.cb-panel h5 { font-size: 0.74rem; color: #cfc9ff; margin: 0.4rem 0 0.2rem; }
-
 .cb-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem; }
 .cb-row > label { width: 56px; flex: none; color: var(--text-muted); font-size: 0.78rem; }
 .cb-row > select, .cb-row > input[type="text"] { flex: 1; min-width: 0; }
@@ -4224,6 +4197,111 @@ body:has(#tab-ai.active) {
 .cb-check-inline { display: block; font-size: 0.74rem; color: var(--text-muted); margin-top: 0.4rem; }
 .cb-actions { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem; }
 .cb-actions-inline { flex-direction: row; flex-wrap: wrap; }
+
+/* ===== UI改善: 共通コンテキストバー / 設定と結果の優先順位 ===== */
+.app-context-bar {
+    position: sticky;
+    top: 3.9rem;
+    z-index: 19;
+    display: grid;
+    grid-template-columns: minmax(210px, 1.1fr) minmax(360px, 2fr) auto;
+    align-items: center;
+    gap: 1rem;
+    width: min(100% - 2rem, 1600px);
+    margin: 0.7rem auto 0;
+    padding: 0.55rem 0.8rem;
+    background: rgba(23, 28, 41, 0.96);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(14px);
+}
+.app-context-primary,
+.app-context-facts {
+    min-width: 0;
+}
+.app-context-primary {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+}
+.app-context-eyebrow {
+    color: var(--text-muted);
+    font-size: 0.64rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.app-context-character {
+    overflow: hidden;
+    color: var(--text-main);
+    font-size: 0.95rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.app-context-build {
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.app-context-facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.55rem;
+}
+.app-context-fact {
+    min-width: 0;
+    padding-left: 0.65rem;
+    border-left: 1px solid var(--border-color);
+}
+.app-context-fact span {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.67rem;
+}
+.app-context-fact strong {
+    display: block;
+    overflow: hidden;
+    color: var(--text-main);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.app-context-action {
+    white-space: nowrap;
+}
+
+/* 比較画面の結果レールも共通バーの下に置く。 */
+.dim-col-right {
+    top: 6.35rem;
+    max-height: calc(100vh - 7rem);
+}
+
+@media (max-width: 1180px) {
+    .app-context-bar {
+        grid-template-columns: minmax(180px, 0.8fr) minmax(0, 1.6fr) auto;
+    }
+}
+
+@media (max-width: 760px) {
+    .app-context-bar {
+        top: 3.9rem;
+        grid-template-columns: 1fr auto;
+        gap: 0.55rem;
+        width: calc(100% - 1rem);
+        margin-top: 0.45rem;
+    }
+    .app-context-facts {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
+    .app-context-action { grid-column: 2; grid-row: 1; }
+}
+
+/* AIワークスペースは画面全体を使う既存レイアウトを優先する。 */
+body:has(#tab-ai.active) .app-context-bar { display: none; }
 
 /* --- キャラ情報 --- */
 .cb-char-meta { margin-bottom: 0.5rem; font-size: 0.8rem; }
@@ -4487,17 +4565,316 @@ body:has(#tab-ai.active) {
 }
 
 @media (max-width: 1400px) {
-    .app-content:has(#tab-build.active) { max-width: 1100px; }
-    .cb-cols { grid-template-columns: 230px minmax(0, 1fr); }
-    .cb-col-right {
-        grid-column: 1 / -1;
+    .app-content:has(#tab-build.active) { max-width: 1400px; }
+}
+@media (max-width: 900px) {
+    .cb-cand { grid-template-columns: 1fr; gap: 0.15rem; }
+    .cb-cand-delta { text-align: left; }
+}
+
+/* ===== キャラビルド: UI改善モックの本番レイアウト =====
+   既存のIDと描画処理は維持し、見た目と情報の優先順位だけを
+   「設定(左) → 結果(右)」の流れへ置き換える。 */
+.cb-mock-shell {
+    max-width: 1360px;
+    padding: 1.5rem 0 5rem;
+}
+.cb-intro {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.25rem;
+    margin: 0.75rem 0 1.1rem;
+}
+.cb-section-kicker {
+    display: block;
+    color: var(--accent-blue);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+}
+.cb-intro .cb-title {
+    margin: 0.1rem 0 0.25rem;
+    color: var(--text-main);
+    font-size: clamp(1.35rem, 3vw, 2rem);
+}
+.cb-intro-help,
+.cb-section-help {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+.cb-intro-status,
+.cb-result-state {
+    color: #5fd49a;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+.cb-build-toolbar {
+    margin-bottom: 1.1rem;
+    border-radius: 10px;
+}
+.cb-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.18fr) minmax(360px, 0.82fr);
+    align-items: start;
+    gap: 1.1rem;
+}
+.cb-flow-stack { min-width: 0; }
+.cb-card {
+    background: linear-gradient(145deg, rgba(29, 41, 60, 0.98), rgba(19, 27, 42, 0.98));
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.14);
+}
+.cb-flow-card { padding: 1rem; }
+.cb-flow-card > h2,
+.cb-result-card h2 { margin: 0.15rem 0 0.25rem; font-size: 1.12rem; }
+.cb-flow-step {
+    margin-top: 0.65rem;
+    overflow: hidden;
+    background: rgba(12, 16, 24, 0.3);
+    border: 1px solid rgba(158, 172, 194, 0.18);
+    border-radius: 10px;
+}
+.cb-flow-step[open] { border-color: rgba(112, 169, 255, 0.48); }
+.cb-flow-step > summary {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.78rem 0.85rem;
+    cursor: pointer;
+    list-style: none;
+    font-weight: 800;
+}
+.cb-flow-step > summary::-webkit-details-marker { display: none; }
+.cb-flow-step > summary::before {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    content: '＋';
+    color: var(--accent-blue);
+    border: 1px solid currentColor;
+    border-radius: 50%;
+}
+.cb-flow-step[open] > summary::before { content: '−'; }
+.cb-summary-meta {
+    margin-left: auto;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cb-step-body {
+    padding: 0 0.85rem 0.95rem;
+    border-top: 1px solid rgba(158, 172, 194, 0.12);
+}
+.cb-field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    padding-top: 0.8rem;
+}
+.cb-field {
+    min-width: 0;
+    padding: 0.65rem;
+    background: rgba(31, 45, 67, 0.78);
+    border: 1px solid rgba(158, 172, 194, 0.16);
+    border-radius: 8px;
+}
+.cb-field-control {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+}
+.cb-field-label {
+    display: block;
+    margin-bottom: 0.05rem;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+.cb-field-label-sub { margin-top: 0.35rem; }
+.cb-field-control select,
+.cb-field-control .sr-picker-button { width: 100%; min-width: 0; }
+.cb-field-control .cb-char-meta { margin-bottom: 0; }
+.cb-field-control .cb-char-meta b { font-size: 0.9rem; }
+.cb-field-control .cb-actions { margin-top: 0; }
+.cb-lc-cands { margin-top: 0.2rem; }
+.cb-flow-note { padding-top: 0.8rem; }
+.cb-mode-tabs { margin-top: 0.8rem; }
+.cb-slots {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    padding-top: 0.8rem;
+}
+.cb-slot {
+    padding: 0.55rem;
+    background: #202e45;
+    border-left: 3px solid var(--accent-gold);
+    border-radius: 7px;
+}
+.cb-slot.is-empty { border-left-style: solid; opacity: 0.82; }
+.cb-candidate-list { padding-top: 0.8rem; }
+.cb-result-wrap {
+    position: sticky;
+    top: 6.35rem;
+    display: grid;
+    gap: 0.75rem;
+    align-self: start;
+    max-height: calc(100vh - 7rem);
+    overflow-y: auto;
+}
+.cb-result-card {
+    padding: 1.1rem;
+    border-color: #496891;
+    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.28);
+}
+.cb-result-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+.cb-result-target {
+    margin: 0.8rem 0;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+.cb-result-target strong { color: var(--text-main); }
+.cb-result-card .cb-stat-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
+.cb-result-card .cb-hero-box {
+    padding: 0.65rem;
+    background: rgba(12, 16, 24, 0.46);
+    border-color: rgba(158, 172, 194, 0.18);
+    border-radius: 9px;
+}
+.cb-result-card .cb-hero-box strong { font-size: 1.25rem; }
+.cb-result-card .cb-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem 0.55rem; }
+.cb-result-card .cb-stat-row { padding: 0.3rem; }
+.cb-result-divider { margin: 1rem 0 0.75rem; border-top: 1px solid rgba(158, 172, 194, 0.16); }
+.cb-result-card h3 { margin: 0 0 0.55rem; font-size: 0.88rem; }
+.cb-next-action {
+    padding: 0.95rem;
+    background: rgba(55, 137, 239, 0.1);
+    border: 1px solid rgba(112, 169, 255, 0.28);
+    border-radius: 10px;
+}
+.cb-next-action h3 { margin: 0.15rem 0 0.45rem; font-size: 0.95rem; }
+.cb-next-action > p { margin: 0 0 0.65rem; color: var(--text-muted); font-size: 0.75rem; }
+.cb-next-ref { margin-bottom: 0.6rem; }
+.cb-next-ref > label { width: 4.2rem; }
+.cb-stepper { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.35rem; }
+.cb-step {
+    padding: 0.55rem 0.35rem;
+    color: var(--text-muted);
+    background: rgba(12, 16, 24, 0.32);
+    border-radius: 8px;
+    font-size: 0.68rem;
+    text-align: center;
+}
+.cb-step.done { color: #5fd49a; }
+.cb-step.active { color: var(--text-main); background: rgba(55, 137, 239, 0.22); outline: 1px solid rgba(112, 169, 255, 0.54); }
+
+@media (max-width: 980px) {
+    .cb-workspace { grid-template-columns: 1fr; }
+    .cb-result-wrap {
         position: static;
         max-height: none;
         overflow-y: visible;
     }
+    .cb-mock-shell { padding-top: 1rem; }
 }
-@media (max-width: 900px) {
-    .cb-cols { grid-template-columns: 1fr; }
-    .cb-cand { grid-template-columns: 1fr; gap: 0.15rem; }
-    .cb-cand-delta { text-align: left; }
+@media (max-width: 560px) {
+    .cb-intro { display: block; }
+    .cb-intro-status { display: block; margin-top: 0.5rem; }
+    .cb-field-grid { grid-template-columns: 1fr; }
+    .cb-slots { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cb-result-card .cb-stat-grid { grid-template-columns: 1fr; }
+    .cb-summary-meta { max-width: 45%; }
+}
+
+/* --- 部位ボタンの近くに開く遺物操作ポップオーバー --- */
+.cb-slot {
+    position: relative;
+}
+.cb-slots {
+    position: relative;
+    isolation: isolate;
+}
+.cb-slot-acts {
+    position: relative;
+}
+.cb-slot-action-anchor {
+    position: relative;
+    display: inline-flex;
+}
+.cb-slot-popover {
+    position: absolute;
+    z-index: 40;
+    top: 100%;
+    left: 0;
+    width: min(560px, calc(100vw - 2rem));
+    max-height: min(520px, calc(100vh - 1.5rem));
+    margin: 0;
+    background: #121b2b;
+    overflow: auto;
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.48);
+}
+.cb-slot:nth-child(3n) .cb-slot-popover {
+    left: auto;
+    right: 0;
+}
+.cb-slot-popover .cb-picker-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #172236;
+}
+.cb-slot-popover .cb-cand-list {
+    max-height: none;
+}
+.cb-slot-popover .cb-cand {
+    grid-template-columns: minmax(120px, 1.1fr) minmax(0, 1.6fr) 100px 66px;
+}
+.cb-slot-popover .cb-editor {
+    background: rgba(0, 0, 0, 0.12);
+}
+@media (max-width: 980px) {
+    .cb-slot-popover {
+        width: min(560px, calc(100vw - 2rem));
+    }
+}
+@media (max-width: 560px) {
+    .cb-slot-popover {
+        width: min(560px, calc(100vw - 2rem));
+        max-height: min(520px, calc(100vh - 1.5rem));
+        margin: 0;
+    }
+    .cb-slot-popover .cb-cand {
+        grid-template-columns: 1fr auto;
+    }
+    .cb-slot-popover .cb-cand-subs,
+    .cb-slot-popover .cb-cand-delta {
+        grid-column: 1 / -1;
+    }
+}
+
+/* 開いている部位を他の部位カードより前面に出し、ポップオーバーを切らない。 */
+.cb-flow-step {
+    overflow: visible;
+}
+.cb-slot.is-picking {
+    position: relative;
+    z-index: 1;
+    opacity: 1;
+}
+.cb-slot-popover {
+    z-index: 100;
 }

@@ -2,6 +2,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabBtns = document.querySelectorAll('.tab-btn');
     const tabPanes = document.querySelectorAll('.tab-pane');
 
+    const notifyTabChange = targetId => {
+        window.dispatchEvent(new CustomEvent('srsim:tab-change', {
+            detail: { targetId },
+        }));
+    };
+
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             if(btn.disabled) return;
@@ -13,7 +19,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // Add active class to clicked
             btn.classList.add('active');
             const targetId = btn.getAttribute('data-target');
-            document.getElementById(targetId).classList.add('active');
+            const targetPane = document.getElementById(targetId);
+            if (!targetPane) return;
+            targetPane.classList.add('active');
+            notifyTabChange(targetId);
         });
     });
+
+    const initialTarget = document.querySelector('.tab-btn.active')?.getAttribute('data-target');
+    if (initialTarget) notifyTabChange(initialTarget);
 });

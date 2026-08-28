@@ -1,6 +1,6 @@
 import { ELEMENT, PATH } from '../../build/constants.js';
-import { Registry } from '../../build/registry.js';
 import { STAT, ELEMENT_DMG_KEYS } from '../../build/statKeys.js';
+import { addCharacterDefinition } from './_characterRegistry.js';
 
 const ELEMENT_BY_NAME = Object.freeze({
     Physical: ELEMENT.PHYSICAL,
@@ -379,8 +379,9 @@ export function idFromEnglishName(name) {
 export function addCharacter(def) {
     const element = ELEMENT_BY_NAME[def.element] || def.element;
     const path = PATH_BY_NAME[def.path] || def.path;
-    Registry.character.add({
-        id: def.id || idFromEnglishName(def.englishName),
+    const id = def.id || idFromEnglishName(def.englishName);
+    addCharacterDefinition({
+        id,
         name: def.name,
         aliases: Array.isArray(def.aliases) ? [...def.aliases] : [],
         element,
@@ -394,6 +395,7 @@ export function addCharacter(def) {
             aggro: AGGRO_BY_PATH[path] || 100,
         },
         maxEnergy: def.maxEnergy,
+        damageScale: def.damageScale,
         traces: buildTraces(def.traceBonuses),
         eidolons: {},
         eidolonsDetail: def.eidolonsDetail || {},

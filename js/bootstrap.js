@@ -35,6 +35,7 @@ import { initDiminishingUI } from './ui/diminishingUI.js';
 import { initRelicUI } from './ui/relicUI.js';
 import { initBuildUI } from './ui/buildUI.js';
 import { initDiminishingAssistantUI } from './ui/diminishingAssistantUI.js';
+import { initContextBar } from './ui/contextBar.js';
 import * as SmartPicker from './ui/smartPicker.js';
 
 // 定数(UI 側で select 生成等に使う)
@@ -95,6 +96,7 @@ console.info(
 );
 
 // UI 初期化 (DOM はモジュール実行時点で既にパース済み)
+initContextBar();
 const diminishingBridge = initDiminishingUI();
 initRelicUI();
 // キャラビルドタブは保存ビルドを他タブへ渡すため、両タブの初期化後に立ち上げる。

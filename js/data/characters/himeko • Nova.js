@@ -3,7 +3,7 @@
 
 import { ELEMENT, PATH } from '../../build/constants.js';
 import { STAT, ELEMENT_DMG_KEYS } from '../../build/statKeys.js';
-import { Registry } from '../../build/registry.js';
+import { addCharacterDefinition } from './_characterRegistry.js';
 
 const SKILL_DMG = [0.10, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.20, 0.22, 0.24];
 const ULT = [
@@ -23,7 +23,7 @@ const TALENT = [
     [0.22, 0.88, 1.76, 0.26, 2.20, 0.35], [0.24, 0.96, 1.92, 0.29, 2.40, 0.38],
 ];
 
-Registry.character.add({
+addCharacterDefinition({
     id: 'himeko_nova',
     name: '姫子・旅立ち',
     element: ELEMENT.FIRE,

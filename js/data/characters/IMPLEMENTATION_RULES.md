@@ -7,7 +7,8 @@
 
 - **ファイル作成**: `data/characters/<id>.js` としてファイルを作成します。
 - **インポート**: 新たに作成したキャラファイルは `data/characters/_index.js` に `import` を追加して読み込ませます。
-- **登録**: `Registry.character.add({ ... })` を用いてキャラクターオブジェクトを登録します。
+- **登録**: 通常形式は `_defineCharacter.js` の `addCharacter()`、詳細データの直接形式は `_characterRegistry.js` の `addCharacterDefinition()` を使います。どちらも最終的には `Registry.character` へ登録されます。
+- **火力分類**: `damageScale` は原則 `js/data/characters/damageScaling.js` の分類表で管理します。個別定義で明示した値は分類表より優先されます。値は `DAMAGE_SCALE.ATK` / `HP` / `BREAK` / `ELATION` のいずれかです。
 
 ## 2. 基礎ステータス (Base Info & Stats)
 

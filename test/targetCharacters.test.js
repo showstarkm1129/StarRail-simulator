@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { computeCharacterAttackDamages } from '../js/build/attackDamage.js';
 import { Registry } from '../js/build/registry.js';
 import { StatComputer } from '../js/build/statComputer.js';
+import { STAT } from '../js/build/statKeys.js';
 import { presetEidolonMaxLevels } from '../js/build/skillUtil.js';
 
 import '../js/data/characters/_index.js';
@@ -64,6 +65,29 @@ test('千冶・刃の強化攻撃と戦闘スキルの多段内訳がダメー�
     );
     assert.equal(rows[3].multiplier, 0.27);
     assert.equal(rows[3].hitCount, 4);
+});
+
+test('撃破キャラの攻撃行は靭性削り量を超撃破係数に使い、ATKを参照しない', () => {
+    const character = Registry.character.get('firefly');
+    const build = buildFor(character.id);
+    const baseRow = computeCharacterAttackDamages(character, build, StatComputer.compute(build))
+        .find(row => row.skillKey === 'basic');
+    const atkBuild = {
+        ...build,
+        envBuffs: [{ stat: STAT.ATK_PERCENT, value: 1, label: 'ATK+100%' }],
+    };
+    const atkRow = computeCharacterAttackDamages(character, atkBuild, StatComputer.compute(atkBuild))
+        .find(row => row.skillKey === 'basic');
+    const breakBuild = {
+        ...build,
+        envBuffs: [{ stat: STAT.BREAK_EFFECT, value: 1, label: '撃破特効+100%' }],
+    };
+    const breakRow = computeCharacterAttackDamages(character, breakBuild, StatComputer.compute(breakBuild))
+        .find(row => row.skillKey === 'basic');
+
+    assert.equal(baseRow.multiplier, character.skills.basic.toughness / 10);
+    assert.equal(atkRow.damage, baseRow.damage);
+    assert.ok(breakRow.damage > baseRow.damage);
 });
 
 test('複合攻撃・外部参照値・条件付き追加攻撃を共通行へ展開する', () => {

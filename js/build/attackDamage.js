@@ -4,6 +4,7 @@
 // 一般的な atk / hpPct / def 系の倍率だけを安全に解決し、推測できない攻撃は返さない。
 
 import { Diminishing } from './diminishing.js';
+import { DAMAGE_SCALE } from './constants.js';
 import { getTraceLevelCap, getSkillMultAt } from './skillUtil.js';
 
 const ATTACK_TYPES = new Set(['attack', 'follow_up']);
@@ -132,16 +133,31 @@ function normalizeComponent(component, skill, levelMultiplier) {
     const target = component.target || skill.damageTarget || skill.target;
     if (!COMPONENT_STATS.has(scalingStat) || !ENEMY_TARGETS.has(target)
         || !Number.isFinite(multiplier) || multiplier <= 0) return null;
-    return { ...component, scalingStat, target, multiplier };
+    return {
+        ...component,
+        scalingStat,
+        target,
+        multiplier,
+        toughness: component.toughness ?? skill.toughness ?? null,
+        superBreakMultiplier: component.superBreakMultiplier ?? skill.superBreakMultiplier ?? 1,
+    };
 }
 
 function damageFactor(finalStats, options, damageType, refStat) {
     const factors = Diminishing.computeDamageFactors(finalStats, { ...Diminishing.DEFAULT_OPTIONS, ...options, refStat });
     const baseFactor = refStat === 'reference' ? 1 : factors.atk;
-    return baseFactor * factors.break * factors.fixedDmg * factors.sepMult
+    const standardMultipliers = factors.damageScale === DAMAGE_SCALE.BREAK
+        || factors.damageScale === DAMAGE_SCALE.ELATION
+        ? 1
+        : factors.fixedDmg * factors.sepMult;
+    return baseFactor * factors.break * standardMultipliers
         * factors.critByType[damageType] * factors.dmgBonusByType[damageType]
         * factors.defByType[damageType] * factors.resByType[damageType]
         * factors.takenByType[damageType];
+}
+
+function defaultToughness(damageType) {
+    return ({ basic: 10, skill: 20, ult: 30, followup: 10 })[damageType] || 10;
 }
 
 function conditionActive(component, options) {
@@ -182,9 +198,17 @@ export function computeCharacterAttackDamages(character, build, finalStats, opti
         const components = resolveComponents(skill, levelMultiplier);
         for (const component of components) {
             const active = conditionActive(component, resolvedOptions);
+            const factors = active
+                ? Diminishing.computeDamageFactors(finalStats, /** @type {any} */ (resolvedOptions))
+                : null;
+            const isBreakScale = factors?.damageScale === DAMAGE_SCALE.BREAK;
+            const componentMultiplier = isBreakScale
+                ? (Number(component.toughness) || defaultToughness(damageType)) / 10
+                    * (Number(component.superBreakMultiplier) || 1)
+                : component.multiplier;
             const damage = active
                 ? damageFactor(finalStats, resolvedOptions, damageType, component.scalingStat)
-                    * componentBaseValue(component, resolvedOptions) * component.multiplier
+                    * componentBaseValue(component, resolvedOptions) * componentMultiplier
                 : 0;
             const hitCount = Number.isInteger(component.hits) && component.hits > 0
                 ? component.hits
@@ -198,7 +222,7 @@ export function computeCharacterAttackDamages(character, build, finalStats, opti
                 target: TARGET_LABELS[component.target] || component.target || '—',
                 level,
                 scalingStat: component.scalingStat,
-                multiplier: component.multiplier,
+                multiplier: componentMultiplier,
                 damage,
                 totalDamage: hitCount ? damage * hitCount : null,
                 hitCount,

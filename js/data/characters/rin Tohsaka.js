@@ -2,7 +2,7 @@
 
 import { ELEMENT, PATH } from '../../build/constants.js';
 import { STAT, ELEMENT_DMG_KEYS } from '../../build/statKeys.js';
-import { Registry } from '../../build/registry.js';
+import { addCharacterDefinition } from './_characterRegistry.js';
 
 const SKILL = [
     [0.90, 0.45, 0.45], [0.99, 0.49, 0.49], [1.08, 0.54, 0.54], [1.17, 0.58, 0.58], [1.26, 0.63, 0.63],
@@ -20,7 +20,7 @@ const TALENT = [
     [0.77, 3.30], [0.84, 3.60],
 ];
 
-Registry.character.add({
+addCharacterDefinition({
     id: 'rin_tohsaka',
     name: '遠坂凛',
     element: ELEMENT.QUANTUM,

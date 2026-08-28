@@ -226,6 +226,7 @@ function finalize(acc, ctx) {
             characterId: ctx.character.id,
             element: ctx.character.element,
             path: ctx.character.path,
+            damageScale: ctx.character.damageScale || null,
             lightconeId: ctx.lightcone?.id ?? null,
             superimpose: ctx.build.lightcone?.superimpose ?? null,
             eidolon: ctx.build.eidolon ?? 0,

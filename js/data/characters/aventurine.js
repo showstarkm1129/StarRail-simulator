@@ -15,9 +15,9 @@
 
 import { ELEMENT, PATH } from '../../build/constants.js';
 import { STAT, ELEMENT_DMG_KEYS } from '../../build/statKeys.js';
-import { Registry } from '../../build/registry.js';
+import { addCharacterDefinition } from './_characterRegistry.js';
 
-Registry.character.add({
+addCharacterDefinition({
     id: 'aventurine',
     name: 'アベンチュリン',
     element: ELEMENT.IMAGINARY,

@@ -2,6 +2,7 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { StatComputer } from '../js/build/statComputer.js';
 import { Diminishing } from '../js/build/diminishing.js';
+import { DAMAGE_SCALE } from '../js/build/constants.js';
 import { STAT } from '../js/build/statKeys.js';
 import { registerFixtures, makeFixtureBuild } from './fixtures.js';
 
@@ -196,6 +197,62 @@ test('directStatsToFinalStats: 未指定キーは 0、EP回復は既定100%扱�
     approx(stats.derived.energyRegenPct, 0);
     // raw 側は基礎分を引いた加算値 (CRIT_RATE_BASE=0.05)
     approx(stats.raw[STAT.CRIT_RATE], -0.05);
+});
+
+test('火力スケール分類: HPキャラはATKを上げても火力係数が変わらない', () => {
+    const beforeStats = Diminishing.directStatsToFinalStats({ atk: 2000, hp: 10000 });
+    const afterStats = Diminishing.directStatsToFinalStats({ atk: 3000, hp: 10000 });
+    beforeStats.meta.damageScale = DAMAGE_SCALE.HP;
+    afterStats.meta.damageScale = DAMAGE_SCALE.HP;
+
+    const res = Diminishing.compareStats(beforeStats, afterStats);
+    assert.equal(res.factors.damageScale, DAMAGE_SCALE.HP);
+    assert.equal(res.factors.atk.ratio, 1);
+    assert.equal(res.factors.total.ratio, 1);
+});
+
+test('火力スケール分類: 撃破キャラは撃破特効を主係数にし、会心/与ダメを使わない', () => {
+    const beforeStats = Diminishing.directStatsToFinalStats({
+        atk: 2000,
+        breakEffect: 1.00,
+        critRate: 1.00,
+        critDmg: 2.00,
+        dmgAll: 1.00,
+    });
+    const afterStats = Diminishing.directStatsToFinalStats({
+        atk: 3000,
+        breakEffect: 1.50,
+        critRate: 1.00,
+        critDmg: 2.00,
+        dmgAll: 2.00,
+    });
+    beforeStats.meta.damageScale = DAMAGE_SCALE.BREAK;
+    afterStats.meta.damageScale = DAMAGE_SCALE.BREAK;
+
+    const res = Diminishing.compareStats(beforeStats, afterStats);
+    assert.equal(res.factors.damageScale, DAMAGE_SCALE.BREAK);
+    assert.equal(res.factors.atk.ratio, 1.25);
+    assert.equal(res.factors.crit.ratio, 1);
+    assert.equal(res.factors.dmgBonus.ratio, 1);
+    assert.equal(res.factors.total.ratio, 1.25);
+});
+
+test('火力スケール分類: 愉悦キャラは愉悦度・層・上笑を係数にする', () => {
+    const stats = Diminishing.directStatsToFinalStats({ atk: 2000, critRate: 0.5, critDmg: 1.0 });
+    stats.meta.damageScale = DAMAGE_SCALE.ELATION;
+    const before = Diminishing.computeDamageFactors(stats, {
+        ...Diminishing.DEFAULT_OPTIONS,
+        referenceValues: { elationDegree: 0, elationStacks: 0, elationUplift: 0 },
+    });
+    const after = Diminishing.computeDamageFactors(stats, {
+        ...Diminishing.DEFAULT_OPTIONS,
+        referenceValues: { elationDegree: 1, elationStacks: 0, elationUplift: 0 },
+    });
+
+    assert.equal(before.atk, 1);
+    assert.equal(after.atk, 2);
+    assert.equal(after.crit, 1.5);
+    assert.equal(after.dmgBonus, 1);
 });
 
 test('compareStats: 直接入力の前後比較が乗算枠の積になる', () => {

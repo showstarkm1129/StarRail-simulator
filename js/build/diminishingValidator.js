@@ -1,7 +1,7 @@
 // diminishingValidator.js — 限界効用状態・比較ジョブの構造化検証
 
 import { Registry } from './registry.js';
-import { ALL_SLOTS, ELEMENT_LIST } from './constants.js';
+import { ALL_SLOTS, DAMAGE_SCALE_LIST, ELEMENT_LIST } from './constants.js';
 import { ALL_STAT_KEYS, STAT } from './statKeys.js';
 import { RELIC_MAIN_OPTIONS } from './relicMainTable.js';
 import { SUBSTAT_TABLE } from './substatTable.js';
@@ -54,8 +54,8 @@ const PARTY_KEYS = new Set([
     'mode', 'characterId', 'levelPreset', 'lightcone', 'ornamentId', 'effectSelection',
     'buildId', 'build', 'activeEffectIds', 'stacksByEffectId',
 ]);
-const OPTION_KEYS = new Set(['refStat', 'enemyLevel', 'enemyBaseRes', 'critMode', 'breakState', 'elementOverride', 'referenceValues']);
-const REFERENCE_VALUE_KEYS = new Set(['cumulativeHealing', 'summonHp', 'gluttonyStacks']);
+const OPTION_KEYS = new Set(['refStat', 'damageScale', 'enemyLevel', 'enemyBaseRes', 'critMode', 'breakState', 'elementOverride', 'referenceValues']);
+const REFERENCE_VALUE_KEYS = new Set(['cumulativeHealing', 'summonHp', 'gluttonyStacks', 'elationDegree', 'elationStacks', 'elationUplift']);
 const SUBS_KEYS = new Set(['mode', 'manual', 'total', 'perSlot']);
 const ROLL_CONFIG_KEYS = new Set(['allocations', 'tier', 'lastResult']);
 const DIRECT_KEYS = new Set(['stats', 'snapshot']);
@@ -330,6 +330,9 @@ function validateEffects(state, errors, path) {
 
 function validateOptions(options, path, errors) {
     validateKnownKeys(options, OPTION_KEYS, path, errors);
+    if (options.damageScale !== null && !DAMAGE_SCALE_LIST.includes(options.damageScale)) {
+        errors.push(issue('INVALID_DAMAGE_SCALE', `${path}.damageScale`, '火力計算系統が不正です。'));
+    }
     if (!['atk', 'hp', 'def', 'spd'].includes(options.refStat)) errors.push(issue('INVALID_REF_STAT', `${path}.refStat`, '参照ステータスが不正です。'));
     validateIntegerRange(options.enemyLevel, 1, 100, `${path}.enemyLevel`, errors);
     validateRange(options.enemyBaseRes, -1, 1, `${path}.enemyBaseRes`, errors);

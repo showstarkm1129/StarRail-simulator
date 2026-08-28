@@ -7,9 +7,9 @@
 //   isTestAllEquipment: true
 //   testAllSuperimpose: 1
 
-import { Registry } from '../../build/registry.js';
+import { addCharacterDefinition } from './_characterRegistry.js';
 
-Registry.character.add({
+addCharacterDefinition({
     id: 'testAllS1',
     name: 'テスト全装備 (S1)',
     element: null,

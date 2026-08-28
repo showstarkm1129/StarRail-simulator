@@ -6,9 +6,9 @@
 // 条件付きの効果は hooks (onBuildResolved 等) かトリガー型 hook で扱う。
 
 import { ELEMENT, PATH } from '../../build/constants.js';
-import { Registry } from '../../build/registry.js';
+import { addCharacterDefinition } from './_characterRegistry.js';
 
-Registry.character.add({
+addCharacterDefinition({
     id: 'template',                   // 一意な ID(英小文字+数字推奨)
     name: 'テンプレ',                  // 表示名
     element: ELEMENT.PHYSICAL,        // 属性

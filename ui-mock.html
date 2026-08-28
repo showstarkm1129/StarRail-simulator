@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>UI改善モック | 崩壊スターレイル シミュレーター</title>
+    <style>
+        :root {
+            --bg: #0c1018;
+            --surface: #151c29;
+            --surface-raised: #1c2738;
+            --surface-soft: #202e45;
+            --line: #304057;
+            --text: #edf3ff;
+            --muted: #9eacc2;
+            --blue: #70adff;
+            --blue-strong: #3789ef;
+            --gold: #e8c66f;
+            --green: #5fd49a;
+            --red: #ff8d9a;
+            --shadow: 0 18px 46px rgba(0, 0, 0, .28);
+        }
+
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            margin: 0;
+            min-width: 320px;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 80% -20%, rgba(66, 118, 208, .20), transparent 34rem),
+                var(--bg);
+            font: 14px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+        }
+
+        button, input, select { font: inherit; }
+        button { cursor: pointer; }
+
+        .mock-header {
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            min-height: 60px;
+            padding: 0 28px;
+            background: rgba(13, 18, 28, .94);
+            border-bottom: 1px solid var(--line);
+            backdrop-filter: blur(14px);
+        }
+
+        .brand {
+            color: var(--gold);
+            font-weight: 800;
+            letter-spacing: .03em;
+            white-space: nowrap;
+        }
+
+        .mock-nav {
+            display: flex;
+            gap: 5px;
+            min-width: 0;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .mock-nav::-webkit-scrollbar { display: none; }
+
+        .mock-nav button,
+        .context-action,
+        .ghost,
+        .primary,
+        .secondary {
+            border: 1px solid transparent;
+            border-radius: 8px;
+            color: var(--text);
+            transition: .18s ease;
+        }
+
+        .mock-nav button {
+            padding: 9px 13px;
+            color: var(--muted);
+            background: transparent;
+            white-space: nowrap;
+        }
+
+        .mock-nav button:hover,
+        .mock-nav button.active {
+            color: var(--text);
+            background: rgba(112, 173, 255, .14);
+            box-shadow: inset 0 -2px 0 var(--blue);
+        }
+
+        .mock-note {
+            margin-left: auto;
+            color: var(--muted);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .context-bar {
+            position: sticky;
+            top: 60px;
+            z-index: 20;
+            display: grid;
+            grid-template-columns: minmax(210px, 1.4fr) repeat(3, minmax(130px, .8fr)) auto;
+            gap: 10px;
+            max-width: 1360px;
+            margin: 16px auto 0;
+            padding: 12px;
+            background: rgba(25, 35, 52, .95);
+            border: 1px solid #405779;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(14px);
+        }
+
+        .context-cell {
+            min-width: 0;
+            padding: 4px 12px;
+            border-right: 1px solid rgba(158, 172, 194, .18);
+        }
+
+        .context-cell:last-of-type { border-right: 0; }
+        .eyebrow,
+        .field-label,
+        .result-label {
+            display: block;
+            margin-bottom: 2px;
+            color: var(--muted);
+            font-size: 11px;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .context-cell strong {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .context-cell small { color: var(--muted); }
+        .context-cell .gold { color: var(--gold); }
+
+        .context-action {
+            align-self: center;
+            padding: 9px 14px;
+            color: #06111f;
+            background: var(--blue);
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .context-action:hover,
+        .primary:hover { background: #8bc1ff; transform: translateY(-1px); }
+
+        .page {
+            width: min(1360px, calc(100% - 40px));
+            margin: 0 auto;
+            padding: 24px 0 80px;
+        }
+
+        .intro {
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+            gap: 20px;
+            margin: 12px 8px 18px;
+        }
+
+        h1, h2, h3, p { margin-top: 0; }
+        h1 { margin-bottom: 4px; font-size: clamp(22px, 3vw, 32px); }
+        h2 { margin-bottom: 4px; font-size: 18px; }
+        h3 { margin-bottom: 4px; font-size: 15px; }
+        .intro p { margin: 0; color: var(--muted); }
+        .intro-status { color: var(--green); font-size: 12px; white-space: nowrap; }
+
+        .workspace {
+            display: grid;
+            grid-template-columns: minmax(0, 1.18fr) minmax(360px, .82fr);
+            align-items: start;
+            gap: 18px;
+        }
+
+        .stack { display: grid; gap: 12px; }
+        .card {
+            background: linear-gradient(145deg, rgba(29, 41, 60, .98), rgba(19, 27, 42, .98));
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, .14);
+        }
+
+        .flow-card { padding: 16px; }
+        .section-kicker { color: var(--blue); font-size: 12px; font-weight: 800; }
+        .section-help { margin: 0; color: var(--muted); font-size: 12px; }
+
+        details.flow-step {
+            margin-top: 10px;
+            overflow: hidden;
+            background: rgba(12, 16, 24, .30);
+            border: 1px solid rgba(158, 172, 194, .18);
+            border-radius: 10px;
+        }
+
+        details.flow-step[open] { border-color: rgba(112, 173, 255, .48); }
+
+        details.flow-step > summary {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 13px 14px;
+            list-style: none;
+            font-weight: 800;
+        }
+
+        details.flow-step > summary::-webkit-details-marker { display: none; }
+        details.flow-step > summary::before {
+            content: "＋";
+            display: grid;
+            place-items: center;
+            width: 22px;
+            height: 22px;
+            color: var(--blue);
+            border: 1px solid currentColor;
+            border-radius: 50%;
+        }
+
+        details.flow-step[open] > summary::before { content: "−"; }
+        .summary-meta { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 500; }
+        .step-body { padding: 0 14px 15px; border-top: 1px solid rgba(158, 172, 194, .12); }
+
+        .field-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            padding-top: 13px;
+        }
+
+        .field {
+            padding: 10px 11px;
+            background: rgba(31, 45, 67, .78);
+            border: 1px solid rgba(158, 172, 194, .16);
+            border-radius: 8px;
+        }
+
+        .field strong { display: block; }
+        .field small { color: var(--muted); }
+
+        .relic-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            padding-top: 13px;
+        }
+
+        .relic-chip {
+            padding: 10px;
+            background: #202e45;
+            border-left: 3px solid var(--gold);
+            border-radius: 7px;
+        }
+
+        .relic-chip strong { display: block; font-size: 12px; }
+        .relic-chip span { color: var(--gold); font-variant-numeric: tabular-nums; }
+
+        .candidate-list { display: grid; gap: 8px; padding-top: 13px; }
+        .candidate {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            background: rgba(31, 45, 67, .68);
+            border: 1px solid rgba(158, 172, 194, .17);
+            border-radius: 8px;
+        }
+
+        .candidate:has(input:checked) {
+            background: rgba(55, 137, 239, .18);
+            border-color: var(--blue);
+        }
+
+        .candidate input { accent-color: var(--blue); }
+        .candidate strong { display: block; }
+        .candidate small { color: var(--muted); }
+        .candidate .candidate-delta { color: var(--green); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+        .result-wrap {
+            position: sticky;
+            top: 138px;
+            display: grid;
+            gap: 12px;
+        }
+
+        .result-card { padding: 18px; border-color: #496891; box-shadow: var(--shadow); }
+        .result-header { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+        .result-header h2 { margin: 0; }
+        .result-state { color: var(--green); font-size: 12px; }
+        .result-target { margin: 13px 0; color: var(--muted); }
+        .result-target strong { color: var(--text); }
+
+        .compare-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .compare-cell {
+            padding: 13px;
+            background: rgba(12, 16, 24, .46);
+            border: 1px solid rgba(158, 172, 194, .18);
+            border-radius: 9px;
+        }
+
+        .compare-cell.current { border-color: rgba(95, 212, 154, .62); }
+        .compare-value { display: block; margin: 2px 0; font-size: 25px; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .compare-sub { color: var(--muted); font-size: 12px; }
+        .delta-box { margin: 12px 0; padding: 14px; background: linear-gradient(120deg, rgba(55, 137, 239, .18), rgba(95, 212, 154, .12)); border: 1px solid rgba(95, 212, 154, .48); border-radius: 9px; }
+        .delta-box strong { display: block; color: var(--green); font-size: 28px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+        .delta-box small { color: var(--muted); }
+
+        .meter { height: 8px; margin: 12px 0 16px; overflow: hidden; background: #0d1420; border-radius: 99px; }
+        .meter > span { display: block; width: 64%; height: 100%; background: linear-gradient(90deg, var(--blue), var(--green)); border-radius: inherit; transition: width .22s ease; }
+
+        .breakdown { display: grid; gap: 7px; padding-top: 4px; }
+        .breakdown-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; color: var(--muted); }
+        .breakdown-row strong { color: var(--text); font-variant-numeric: tabular-nums; }
+        .breakdown-row strong.positive { color: var(--green); }
+
+        .next-action { padding: 15px; background: rgba(55, 137, 239, .10); border: 1px solid rgba(112, 173, 255, .28); border-radius: 10px; }
+        .next-action p { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+        .action-row { display: flex; flex-wrap: wrap; gap: 8px; }
+        .primary, .secondary, .ghost { padding: 9px 12px; font-weight: 700; }
+        .primary { color: #071322; background: var(--blue); }
+        .secondary { color: var(--text); background: var(--surface-soft); border-color: var(--line); }
+        .ghost { color: var(--muted); background: transparent; border-color: var(--line); }
+        .secondary:hover, .ghost:hover { color: var(--text); border-color: var(--blue); }
+
+        .stepper { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        .step { padding: 9px 8px; color: var(--muted); background: rgba(12, 16, 24, .32); border-radius: 8px; font-size: 11px; text-align: center; }
+        .step.done { color: var(--green); }
+        .step.active { color: var(--text); background: rgba(55, 137, 239, .22); outline: 1px solid rgba(112, 173, 255, .54); }
+
+        .toast { position: fixed; right: 22px; bottom: 22px; z-index: 50; max-width: 320px; padding: 12px 15px; color: var(--text); background: #233a58; border: 1px solid var(--blue); border-radius: 9px; box-shadow: var(--shadow); opacity: 0; transform: translateY(10px); pointer-events: none; transition: .2s ease; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+
+        @media (max-width: 980px) {
+            .mock-header { gap: 12px; padding: 0 16px; }
+            .mock-note { display: none; }
+            .context-bar { grid-template-columns: repeat(3, 1fr); width: calc(100% - 24px); margin-top: 12px; }
+            .context-action { grid-column: 1 / -1; }
+            .workspace { grid-template-columns: 1fr; }
+            .result-wrap { position: static; }
+            .page { width: min(100% - 24px, 760px); padding-top: 16px; }
+        }
+
+        @media (max-width: 560px) {
+            body { font-size: 13px; }
+            .brand { font-size: 12px; }
+            .mock-header { min-height: 54px; }
+            .context-bar { top: 54px; grid-template-columns: 1fr 1fr; }
+            .context-cell { border-right: 0; }
+            .intro { display: block; }
+            .intro-status { display: block; margin-top: 8px; }
+            .field-grid, .relic-grid { grid-template-columns: 1fr 1fr; }
+            .candidate { grid-template-columns: auto 1fr; }
+            .candidate .candidate-delta { grid-column: 2; }
+            .compare-value { font-size: 21px; }
+        }
+    </style>
+</head>
+<body>
+    <header class="mock-header">
+        <div class="brand">崩壊スターレイル シミュレーター</div>
+        <nav class="mock-nav" aria-label="モックのメインナビゲーション">
+            <button type="button" data-nav="speed">速度・行動回数</button>
+            <button type="button" data-nav="combat">戦闘シミュ</button>
+            <button type="button" data-nav="build" class="active">キャラビルド</button>
+            <button type="button" data-nav="compare">限界効用逓減</button>
+            <button type="button" data-nav="relics">遺物</button>
+        </nav>
+        <span class="mock-note">UI改善モック / 数値はデモ</span>
+    </header>
+
+    <section class="context-bar" aria-label="現在の検証コンテキスト">
+        <div class="context-cell">
+            <span class="eyebrow">検証対象</span>
+            <strong id="context-character">花火</strong>
+            <small id="context-build">速度160ビルド</small>
+        </div>
+        <div class="context-cell">
+            <span class="eyebrow">現在の操作</span>
+            <strong id="context-mode">キャラビルド</strong>
+            <small>設定を編集しています</small>
+        </div>
+        <div class="context-cell">
+            <span class="eyebrow">比較基準</span>
+            <strong>保存時</strong>
+            <small>攻撃力 / 期待値</small>
+        </div>
+        <div class="context-cell">
+            <span class="eyebrow">保存状態</span>
+            <strong class="gold" id="context-save">未保存の変更</strong>
+            <small>自動保存: 14:32</small>
+        </div>
+        <button type="button" class="context-action" id="context-to-result">比較結果を見る →</button>
+    </section>
+
+    <main class="page">
+        <div class="intro">
+            <div>
+                <h1>キャラビルド</h1>
+                <p>設定は必要なときだけ開き、右側で結果を確認しながら調整します。</p>
+            </div>
+            <span class="intro-status">● 計算可能 / デモデータ</span>
+        </div>
+
+        <div class="workspace">
+            <section class="stack" aria-label="ビルド設定">
+                <article class="card flow-card">
+                    <span class="section-kicker">01 — BUILD</span>
+                    <h2>ビルド設定</h2>
+                    <p class="section-help">上から順に決めれば、保存・比較まで迷わず進めます。</p>
+
+                    <details class="flow-step" open>
+                        <summary>キャラクター・光円錐 <span class="summary-meta">花火 / 人生は遊び S1</span></summary>
+                        <div class="step-body">
+                            <div class="field-grid">
+                                <div class="field"><span class="field-label">キャラクター</span><strong>花火</strong><small>量子 / 調和 / ★5</small></div>
+                                <div class="field"><span class="field-label">星魂</span><strong>E0</strong><small>変更候補に登録できます</small></div>
+                                <div class="field"><span class="field-label">光円錐</span><strong>人生は遊び</strong><small>調和 / S1</small></div>
+                                <div class="field"><span class="field-label">参照ステ</span><strong>攻撃力</strong><small>比較の基準として使用</small></div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <details class="flow-step" open>
+                        <summary>遺物・サブステータス <span class="summary-meta">6部位 / SPD 160.0</span></summary>
+                        <div class="step-body">
+                            <div class="relic-grid">
+                                <div class="relic-chip"><strong>頭部</strong><span>HP / SPD +5</span></div>
+                                <div class="relic-chip"><strong>手部</strong><span>ATK / CR +7</span></div>
+                                <div class="relic-chip"><strong>胴体</strong><span>会心率 / CD +18</span></div>
+                                <div class="relic-chip"><strong>脚部</strong><span>速度 / ATK +12</span></div>
+                                <div class="relic-chip"><strong>オーブ</strong><span>量子DMG / CD +9</span></div>
+                                <div class="relic-chip"><strong>縄</strong><span>ATK% / CR +6</span></div>
+                            </div>
+                            <div class="action-row" style="margin-top: 12px">
+                                <button type="button" class="secondary">遺物を入れ替える</button>
+                                <button type="button" class="ghost">サブステを編集</button>
+                            </div>
+                        </div>
+                    </details>
+
+                    <details class="flow-step" open id="candidate-section">
+                        <summary>差分候補 <span class="summary-meta">1件を選択中</span></summary>
+                        <div class="step-body">
+                            <div class="candidate-list">
+                                <label class="candidate">
+                                    <input type="radio" name="candidate" value="base" data-current="2,424" data-delta="0.00" data-spd="160.0" data-av="62.50" data-note="保存時の基準ビルドです。">
+                                    <span><strong>保存時のビルド</strong><small>現在の装備・サブステータス</small></span>
+                                    <span class="candidate-delta">基準</span>
+                                </label>
+                                <label class="candidate">
+                                    <input type="radio" name="candidate" value="speed" data-current="2,424" data-delta="4.62" data-spd="166.0" data-av="60.24" data-note="速度が6上がり、行動値が2.26短縮されます。">
+                                    <span><strong>脚部を速度寄りに変更</strong><small>SPD +6 / ATK -0</small></span>
+                                    <span class="candidate-delta">+4.62%</span>
+                                </label>
+                                <label class="candidate">
+                                    <input type="radio" name="candidate" value="crit" data-current="2,518" data-delta="3.18" data-spd="160.0" data-av="62.50" data-note="会心ダメージを伸ばし、1回あたりの期待値を上げます。">
+                                    <span><strong>胴体を会心ダメ寄りに変更</strong><small>CD +24 / CR -3</small></span>
+                                    <span class="candidate-delta">+3.18%</span>
+                                </label>
+                            </div>
+                        </div>
+                    </details>
+
+                    <details class="flow-step">
+                        <summary>パーティ・敵条件 <span class="summary-meta">花火 / 敵Lv95 / 期待値</span></summary>
+                        <div class="step-body">
+                            <div class="field-grid">
+                                <div class="field"><span class="field-label">パーティ</span><strong>花火 / ルアン・メェイ</strong><small>条件付き効果を反映</small></div>
+                                <div class="field"><span class="field-label">敵条件</span><strong>Lv95 / 靭性残</strong><small>基礎耐性 0%</small></div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <details class="flow-step">
+                        <summary>詳細設定・計算根拠 <span class="summary-meta">必要なときだけ開く</span></summary>
+                        <div class="step-body">
+                            <p class="section-help" style="padding-top: 13px">倍率、バフ、敵補正を項目別に確認できます。普段は閉じておくことで、実験のテンポを保ちます。</p>
+                        </div>
+                    </details>
+                </article>
+            </section>
+
+            <aside class="result-wrap" id="result-panel" aria-label="比較結果">
+                <article class="card result-card">
+                    <div class="result-header">
+                        <div><span class="section-kicker">02 — COMPARE</span><h2>比較結果</h2></div>
+                        <span class="result-state" id="result-state">● 即時反映</span>
+                    </div>
+                    <p class="result-target">対象: <strong>花火 / 戦闘スキル</strong>　条件: <strong>期待値</strong></p>
+
+                    <div class="compare-grid">
+                        <div class="compare-cell"><span class="result-label">基準ビルド</span><strong class="compare-value">2,424</strong><span class="compare-sub">ATK / SPD 160.0</span></div>
+                        <div class="compare-cell current"><span class="result-label">選択中</span><strong class="compare-value" id="current-value">2,424</strong><span class="compare-sub" id="current-sub">ATK / SPD 160.0</span></div>
+                    </div>
+
+                    <div class="delta-box"><span class="result-label">共通火力の変化</span><strong id="delta-value">+0.00%</strong><small id="delta-note">保存時の基準ビルドです。</small></div>
+                    <div class="meter" aria-label="基準ビルドに対する火力の割合"><span id="meter-fill"></span></div>
+
+                    <div class="breakdown" aria-label="変更点の内訳">
+                        <div class="breakdown-row"><span>速度</span><strong id="breakdown-speed">160.0 → 160.0</strong></div>
+                        <div class="breakdown-row"><span>基本行動値</span><strong id="breakdown-av">62.50 → 62.50</strong></div>
+                        <div class="breakdown-row"><span>候補による差分</span><strong class="positive" id="breakdown-delta">+0.00%</strong></div>
+                    </div>
+                </article>
+
+                <article class="next-action">
+                    <span class="section-kicker">03 — NEXT ACTION</span>
+                    <h3>この結果で次にすること</h3>
+                    <p>比較対象を決めたら保存し、限界効用逓減または戦闘シミュへ送れます。</p>
+                    <div class="action-row">
+                        <button type="button" class="primary" id="save-button">保存して比較へ</button>
+                        <button type="button" class="secondary" id="combat-button">戦闘シミュへ送る</button>
+                    </div>
+                </article>
+
+                <div class="stepper" aria-label="検証の進行状況">
+                    <div class="step done">✓ 01<br>ビルド</div>
+                    <div class="step active">● 02<br>比較</div>
+                    <div class="step">03<br>検証</div>
+                </div>
+            </aside>
+        </div>
+    </main>
+
+    <div class="toast" id="toast" role="status"></div>
+
+    <script>
+        const toast = document.getElementById('toast');
+        let toastTimer;
+
+        function showToast(message) {
+            toast.textContent = message;
+            toast.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
+        }
+
+        function updateResult(input) {
+            const current = input.dataset.current;
+            const delta = Number(input.dataset.delta || 0);
+            const speed = input.dataset.spd;
+            const av = input.dataset.av;
+            document.getElementById('current-value').textContent = current;
+            document.getElementById('current-sub').textContent = `ATK / SPD ${speed}`;
+            document.getElementById('delta-value').textContent = `${delta >= 0 ? '+' : ''}${delta.toFixed(2)}%`;
+            document.getElementById('delta-note').textContent = input.dataset.note;
+            document.getElementById('breakdown-speed').textContent = `160.0 → ${speed}`;
+            document.getElementById('breakdown-av').textContent = `62.50 → ${av}`;
+            document.getElementById('breakdown-delta').textContent = `${delta >= 0 ? '+' : ''}${delta.toFixed(2)}%`;
+            document.getElementById('meter-fill').style.width = `${Math.max(28, Math.min(92, 58 + delta * 1.2))}%`;
+            document.getElementById('context-build').textContent = delta === 0 ? '速度160ビルド' : `候補適用中 / SPD ${speed}`;
+            document.getElementById('context-save').textContent = delta === 0 ? '保存済み' : '未保存の変更';
+            document.getElementById('result-state').textContent = delta === 0 ? '● 基準値' : '● 候補を比較中';
+        }
+
+        document.querySelectorAll('input[name="candidate"]').forEach(input => {
+            input.addEventListener('change', () => updateResult(input));
+        });
+
+        document.getElementById('context-to-result').addEventListener('click', () => {
+            document.getElementById('result-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+
+        document.getElementById('save-button').addEventListener('click', () => {
+            document.getElementById('context-save').textContent = '保存済み';
+            document.getElementById('context-build').textContent = '比較対象として保存';
+            showToast('デモ: ビルドを保存し、比較画面へ進みます');
+        });
+
+        document.getElementById('combat-button').addEventListener('click', () => {
+            showToast('デモ: 選択中の条件を戦闘シミュへ送ります');
+        });
+
+        document.querySelectorAll('[data-nav]').forEach(button => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('[data-nav]').forEach(item => item.classList.remove('active'));
+                button.classList.add('active');
+                const labels = { build: 'キャラビルド', compare: '限界効用逓減', relics: '遺物倉庫', speed: '速度・行動回数', combat: '戦闘シミュ' };
+                document.getElementById('context-mode').textContent = labels[button.dataset.nav];
+                showToast(`デモ: ${labels[button.dataset.nav]} を選択しました`);
+            });
+        });
+
+        document.querySelector('input[name="candidate"]:checked')?.dispatchEvent(new Event('change'));
+    </script>
+</body>
+</html>
